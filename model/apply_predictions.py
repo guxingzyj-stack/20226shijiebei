@@ -13,14 +13,10 @@ DEFAULT_DC_PARAMS = {"c": 0.22314355131420976, "k": 0.25, "H": 80.0, "rho": -0.0
 DEFAULT_MODEL_PARAMS = {
     "dc": DEFAULT_DC_PARAMS,
     "production_weights": {
-        "production_weight_source": "default_due_to_missing_historical_market_odds",
-        "w_dc": 0.35,
-        "w_market": 0.65,
-        "missing_current_market_policy": {
-            "production_weight_source": "dc_only_due_to_missing_current_market_odds",
-            "w_dc": 1.0,
-            "w_market": 0.0,
-        },
+        "w_dc": 0.3,
+        "w_market": 0.7,
+        "source": "temporary_market_prior_until_historical_backtest_complete",
+        "todo": "replace with backtest-optimized weights after verified historical market odds",
     },
 }
 
@@ -31,14 +27,6 @@ def market_three_way_from_snapshots(snapshots: list[dict[str, Any]]) -> dict[str
             odds = {key: float(value) for key, value in snapshot["odds"].items()}
             if set(odds) == {"3", "1", "0"}:
                 return shin_devig_three_way(odds)
-    for snapshot in snapshots:
-        if snapshot["play_type"] == "hhad":
-            odds = {key: float(value) for key, value in snapshot["odds"].items()}
-            if set(odds) == {"3", "1", "0"}:
-                return shin_devig_three_way(odds)
-    for snapshot in snapshots:
-        if snapshot["play_type"] == "crs":
-            return _crs_market_three_way({key: float(value) for key, value in snapshot["odds"].items()})
     return None
 
 
@@ -47,19 +35,14 @@ def production_weights_for_match(snapshots: list[dict[str, Any]], params: dict[s
     has_had = any(snapshot["play_type"] == "had" and set(snapshot["odds"]) == {"3", "1", "0"} for snapshot in snapshots)
     if has_had:
         return {
-            "production_weight_source": str(production.get("production_weight_source", "default_due_to_missing_historical_market_odds")),
-            "w_dc": float(production.get("w_dc", 0.35)),
-            "w_market": float(production.get("w_market", 0.65)),
+            "production_weight_source": str(production.get("source", "temporary_market_prior_until_historical_backtest_complete")),
+            "w_dc": float(production.get("w_dc", 0.3)),
+            "w_market": float(production.get("w_market", 0.7)),
         }
-    policy = production.get("missing_current_market_policy") or {
-        "production_weight_source": "dc_only_due_to_missing_current_market_odds",
-        "w_dc": 1.0,
-        "w_market": 0.0,
-    }
     return {
-        "production_weight_source": str(policy.get("production_weight_source", "dc_only_due_to_missing_current_market_odds")),
-        "w_dc": float(policy.get("w_dc", 1.0)),
-        "w_market": float(policy.get("w_market", 0.0)),
+        "production_weight_source": "missing_current_market_odds",
+        "w_dc": 0.0,
+        "w_market": 0.0,
     }
 
 
@@ -77,6 +60,7 @@ def predict_once() -> dict[str, int]:
         prediction_count = 0
         ev_count = 0
         market_fused_count = 0
+        skipped_missing_market_count = 0
         dc_only_count = 0
         for match in db.fetch_upcoming_matches(conn):
             home = to_english_team_name(match["home_team"])
@@ -88,14 +72,17 @@ def predict_once() -> dict[str, int]:
             dc_home, dc_draw, dc_away = three_way_probs(matrix)
             dc_probs = normalize_probs({"3": dc_home, "1": dc_draw, "0": dc_away})
             snapshots = db.fetch_latest_snapshots_for_match(conn, match["match_id"])
-            market_probs = market_three_way_from_snapshots(snapshots) or dc_probs
+            market_probs = market_three_way_from_snapshots(snapshots)
             weights = production_weights_for_match(snapshots, params)
+            if market_probs is None or weights["production_weight_source"] == "missing_current_market_odds":
+                skipped_missing_market_count += 1
+                continue
             w_dc = float(weights["w_dc"])
             w_mkt = float(weights["w_market"])
-            if w_mkt > 0:
-                market_fused_count += 1
-            else:
-                dc_only_count += 1
+            if w_mkt <= 0:
+                skipped_missing_market_count += 1
+                continue
+            market_fused_count += 1
             final = normalize_probs({key: w_dc * dc_probs[key] + w_mkt * market_probs[key] for key in ("3", "1", "0")})
             db.insert_prediction(
                 conn,
@@ -123,6 +110,7 @@ def predict_once() -> dict[str, int]:
             "predictions": prediction_count,
             "ev_signals": ev_count,
             "market_fused_matches": market_fused_count,
+            "skipped_missing_market_matches": skipped_missing_market_count,
             "dc_only_matches": dc_only_count,
         }
 

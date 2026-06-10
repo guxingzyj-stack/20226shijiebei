@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from model import db
-from model.backtest import backtest_dc_only
+from model.backtest import backtest_dc_only, backtest_with_market_odds
 from model.fit_dc import fit_dixon_coles_with_diagnostics, model_version_params, prepare_training_frame
 from model.history import DEFAULT_RESULTS_PATH, download_results, load_results
 
@@ -17,6 +17,7 @@ def train_once(results_path: Path = DEFAULT_RESULTS_PATH, download_if_missing: b
     fit_result = fit_dixon_coles_with_diagnostics(matches_with_elo)
     dc_params = fit_result.params
     backtest = backtest_dc_only(matches_with_elo, dc_params)
+    market_backtest = backtest_with_market_odds(matches_with_elo, dc_params)
     params = model_version_params(
         dc_params,
         blend_weight=backtest.best_w_dc,
@@ -27,6 +28,7 @@ def train_once(results_path: Path = DEFAULT_RESULTS_PATH, download_if_missing: b
                 "blended_rps": backtest.blended_rps,
                 "matches": backtest.matches,
             },
+            "market_backtest": market_backtest.__dict__,
             "fit_diagnostics": fit_result.diagnostics,
         },
     )

@@ -25,3 +25,15 @@ python main.py
 ```
 
 `DATABASE_URL` must be provided through environment variables in production.
+
+## Tests
+
+```bash
+PYTHONPATH=. python -m pytest tests/ -q
+```
+
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="."; python -m pytest tests/ -q
+```

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from model.dixon_coles import lambdas_from_elo, score_matrix, three_way_probs
+from model.fit_dc import fit_dixon_coles_with_diagnostics, prepare_training_frame
+from model.history import DEFAULT_RESULTS_PATH, download_results, load_results
 from model.market import normalize_probs
 
 
@@ -29,8 +31,26 @@ def scenario_probs(
 
 
 def sanity_report(params: dict[str, float] | None = None) -> dict[str, dict[str, float]]:
+    if params is None and DEFAULT_RESULTS_PATH.exists():
+        matches = load_results(DEFAULT_RESULTS_PATH)
+        enriched, ratings = prepare_training_frame(matches)
+        fit_result = fit_dixon_coles_with_diagnostics(enriched)
+        params = fit_result.params.as_dict()
+        argentina = ratings.get("Argentina", 1900)
+        haiti = ratings.get("Haiti", 1100)
+    elif params is None:
+        download_results(DEFAULT_RESULTS_PATH)
+        matches = load_results(DEFAULT_RESULTS_PATH)
+        enriched, ratings = prepare_training_frame(matches)
+        fit_result = fit_dixon_coles_with_diagnostics(enriched)
+        params = fit_result.params.as_dict()
+        argentina = ratings.get("Argentina", 1900)
+        haiti = ratings.get("Haiti", 1100)
+    else:
+        argentina = 1900
+        haiti = 1100
     return {
-        "Argentina vs Haiti": scenario_probs(1900, 1100, False, params),
+        "Argentina vs Haiti": scenario_probs(argentina, haiti, True, params),
         "Equal Elo neutral": scenario_probs(1500, 1500, False, params),
     }
 

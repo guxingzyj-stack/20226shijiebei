@@ -4,17 +4,17 @@ from model.apply_predictions import market_three_way_from_snapshots, production_
 def test_production_weights_use_market_when_had_exists():
     snapshots = [{"play_type": "had", "odds": {"3": 1.8, "1": 3.2, "0": 4.0}}]
     weights = production_weights_for_match(snapshots, {})
-    assert weights["w_dc"] == 0.35
-    assert weights["w_market"] == 0.65
-    assert weights["production_weight_source"] == "default_due_to_missing_historical_market_odds"
+    assert weights["w_dc"] == 0.3
+    assert weights["w_market"] == 0.7
+    assert weights["production_weight_source"] == "temporary_market_prior_until_historical_backtest_complete"
 
 
 def test_production_weights_dc_only_when_had_missing():
     snapshots = [{"play_type": "crs", "odds": {"1:0": 7.0}}]
     weights = production_weights_for_match(snapshots, {})
-    assert weights["w_dc"] == 1.0
+    assert weights["w_dc"] == 0.0
     assert weights["w_market"] == 0.0
-    assert weights["production_weight_source"] == "dc_only_due_to_missing_current_market_odds"
+    assert weights["production_weight_source"] == "missing_current_market_odds"
 
 
 def test_market_three_way_prefers_had_snapshot():

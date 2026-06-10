@@ -15,6 +15,7 @@ Commands:
 python -m model.cli download-history
 python -m model.apply_migrations
 python -m model.cli fit-dc
+python -m model.cli backtest-market
 python -m model.cli predict-once
 python -m model.smoke_check
 python -m model.cli apply-migrations
@@ -23,6 +24,18 @@ python -m model.model_worker
 ```
 
 Database credentials must come from `DATABASE_URL` in the environment or `.env`.
+
+Unified test command:
+
+```bash
+PYTHONPATH=. python -m pytest tests/ -q
+```
+
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="."; python -m pytest tests/ -q
+```
 
 P1-B uses the martj42 international results CSV, rolling Elo features, Dixon-Coles
 time-decayed likelihood fitting, Shin devig for `had`/`hhad`, proportional devig

@@ -53,8 +53,8 @@ def fit_dixon_coles(matches_with_elo: pd.DataFrame, xi: float = XI) -> DCParams:
 def fit_dixon_coles_with_diagnostics(matches_with_elo: pd.DataFrame, xi: float = XI) -> DCFitResult:
     if matches_with_elo.empty:
         raise ValueError("cannot fit Dixon-Coles parameters on empty data")
-    initial_params = [math.log(1.25), 0.25, 80.0, -0.05]
-    bounds = [(math.log(0.2), math.log(4.5)), (0.0, 0.5), (-200.0, 200.0), (-0.2, 0.2)]
+    initial_params = [math.log(1.25), 1.0, 80.0, -0.05]
+    bounds = [(math.log(0.2), math.log(4.5)), (0.05, 2.0), (-200.0, 200.0), (-0.2, 0.2)]
     max_date = matches_with_elo["date"].max()
     days_ago = (max_date - matches_with_elo["date"]).dt.days.astype(float)
     weights = np.exp(-xi * days_ago.to_numpy())
@@ -114,14 +114,10 @@ def model_version_params(dc_params: DCParams, blend_weight: float, extra: dict[s
             "backtest_w_market": 1 - blend_weight,
         },
         "production_weights": {
-            "production_weight_source": "default_due_to_missing_historical_market_odds",
-            "w_dc": 0.35,
-            "w_market": 0.65,
-            "missing_current_market_policy": {
-                "production_weight_source": "dc_only_due_to_missing_current_market_odds",
-                "w_dc": 1.0,
-                "w_market": 0.0,
-            },
+            "w_dc": 0.3,
+            "w_market": 0.7,
+            "source": "temporary_market_prior_until_historical_backtest_complete",
+            "todo": "replace with backtest-optimized weights after verified historical market odds",
         },
     }
     if extra:

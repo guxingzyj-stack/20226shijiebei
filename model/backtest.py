@@ -7,6 +7,8 @@ import pandas as pd
 
 from model.dixon_coles import lambdas_from_elo, score_matrix, three_way_probs
 from model.fit_dc import DCParams
+from model.historical_odds import FOOTBALL_DATA_ODDS_URLS, HistoricalOddsMatch, load_historical_odds_sources, match_validation_game_to_odds
+from model.market import shin_devig_three_way
 from model.metrics import rps_three_way
 from model.market import normalize_probs
 
@@ -21,6 +23,22 @@ class BacktestResult:
     blended_rps: float
     best_w_dc: float
     matches: int
+
+
+@dataclass(frozen=True)
+class MarketBacktestReport:
+    validation_target: str
+    odds_sources: list[str]
+    total_validation_matches: int
+    matched_odds_matches: int
+    unmatched_matches: int
+    market_rps: float | None
+    dc_rps: float | None
+    blended_rps: float | None
+    best_w_dc: float | None
+    best_w_market: float | None
+    status: str
+    unmatched_reasons: dict[str, int]
 
 
 def outcome_from_score(home_score: int, away_score: int) -> str:
@@ -88,3 +106,72 @@ def backtest_dc_only(matches_with_elo: pd.DataFrame, params: DCParams) -> Backte
         scores.append(rps_for_probs(probs, outcome_from_score(int(row.home_score), int(row.away_score))))
     dc_rps = sum(scores) / len(scores)
     return BacktestResult(market_rps=None, dc_rps=dc_rps, blended_rps=dc_rps, best_w_dc=1.0, matches=len(frame))
+
+
+def backtest_with_market_odds(
+    matches_with_elo: pd.DataFrame,
+    params: DCParams,
+    odds_rows: list[HistoricalOddsMatch] | None = None,
+) -> MarketBacktestReport:
+    frame = validation_frame(matches_with_elo)
+    odds_rows = odds_rows if odds_rows is not None else load_historical_odds_sources()
+    dc_probs: list[dict[str, float]] = []
+    market_probs: list[dict[str, float]] = []
+    outcomes: list[str] = []
+    unmatched = 0
+    for row in frame.itertuples(index=False):
+        matched = match_validation_game_to_odds(row, odds_rows)
+        if matched is None:
+            unmatched += 1
+            continue
+        dc_probs.append(dc_probs_for_row(row, params))
+        market_probs.append(shin_devig_three_way(matched.odds))
+        outcomes.append(outcome_from_score(int(row.home_score), int(row.away_score)))
+    if not outcomes:
+        return MarketBacktestReport(
+            validation_target="2022 World Cup + 2024 Euro + 2024 Copa America",
+            odds_sources=FOOTBALL_DATA_ODDS_URLS,
+            total_validation_matches=len(frame),
+            matched_odds_matches=0,
+            unmatched_matches=len(frame),
+            market_rps=None,
+            dc_rps=None,
+            blended_rps=None,
+            best_w_dc=None,
+            best_w_market=None,
+            status="insufficient_historical_odds",
+            unmatched_reasons={"no_matching_odds": len(frame)},
+        )
+    market_scores = [rps_for_probs(probs, outcome) for probs, outcome in zip(market_probs, outcomes)]
+    dc_scores = [rps_for_probs(probs, outcome) for probs, outcome in zip(dc_probs, outcomes)]
+    best_w_dc, blended_rps = choose_blend_weight(dc_probs, market_probs, outcomes)
+    status = "ok" if len(outcomes) >= 30 else "insufficient_historical_odds"
+    return MarketBacktestReport(
+        validation_target="2022 World Cup + 2024 Euro + 2024 Copa America",
+        odds_sources=FOOTBALL_DATA_ODDS_URLS,
+        total_validation_matches=len(frame),
+        matched_odds_matches=len(outcomes),
+        unmatched_matches=unmatched,
+        market_rps=sum(market_scores) / len(market_scores),
+        dc_rps=sum(dc_scores) / len(dc_scores),
+        blended_rps=blended_rps,
+        best_w_dc=best_w_dc,
+        best_w_market=1 - best_w_dc,
+        status=status,
+        unmatched_reasons={"no_matching_odds": unmatched},
+    )
+
+
+def print_market_backtest_report(report: MarketBacktestReport) -> None:
+    print("P1 Market Backtest Report")
+    print(f"- validation_target: {report.validation_target}")
+    print(f"- odds_sources: {report.odds_sources}")
+    print(f"- total_validation_matches: {report.total_validation_matches}")
+    print(f"- matched_odds_matches: {report.matched_odds_matches}")
+    print(f"- unmatched_matches: {report.unmatched_matches}")
+    print(f"- market_rps: {report.market_rps}")
+    print(f"- dc_rps: {report.dc_rps}")
+    print(f"- blended_rps: {report.blended_rps}")
+    print(f"- best_w_dc: {report.best_w_dc}")
+    print(f"- best_w_market: {report.best_w_market}")
+    print(f"- status: {report.status}")
