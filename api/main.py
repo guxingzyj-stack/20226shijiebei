@@ -25,8 +25,8 @@ def get_current_user(
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"ok": "true"}
+def health() -> dict[str, bool]:
+    return {"ok": True}
 
 
 @app.post("/api/auth/register", response_model=TokenResponse)
@@ -57,6 +57,12 @@ def match_detail(match_id: str, db: Database = Depends(get_db)) -> dict:
     match = db.get_match(match_id)
     if match is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="match not found")
+    prediction = db.latest_prediction(match_id)
+    ev_signals = db.latest_ev_signals(match_id)
+    match["latest_odds"] = db.latest_odds_by_match(match_id)
+    match["latest_prediction"] = prediction
+    match["score_matrix"] = prediction.get("score_matrix") if prediction else None
+    match["ev_signals"] = ev_signals
     return match
 
 

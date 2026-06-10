@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r /app/api/requirements.txt
 COPY . /app
 
 ENV PYTHONUNBUFFERED=1
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-lc", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

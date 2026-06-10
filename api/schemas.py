@@ -41,6 +41,7 @@ class BetResponse(BaseModel):
     stake: Decimal
     potential_payout: Decimal
     status: str
+    balance: Decimal | None = None
 
 
 class SuggestionResponse(BaseModel):

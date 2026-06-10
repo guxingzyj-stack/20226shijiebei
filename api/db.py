@@ -80,6 +80,49 @@ class Database:
             row = cur.fetchone()
             return dict(row) if row else None
 
+    def latest_odds_by_match(self, match_id: str) -> list[dict[str, Any]]:
+        with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT ON (play_type) id, match_id, play_type, goal_line, odds, source, fetched_at
+                FROM odds_snapshots
+                WHERE match_id = %s
+                ORDER BY play_type, fetched_at DESC
+                """,
+                (match_id,),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+    def latest_prediction(self, match_id: str) -> dict[str, Any] | None:
+        with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT id, match_id, model_version, p_home, p_draw, p_away,
+                       score_matrix, lambda_home, lambda_away, created_at
+                FROM predictions
+                WHERE match_id = %s
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (match_id,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def latest_ev_signals(self, match_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT match_id, play_type, selection, model_prob, odds, ev, snapshot_id, created_at
+                FROM ev_signals
+                WHERE match_id = %s
+                ORDER BY ev DESC, created_at DESC
+                LIMIT %s
+                """,
+                (match_id, limit),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
     def odds_history(self, match_id: str, play_type: str | None = None) -> list[dict[str, Any]]:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             if play_type:
@@ -144,7 +187,10 @@ class Database:
                 """,
                 (user_id, Jsonb(legs), parlay, stake, potential_payout),
             )
-            return dict(cur.fetchone())
+            bet = dict(cur.fetchone())
+            cur.execute("SELECT balance FROM users WHERE id = %s", (user_id,))
+            bet["balance"] = cur.fetchone()["balance"]
+            return bet
 
     def list_user_bets(self, user_id: int) -> list[dict[str, Any]]:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:

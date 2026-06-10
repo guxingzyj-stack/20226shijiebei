@@ -29,6 +29,17 @@ class FakeDb:
             ("m1", "had"): {"id": 10, "match_id": "m1", "play_type": "had", "goal_line": None, "odds": {"3": 2.0, "1": 3.0, "0": 4.0}}
         }
         self.ev_signal = {"match_id": "m1", "play_type": "had", "selection": "3", "model_prob": 0.60, "odds": 2.20, "ev": 0.32}
+        self.prediction = {
+            "id": 1,
+            "match_id": "m1",
+            "model_version": 1,
+            "p_home": 0.5,
+            "p_draw": 0.3,
+            "p_away": 0.2,
+            "score_matrix": [[0.1]],
+            "lambda_home": 1.2,
+            "lambda_away": 0.8,
+        }
 
     def create_user(self, username, password_hash):
         user = {"id": self.next_user_id, "username": username, "password_hash": password_hash, "balance": Decimal("10000")}
@@ -56,6 +67,15 @@ class FakeDb:
                 rows.append(snapshot)
         return rows
 
+    def latest_odds_by_match(self, match_id):
+        return [snapshot for (mid, _), snapshot in self.snapshots.items() if mid == match_id]
+
+    def latest_prediction(self, match_id):
+        return self.prediction if match_id == "m1" else None
+
+    def latest_ev_signals(self, match_id, limit=20):
+        return [self.ev_signal] if match_id == "m1" else []
+
     def latest_odds(self, match_id, play_type):
         return self.snapshots.get((match_id, play_type))
 
@@ -71,6 +91,7 @@ class FakeDb:
             "stake": stake,
             "potential_payout": potential_payout,
             "status": "open",
+            "balance": user["balance"],
         }
         self.bets.append(bet)
         return bet
@@ -118,6 +139,23 @@ def test_bet_placement_uses_server_odds_not_client_odds(monkeypatch):
         body = response.json()
         assert body["legs"][0]["odds"] == "2.0"
         assert body["potential_payout"] == "20.0"
+        assert body["balance"] == "90"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_match_detail_includes_smoke_fields(monkeypatch):
+    fake = FakeDb()
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/api/matches/m1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["latest_odds"]
+        assert body["latest_prediction"]["match_id"] == "m1"
+        assert body["score_matrix"] == [[0.1]]
+        assert body["ev_signals"][0]["selection"] == "3"
     finally:
         app.dependency_overrides.clear()
 
