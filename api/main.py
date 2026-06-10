@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import os
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.middleware.cors import CORSMiddleware
 from psycopg.errors import UniqueViolation
 
 from api.auth import create_access_token, current_user_claims, hash_password, verify_password
@@ -12,6 +14,19 @@ from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenRespons
 
 
 app = FastAPI(title="World Cup Jingcai Simulation API")
+
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5174").split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 
 def get_current_user(
