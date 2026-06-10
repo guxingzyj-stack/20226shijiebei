@@ -7,7 +7,14 @@ import pandas as pd
 
 from model.dixon_coles import lambdas_from_elo, score_matrix, three_way_probs
 from model.fit_dc import DCParams
-from model.historical_odds import FOOTBALL_DATA_ODDS_URLS, HistoricalOddsMatch, load_historical_odds_sources, match_validation_game_to_odds
+from model.historical_odds import (
+    FOOTBALL_DATA_ODDS_URLS,
+    THE_ODDS_API_VALIDATION_PATH,
+    HistoricalOddsMatch,
+    load_historical_odds_sources,
+    load_the_odds_api_validation_odds,
+    match_validation_game_to_odds,
+)
 from model.market import shin_devig_three_way
 from model.metrics import rps_three_way
 from model.market import normalize_probs
@@ -28,6 +35,8 @@ class BacktestResult:
 @dataclass(frozen=True)
 class MarketBacktestReport:
     validation_target: str
+    odds_source: str
+    sport_key: str | None
     odds_sources: list[str]
     total_validation_matches: int
     matched_odds_matches: int
@@ -112,6 +121,8 @@ def backtest_with_market_odds(
     matches_with_elo: pd.DataFrame,
     params: DCParams,
     odds_rows: list[HistoricalOddsMatch] | None = None,
+    odds_source: str = "football_data",
+    sport_key: str | None = None,
 ) -> MarketBacktestReport:
     frame = validation_frame(matches_with_elo)
     odds_rows = odds_rows if odds_rows is not None else load_historical_odds_sources()
@@ -130,6 +141,8 @@ def backtest_with_market_odds(
     if not outcomes:
         return MarketBacktestReport(
             validation_target="2022 World Cup + 2024 Euro + 2024 Copa America",
+            odds_source=odds_source,
+            sport_key=sport_key,
             odds_sources=FOOTBALL_DATA_ODDS_URLS,
             total_validation_matches=len(frame),
             matched_odds_matches=0,
@@ -148,6 +161,8 @@ def backtest_with_market_odds(
     status = "ok" if len(outcomes) >= 30 else "insufficient_historical_odds"
     return MarketBacktestReport(
         validation_target="2022 World Cup + 2024 Euro + 2024 Copa America",
+        odds_source=odds_source,
+        sport_key=sport_key,
         odds_sources=FOOTBALL_DATA_ODDS_URLS,
         total_validation_matches=len(frame),
         matched_odds_matches=len(outcomes),
@@ -162,9 +177,48 @@ def backtest_with_market_odds(
     )
 
 
+def backtest_market_from_source(
+    matches_with_elo: pd.DataFrame,
+    params: DCParams,
+    source: str,
+) -> MarketBacktestReport:
+    if source == "football_data":
+        return backtest_with_market_odds(matches_with_elo, params, odds_source="football_data")
+    if source == "the_odds_api":
+        odds_rows = load_the_odds_api_validation_odds()
+        sport_keys = sorted({row.source_url for row in odds_rows})
+        sport_key = sport_keys[0] if len(sport_keys) == 1 else None
+        report = backtest_with_market_odds(
+            matches_with_elo,
+            params,
+            odds_rows,
+            odds_source="the_odds_api",
+            sport_key=sport_key,
+        )
+        return MarketBacktestReport(
+            validation_target="2022 World Cup",
+            odds_source=report.odds_source,
+            sport_key=report.sport_key,
+            odds_sources=[str(THE_ODDS_API_VALIDATION_PATH)],
+            total_validation_matches=64,
+            matched_odds_matches=report.matched_odds_matches,
+            unmatched_matches=max(64 - report.matched_odds_matches, 0),
+            market_rps=report.market_rps,
+            dc_rps=report.dc_rps,
+            blended_rps=report.blended_rps,
+            best_w_dc=report.best_w_dc,
+            best_w_market=report.best_w_market,
+            status="ok" if report.matched_odds_matches >= 30 else "insufficient_historical_odds",
+            unmatched_reasons={"no_matching_odds": max(64 - report.matched_odds_matches, 0)},
+        )
+    raise ValueError(f"unknown market backtest source: {source}")
+
+
 def print_market_backtest_report(report: MarketBacktestReport) -> None:
     print("P1 Market Backtest Report")
     print(f"- validation_target: {report.validation_target}")
+    print(f"- odds_source: {report.odds_source}")
+    print(f"- sport_key: {report.sport_key}")
     print(f"- odds_sources: {report.odds_sources}")
     print(f"- total_validation_matches: {report.total_validation_matches}")
     print(f"- matched_odds_matches: {report.matched_odds_matches}")
@@ -175,5 +229,5 @@ def print_market_backtest_report(report: MarketBacktestReport) -> None:
     print(f"- best_w_dc: {report.best_w_dc}")
     print(f"- best_w_market: {report.best_w_market}")
     print(f"- status: {report.status}")
-    if report.matched_odds_matches == 0:
-        print("ERROR: no historical market odds matched; P1 market backtest cannot pass")
+    if report.matched_odds_matches < 30:
+        print("ERROR: fewer than 30 historical market odds matched; P1 market backtest cannot pass")

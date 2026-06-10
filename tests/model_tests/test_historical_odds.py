@@ -3,6 +3,7 @@ import pandas as pd
 from model.historical_odds import (
     HistoricalOddsMatch,
     load_manual_validation_odds,
+    load_the_odds_api_validation_odds,
     match_validation_game_to_odds,
     normalize_odds_row,
     validate_historical_odds_rows,
@@ -61,6 +62,22 @@ def test_load_manual_validation_odds_schema(tmp_path):
     assert len(rows) == 1
     assert rows[0].competition == "FIFA World Cup"
     assert rows[0].bookmaker == "TestBook"
+
+
+def test_load_the_odds_api_validation_odds_schema(tmp_path):
+    path = tmp_path / "the_odds_api_2022_world_cup_h2h.csv"
+    path.write_text(
+        "competition,date,kickoff_time,home_team,away_team,home_score,away_score,snapshot_time,"
+        "bookmaker_strategy,home_odds,draw_odds,away_odds,source_name,source_url_or_key,notes\n"
+        "FIFA World Cup,2022-12-18,2022-12-18T15:00:00Z,Argentina,France,3,3,"
+        "2022-12-18T13:00:00Z,median_available_bookmakers,2.70,3.10,2.90,"
+        "the_odds_api,soccer_fifa_world_cup,fixture\n",
+        encoding="utf-8",
+    )
+    rows = load_the_odds_api_validation_odds(path)
+    assert len(rows) == 1
+    assert rows[0].source_url == "soccer_fifa_world_cup"
+    assert rows[0].bookmaker == "median_available_bookmakers"
 
 
 def test_validate_historical_odds_rows_reports_completeness():

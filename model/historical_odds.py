@@ -17,6 +17,9 @@ MANUAL_VALIDATION_ODDS_PATH = Path(__file__).resolve().parents[1] / "data" / "va
 MANUAL_VALIDATION_TEMPLATE_PATH = (
     Path(__file__).resolve().parents[1] / "data" / "validation_odds" / "manual_validation_odds_template.csv"
 )
+THE_ODDS_API_VALIDATION_PATH = (
+    Path(__file__).resolve().parents[1] / "data" / "validation_odds" / "the_odds_api_2022_world_cup_h2h.csv"
+)
 MANUAL_COLUMNS = [
     "competition",
     "date",
@@ -32,6 +35,23 @@ MANUAL_COLUMNS = [
     "closing_or_opening",
     "notes",
 ]
+THE_ODDS_API_COLUMNS = [
+    "competition",
+    "date",
+    "kickoff_time",
+    "home_team",
+    "away_team",
+    "home_score",
+    "away_score",
+    "snapshot_time",
+    "bookmaker_strategy",
+    "home_odds",
+    "draw_odds",
+    "away_odds",
+    "source_name",
+    "source_url_or_key",
+    "notes",
+]
 
 TEAM_ALIASES = {
     "United States": "USA",
@@ -45,6 +65,22 @@ TEAM_ALIASES = {
     "Curaçao": "Curaçao",
     "Curacao": "Curaçao",
 }
+
+
+TEAM_ALIASES.update(
+    {
+        "USA": "United States",
+        "United States": "United States",
+        "Korea Republic": "South Korea",
+        "Iran": "Iran",
+        "IR Iran": "Iran",
+        "Czech Republic": "Czech Republic",
+        "Czechia": "Czech Republic",
+        "Turkey": "Turkey",
+        "Turkiye": "Turkey",
+        "Türkiye": "Turkey",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -113,6 +149,22 @@ def load_manual_validation_odds(path: str | Path) -> list[HistoricalOddsMatch]:
     return rows
 
 
+def load_the_odds_api_validation_odds(path: str | Path = THE_ODDS_API_VALIDATION_PATH) -> list[HistoricalOddsMatch]:
+    path = Path(path)
+    if not path.exists():
+        return []
+    frame = pd.read_csv(path)
+    missing_columns = [column for column in THE_ODDS_API_COLUMNS if column not in frame.columns]
+    if missing_columns:
+        raise ValueError(f"The Odds API validation odds missing columns: {missing_columns}")
+    rows: list[HistoricalOddsMatch] = []
+    for _, row in frame.iterrows():
+        normalized = normalize_odds_row(row.to_dict(), source_url=str(row.get("source_url_or_key") or path))
+        if normalized is not None:
+            rows.append(normalized)
+    return rows
+
+
 def validate_historical_odds_rows(rows: list[HistoricalOddsMatch]) -> HistoricalOddsValidationReport:
     missing_required_fields = {field: 0 for field in ("competition", "date", "home_team", "away_team", "source_url", "bookmaker")}
     invalid_odds_rows = 0
@@ -144,9 +196,9 @@ def normalize_odds_row(row: dict[str, Any], source_url: str = "") -> HistoricalO
     home_score = _first(row, "HG", "FTHG", "home_score")
     away_score = _first(row, "AG", "FTAG", "away_score")
     competition = _first(row, "competition", "Competition", "Div")
-    bookmaker = _first(row, "bookmaker", "Bookmaker", "source_name")
-    closing_or_opening = _first(row, "closing_or_opening", "odds_type")
-    source = _first(row, "source_url", "source", "SourceURL") or source_url
+    bookmaker = _first(row, "bookmaker", "Bookmaker", "bookmaker_strategy", "source_name")
+    closing_or_opening = _first(row, "closing_or_opening", "odds_type", "snapshot_time")
+    source = _first(row, "source_url", "source", "SourceURL", "source_url_or_key") or source_url
     if home is None or away is None or date_value is None:
         return None
     odds = _extract_three_way_odds(row)
