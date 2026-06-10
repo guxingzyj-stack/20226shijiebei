@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+psycopg[binary]
+python-dotenv
+passlib[bcrypt]
+python-jose[cryptography]
+pydantic
+pytest

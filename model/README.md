@@ -50,3 +50,10 @@ P1-D can fetch 2022 World Cup historical `h2h` snapshots from The Odds API into
 `data/validation_odds/the_odds_api_2022_world_cup_h2h.csv`. The market backtest
 uses the cached decimal 1X2 odds and fails validation when fewer than 30 matches
 are matched.
+
+## P1.5 planned improvement: Elo warmup from 2000
+
+P1.5 will roll Elo from 2000-01-01, then train Dixon-Coles only on matches from
+2015-01-01 onward using each match's pre-match Elo. This keeps the optimizer
+training window stable while avoiding overly flat initial ratings for strong and
+weak national teams. See `docs/P1_5_ELO_WARMUP_PLAN.md`.

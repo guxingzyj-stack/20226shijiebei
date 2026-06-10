@@ -1,0 +1,171 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+
+from fastapi.testclient import TestClient
+
+from api.auth import hash_password
+from api.main import app, get_current_user
+from api.db import get_db
+
+
+class FakeDb:
+    def __init__(self):
+        self.users = {}
+        self.users_by_name = {}
+        self.next_user_id = 1
+        self.bets = []
+        self.matches = {
+            "m1": {
+                "match_id": "m1",
+                "home_team": "A",
+                "away_team": "B",
+                "kickoff_at": datetime.now(timezone.utc) + timedelta(hours=2),
+                "status": "scheduled",
+            }
+        }
+        self.snapshots = {
+            ("m1", "had"): {"id": 10, "match_id": "m1", "play_type": "had", "goal_line": None, "odds": {"3": 2.0, "1": 3.0, "0": 4.0}}
+        }
+        self.ev_signal = {"match_id": "m1", "play_type": "had", "selection": "3", "model_prob": 0.60, "odds": 2.20, "ev": 0.32}
+
+    def create_user(self, username, password_hash):
+        user = {"id": self.next_user_id, "username": username, "password_hash": password_hash, "balance": Decimal("10000")}
+        self.next_user_id += 1
+        self.users[user["id"]] = user
+        self.users_by_name[username] = user
+        return user
+
+    def get_user_by_username(self, username):
+        return self.users_by_name.get(username)
+
+    def get_user_by_id(self, user_id):
+        return self.users.get(user_id)
+
+    def list_matches(self, status="upcoming"):
+        return list(self.matches.values())
+
+    def get_match(self, match_id):
+        return self.matches.get(match_id)
+
+    def odds_history(self, match_id, play_type=None):
+        rows = []
+        for (mid, ptype), snapshot in self.snapshots.items():
+            if mid == match_id and (play_type is None or ptype == play_type):
+                rows.append(snapshot)
+        return rows
+
+    def latest_odds(self, match_id, play_type):
+        return self.snapshots.get((match_id, play_type))
+
+    def create_bet(self, user_id, legs, parlay, stake, potential_payout):
+        user = self.users[user_id]
+        if user["balance"] < stake:
+            raise ValueError("insufficient balance")
+        user["balance"] -= stake
+        bet = {
+            "id": len(self.bets) + 1,
+            "legs": legs,
+            "parlay": parlay,
+            "stake": stake,
+            "potential_payout": potential_payout,
+            "status": "open",
+        }
+        self.bets.append(bet)
+        return bet
+
+    def list_user_bets(self, user_id):
+        return self.bets
+
+    def leaderboard(self):
+        return sorted(self.users.values(), key=lambda item: item["balance"], reverse=True)
+
+    def best_ev_signal(self, match_id):
+        return self.ev_signal if match_id == "m1" else None
+
+
+def test_register_and_login_return_token(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "test-secret")
+    fake = FakeDb()
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        registered = client.post("/api/auth/register", json={"username": "alice", "password": "dummy-test-passphrase"})
+        assert registered.status_code == 200
+        assert registered.json()["access_token"]
+
+        logged_in = client.post("/api/auth/login", json={"username": "alice", "password": "dummy-test-passphrase"})
+        assert logged_in.status_code == 200
+        assert logged_in.json()["access_token"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_placement_uses_server_odds_not_client_odds(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "test-secret")
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": hash_password("dummy-test-passphrase"), "balance": Decimal("100")}
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/bets",
+            json={"parlay": "single", "stake": "10", "legs": [{"match_id": "m1", "play_type": "had", "selection": "3", "odds": "99"}]},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["legs"][0]["odds"] == "2.0"
+        assert body["potential_payout"] == "20.0"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_placement_rejects_inside_five_minutes(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("100")}
+    fake.matches["m1"]["kickoff_at"] = datetime.now(timezone.utc) + timedelta(minutes=4)
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/bets",
+            json={"parlay": "single", "stake": "10", "legs": [{"match_id": "m1", "play_type": "had", "selection": "3"}]},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "betting closed"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_placement_rejects_insufficient_balance(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("5")}
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/bets",
+            json={"parlay": "single", "stake": "10", "legs": [{"match_id": "m1", "play_type": "had", "selection": "3"}]},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "insufficient balance"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_model_suggestion_caps_kelly_at_five_percent(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.get("/api/model/suggestion?match_id=m1")
+        assert response.status_code == 200
+        assert response.json()["suggested_stake"] == "50.00"
+    finally:
+        app.dependency_overrides.clear()
