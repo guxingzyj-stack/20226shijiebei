@@ -175,3 +175,5 @@ def print_market_backtest_report(report: MarketBacktestReport) -> None:
     print(f"- best_w_dc: {report.best_w_dc}")
     print(f"- best_w_market: {report.best_w_market}")
     print(f"- status: {report.status}")
+    if report.matched_odds_matches == 0:
+        print("ERROR: no historical market odds matched; P1 market backtest cannot pass")

@@ -51,7 +51,7 @@ def main() -> int:
         fit_result = fit_dixon_coles_with_diagnostics(matches_with_elo)
         report = backtest_with_market_odds(matches_with_elo, fit_result.params)
         print_market_backtest_report(report)
-        return 0
+        return 1 if report.matched_odds_matches == 0 else 0
     if args.command == "predict-once":
         try:
             print(predict_once())
