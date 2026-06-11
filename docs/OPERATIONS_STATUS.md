@@ -7,6 +7,8 @@ Current production posture:
 - API scheduler has been enabled and is waiting for real `ops_log` observation.
 - P1-C historical market backtest numbers are still pending.
 - P3-C only completes a small engineering sample CSV validation chain; real player data import is still pending.
+- P1-C CLI/reporting now returns `WAIT` until a real historical market odds source is supplied.
+- P3-D real CSV templates and dry-run validation are prepared; no real CSV rows have been imported.
 - GBM remains zero-weight and does not affect P1 production predictions.
 - P4 real recap output is waiting for more finished matches.
 
@@ -17,6 +19,9 @@ python -m api.health_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
 python -m model.p3_acceptance_report --sample
+python -m model.p1c_acceptance_report
+python -m model.p3_acceptance_report --real-dry-run
+python -m ops.next_phase_acceptance
 ```
 
 Cleanup writes require explicit confirmation:
@@ -41,3 +46,5 @@ bash deploy/backup_postgres.sh
 - Do not run real `settlement_runner once` for this task.
 - Do not write fake scores to real `500-` matches.
 - Do not scrape external football data sites.
+- Do not mark P1-C as PASS without real historical national-team market odds.
+- Do not enable GBM weight from sample or header-only P3 data.

@@ -116,3 +116,16 @@ public probes pass
 ```
 
 Do not open betting as part of 019 closeout.
+
+## Post-019 Next Phase Status
+
+Task 024 adds non-destructive readiness tooling for the next two blockers:
+
+```text
+P1-C historical market backtest: WAIT until real national-team historical market odds are available.
+P3-D real feature data: WAIT until reviewed real CSV rows are supplied.
+GBM: w_gbm remains 0.
+Betting: remains disabled.
+```
+
+These WAIT states do not change the 019 safety evidence. They should not be rewritten as PASS until the corresponding real data is available and acceptance reports produce non-fabricated results.

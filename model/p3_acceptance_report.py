@@ -4,6 +4,7 @@ import argparse
 from typing import Any
 
 from model import p3_ingest, p3_train
+from model import p3d_acceptance_report
 
 
 def generate_report(sample: bool = False) -> dict[str, Any]:
@@ -104,7 +105,12 @@ def _result(report: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="P3-C sample pipeline acceptance report")
     parser.add_argument("--sample", action="store_true", help="use data/p3/samples CSV files")
+    parser.add_argument("--real-dry-run", action="store_true", help="run P3-D real CSV readiness dry-run")
     args = parser.parse_args(argv)
+    if args.real_dry_run:
+        report = p3d_acceptance_report.generate_report()
+        p3d_acceptance_report.print_report(report)
+        return 0 if report["result"] != "FAIL" else 1
     report = generate_report(sample=args.sample)
     print_report(report)
     return 0 if report["result"] == "PASS" else 1

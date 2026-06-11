@@ -25,6 +25,9 @@ INJURIES_FILE = DATA_DIR / "manual_injuries_template.csv"
 SAMPLE_SQUAD_FILE = SAMPLE_DIR / "sample_squad.csv"
 SAMPLE_PLAYER_STATS_FILE = SAMPLE_DIR / "sample_player_stats.csv"
 SAMPLE_INJURIES_FILE = SAMPLE_DIR / "sample_injuries.csv"
+REAL_SQUAD_FILE = DATA_DIR / "manual_real_squad_template.csv"
+REAL_PLAYER_STATS_FILE = DATA_DIR / "manual_real_player_stats_template.csv"
+REAL_INJURIES_FILE = DATA_DIR / "manual_real_injuries_template.csv"
 
 REQUIRED_COLUMNS = {
     "squad": {"player_key", "name", "team", "position", "birth_date", "market_value", "source"},
@@ -42,6 +45,26 @@ NUMERIC_COLUMNS = {
     "player_stats": {"minutes", "goals", "assists", "xg", "xa"},
     "injuries": set(),
 }
+REAL_REQUIRED_COLUMNS = {
+    "team",
+    "player_name",
+    "position",
+    "age",
+    "club",
+    "minutes_recent",
+    "goals_recent",
+    "assists_recent",
+    "xg_recent",
+    "xa_recent",
+    "injury_status",
+    "source",
+    "retrieved_at",
+    "confidence",
+    "notes",
+}
+REAL_REQUIRED_VALUES = {"team", "player_name", "source", "retrieved_at", "confidence"}
+REAL_NUMERIC_COLUMNS = {"age", "minutes_recent", "goals_recent", "assists_recent", "xg_recent", "xa_recent"}
+REAL_CONFIDENCE_VALUES = {"high", "medium", "low"}
 
 
 @dataclass(frozen=True)
@@ -131,6 +154,63 @@ def build_feature_snapshots_from_manual_data(manual: ManualData, ratings: dict[s
     injuries = [dict(row) for row in manual.injuries]
     teams = sorted({str(row["team"]).strip() for row in players if str(row.get("team") or "").strip()})
     return [build_team_feature_snapshot(team, ratings, players, stats, injuries) for team in teams]
+
+
+def validate_real(data_dir: Path = DATA_DIR, dry_run: bool = True) -> dict[str, Any]:
+    paths = _real_paths(data_dir)
+    details: dict[str, Any] = {}
+    ok = True
+    total_rows = 0
+    for name, path in paths.items():
+        if not path.exists():
+            details[name] = {"ok": False, "rows": 0, "missing_columns": sorted(REAL_REQUIRED_COLUMNS), "errors": [f"missing file: {path}"]}
+            ok = False
+            continue
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            columns = set(reader.fieldnames or [])
+            missing = sorted(REAL_REQUIRED_COLUMNS - columns)
+            rows = [dict(row) for row in reader]
+        errors = [] if missing else _validate_real_rows(name, rows)
+        total_rows += len(rows)
+        details[name] = {"ok": not missing and not errors, "rows": len(rows), "missing_columns": missing, "errors": errors}
+        ok = ok and not missing and not errors
+    status = "no_real_data_csv" if total_rows == 0 and ok else ("ok" if ok else "validation_failed")
+    return {
+        "ok": ok,
+        "status": status,
+        "result": "WAIT" if status == "no_real_data_csv" else ("PASS" if ok else "FAIL"),
+        "dry_run": dry_run,
+        "rows_validated": total_rows,
+        "would_write_db": False,
+        "details": details,
+    }
+
+
+def build_team_features_real(dry_run: bool = True, data_dir: Path = DATA_DIR) -> dict[str, Any]:
+    validation = validate_real(data_dir=data_dir, dry_run=True)
+    if not validation["ok"] or validation["rows_validated"] == 0:
+        return {
+            "status": validation["status"],
+            "result": validation["result"],
+            "teams": [],
+            "feature_preview": [],
+            "missing_indicators": {},
+            "would_write_db": False,
+            "w_gbm": 0,
+        }
+    rows = _read_real_rows(data_dir)
+    manual = _real_rows_to_manual_data(rows)
+    snapshots = build_feature_snapshots_from_manual_data(manual, ratings={})
+    return {
+        "status": "dry_run" if dry_run else "not_enabled",
+        "result": "PASS",
+        "teams": [row["team"] for row in snapshots],
+        "feature_preview": snapshots,
+        "missing_indicators": _missing_indicators(snapshots),
+        "would_write_db": False,
+        "w_gbm": 0,
+    }
 
 
 def _write_manual_data(conn: psycopg.Connection, manual: ManualData) -> dict[str, int]:
@@ -293,6 +373,14 @@ def _paths(data_dir: Path, sample: bool = False) -> dict[str, Path]:
     }
 
 
+def _real_paths(data_dir: Path) -> dict[str, Path]:
+    return {
+        "squad": data_dir / REAL_SQUAD_FILE.name,
+        "player_stats": data_dir / REAL_PLAYER_STATS_FILE.name,
+        "injuries": data_dir / REAL_INJURIES_FILE.name,
+    }
+
+
 def _read_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         return [dict(row) for row in csv.DictReader(handle)]
@@ -319,6 +407,86 @@ def _validate_rows(name: str, rows: list[dict[str, str]]) -> list[str]:
     return errors
 
 
+def _validate_real_rows(name: str, rows: list[dict[str, str]]) -> list[str]:
+    errors: list[str] = []
+    for index, row in enumerate(rows, start=2):
+        for column in REAL_REQUIRED_VALUES:
+            if not str(row.get(column) or "").strip():
+                errors.append(f"{name}:{index}: missing required {column}")
+        confidence = str(row.get("confidence") or "").strip().lower()
+        if confidence and confidence not in REAL_CONFIDENCE_VALUES:
+            errors.append(f"{name}:{index}: confidence must be high, medium, or low")
+        for column in REAL_NUMERIC_COLUMNS:
+            value = str(row.get(column) or "").strip()
+            if value:
+                try:
+                    float(value)
+                except ValueError:
+                    errors.append(f"{name}:{index}: invalid numeric {column}")
+    return errors
+
+
+def _read_real_rows(data_dir: Path) -> dict[str, list[dict[str, str]]]:
+    paths = _real_paths(data_dir)
+    return {name: _read_rows(path) for name, path in paths.items()}
+
+
+def _real_rows_to_manual_data(rows: dict[str, list[dict[str, str]]]) -> ManualData:
+    squad = []
+    stats = []
+    injuries = []
+    seen_players: set[str] = set()
+    for section_rows in rows.values():
+        for row in section_rows:
+            player_key = _real_player_key(row)
+            if not player_key:
+                continue
+            if player_key not in seen_players:
+                seen_players.add(player_key)
+                squad.append(
+                    {
+                        "player_key": player_key,
+                        "name": row.get("player_name", ""),
+                        "team": row.get("team", ""),
+                        "position": row.get("position", ""),
+                        "birth_date": "",
+                        "market_value": "",
+                        "source": row.get("source", ""),
+                    }
+                )
+            stats.append(
+                {
+                    "player_key": player_key,
+                    "season": "recent",
+                    "club": row.get("club", ""),
+                    "minutes": row.get("minutes_recent", ""),
+                    "goals": row.get("goals_recent", ""),
+                    "assists": row.get("assists_recent", ""),
+                    "xg": row.get("xg_recent", ""),
+                    "xa": row.get("xa_recent", ""),
+                    "source": row.get("source", ""),
+                }
+            )
+            if str(row.get("injury_status") or "").strip():
+                injuries.append(
+                    {
+                        "player_key": player_key,
+                        "team": row.get("team", ""),
+                        "status": row.get("injury_status", ""),
+                        "injury_type": "",
+                        "expected_return": "",
+                        "source": row.get("source", ""),
+                    }
+                )
+    return ManualData(squad=squad, player_stats=stats, injuries=injuries)
+
+
+def _real_player_key(row: dict[str, str]) -> str:
+    team = str(row.get("team") or "").strip().lower().replace(" ", "_")
+    player = str(row.get("player_name") or "").strip().lower().replace(" ", "_")
+    return f"real_{team}_{player}" if team and player else ""
+
+
 def _missing_indicators(snapshots: list[dict[str, Any]]) -> dict[str, list[str]]:
     indicators: dict[str, list[str]] = {}
     for snapshot in snapshots:
@@ -338,6 +506,10 @@ def main(argv: list[str] | None = None) -> int:
     build_parser = subparsers.add_parser("build-team-features")
     build_parser.add_argument("--dry-run", action="store_true")
     build_parser.add_argument("--sample", action="store_true")
+    validate_real_parser = subparsers.add_parser("validate-real")
+    validate_real_parser.add_argument("--dry-run", action="store_true")
+    build_real_parser = subparsers.add_parser("build-team-features-real")
+    build_real_parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
     if args.command == "validate":
@@ -346,6 +518,10 @@ def main(argv: list[str] | None = None) -> int:
         result = import_manual_data(dry_run=args.dry_run, sample=args.sample, confirm=args.confirm)
     elif args.command == "build-team-features":
         result = build_team_features(dry_run=args.dry_run, sample=args.sample)
+    elif args.command == "validate-real":
+        result = validate_real(dry_run=args.dry_run)
+    elif args.command == "build-team-features-real":
+        result = build_team_features_real(dry_run=args.dry_run)
     else:
         parser.error(f"unknown command: {args.command}")
     print(result)
