@@ -13,6 +13,8 @@ Current production posture:
 
 - `settlement_runner`: `PASS`
 - `results_sync`: `PASS`
+- stale threshold: latest `ops_log` older than 90 minutes is `FAIL` in `api.health_report`
+- `/api/health` exposes `scheduler_last_seen`, `scheduler_last_seen_age_minutes`, and `scheduler_stale`
 
 ### 019 Emergency Repair
 
@@ -56,10 +58,18 @@ Current production posture:
 - status: disabled
 - required environment: `BETTING_ENABLED=false`
 
+### Result State Guard
+
+- `closed` means sale closed / stop selling, not match finished.
+- P0 odds crawler must not set `status=finished` from `data-isend`.
+- `finished` / `completed` is settlement- and recap-ready only when `result_home` and `result_away` are both present.
+- Diagnostic command: `python -m api.result_consistency_report`
+
 ## Safe Commands
 
 ```bash
 python -m api.health_report
+python -m api.result_consistency_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
 python -m model.p1c_acceptance_report

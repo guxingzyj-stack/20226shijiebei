@@ -117,6 +117,19 @@ def test_runner_skips_bet_when_match_result_not_ready():
     assert repo.users[1]["balance"] == Decimal("90")
 
 
+def test_runner_skips_finished_match_when_score_is_missing():
+    repo = FakeSettlementRepository()
+    repo.matches["m1"]["status"] = "finished"
+    repo.matches["m1"]["result_home"] = None
+    repo.matches["m1"]["result_away"] = None
+
+    stats = run_settlement(repo)
+
+    assert stats.skipped_not_ready == 1
+    assert repo.bets[0]["status"] == "open"
+    assert repo.users[1]["balance"] == Decimal("90")
+
+
 def test_runner_voids_postponed_match_with_odds_as_one():
     repo = FakeSettlementRepository()
     repo.matches["m1"]["status"] = "postponed"

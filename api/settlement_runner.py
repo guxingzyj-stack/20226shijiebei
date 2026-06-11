@@ -10,6 +10,7 @@ from psycopg.rows import dict_row
 
 from api.db import connect
 from api.ops_log import record_ops_log, sanitize_error
+from api.result_rules import ready_for_result_evaluation
 from api.settlement import MatchResult, settle_parlay
 
 
@@ -62,9 +63,7 @@ def settle_bet_if_ready(bet: dict[str, Any], match_rows: dict[str, dict[str, Any
         status = str(row.get("status") or "")
         if status == "postponed":
             continue
-        if status != "finished":
-            return None
-        if row.get("result_home") is None or row.get("result_away") is None:
+        if not ready_for_result_evaluation(row):
             return None
         results[match_id] = MatchResult(
             int(row["result_home"]),

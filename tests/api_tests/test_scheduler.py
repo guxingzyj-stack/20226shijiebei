@@ -35,6 +35,16 @@ def test_scheduler_jobs_catch_exceptions(monkeypatch):
     scheduler.settlement_runner_job()
 
 
+def test_scheduler_start_error_is_logged(monkeypatch, capsys):
+    monkeypatch.setenv("ENABLE_API_SCHEDULER", "true")
+    monkeypatch.setattr(scheduler, "create_scheduler", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    scheduler.start_api_scheduler()
+
+    output = capsys.readouterr().out
+    assert "api_scheduler_start_error" in output
+
+
 def test_error_sanitizer_redacts_secret_markers():
     error = sanitize_error(RuntimeError("JWT_SECRET=abc DATABASE_URL=postgres://secret PASSWORD=x"))
 

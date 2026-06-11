@@ -57,6 +57,39 @@ def test_missing_prediction_skip() -> None:
     assert report["result"] == "WAIT"
 
 
+def test_finished_but_missing_result_is_reported_with_match_detail() -> None:
+    report = p1c_prime.build_prospective_calibration_summary(
+        [match(match_id="m-missing-score", result=(None, None))],
+        [odds(match_id="m-missing-score")],
+        [prediction(match_id="m-missing-score")],
+        min_required_matches=1,
+    )
+
+    assert report["skips"]["finished_but_missing_result"] == 1
+    assert report["skipped_match_details"] == [
+        {
+            "match_id": "m-missing-score",
+            "home_team": "",
+            "away_team": "",
+            "kickoff_at": "2026-06-12T10:00:00+00:00",
+            "status": "finished",
+            "home_score": None,
+            "away_score": None,
+            "skip_reason": "finished_but_missing_result",
+        }
+    ]
+
+
+def test_skipped_match_details_are_limited_to_20() -> None:
+    matches = [match(match_id=f"m{i}", status="scheduled") for i in range(25)]
+
+    report = p1c_prime.build_prospective_calibration_summary(matches, [], [], min_required_matches=1)
+
+    assert report["skips"]["not_finished"] == 25
+    assert len(report["skipped_match_details"]) == 20
+    assert report["skipped_match_details"][0]["skip_reason"] == "not_finished"
+
+
 def test_prediction_after_kickoff_is_not_used() -> None:
     report = p1c_prime.build_prospective_calibration_summary([match()], [odds()], [prediction(created="2026-06-12T10:01:00")], min_required_matches=1)
 

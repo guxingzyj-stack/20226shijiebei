@@ -57,9 +57,13 @@ def start_api_scheduler() -> None:
         return
     if _scheduler is not None and _scheduler.running:
         return
-    _scheduler = create_scheduler()
-    _scheduler.start()
-    print({"event": "api_scheduler_started", "jobs": [job.id for job in _scheduler.get_jobs()]})
+    try:
+        _scheduler = create_scheduler()
+        _scheduler.start()
+        print({"event": "api_scheduler_started", "jobs": [job.id for job in _scheduler.get_jobs()]})
+    except Exception as exc:
+        print({"event": "api_scheduler_start_error", "error": sanitize_error(exc)})
+        _scheduler = None
 
 
 def stop_api_scheduler() -> None:

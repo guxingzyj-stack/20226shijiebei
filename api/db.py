@@ -59,7 +59,8 @@ class Database:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
-                SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status, ht_home, ht_away
+                SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
+                       result_home, result_away, ht_home, ht_away
                 FROM matches
                 WHERE status = %s
                 ORDER BY kickoff_at
@@ -72,7 +73,8 @@ class Database:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
-                SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status, ht_home, ht_away
+                SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
+                       result_home, result_away, ht_home, ht_away
                 FROM matches
                 WHERE match_id = %s
                 """,

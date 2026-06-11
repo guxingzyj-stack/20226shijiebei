@@ -83,9 +83,12 @@ def upsert_matches(conn: psycopg.Connection, matches: Iterable[MatchOdds]) -> No
                   kickoff_at = EXCLUDED.kickoff_at,
                   stage = EXCLUDED.stage,
                   group_name = EXCLUDED.group_name,
-                  result_home = EXCLUDED.result_home,
-                  result_away = EXCLUDED.result_away,
-                  status = EXCLUDED.status,
+                  result_home = matches.result_home,
+                  result_away = matches.result_away,
+                  status = CASE
+                    WHEN matches.status IN ('finished', 'completed') THEN matches.status
+                    ELSE EXCLUDED.status
+                  END,
                   updated_at = now()
                 """,
                 (

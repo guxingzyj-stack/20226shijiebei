@@ -39,6 +39,24 @@ class M500ParserTests(unittest.TestCase):
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0].match_id, "500-1359172")
         self.assertEqual({entry.play_type for entry in matches[0].odds}, {"had", "hhad"})
+        self.assertEqual(matches[0].status, "scheduled")
+
+    def test_sale_closed_is_not_finished(self) -> None:
+        html = """
+        <table><tr class="bet-tb-tr" data-fixtureid="1359172" data-homesxname="Mexico"
+          data-awaysxname="South Africa" data-matchdate="2026-06-12" data-matchtime="03:00"
+          data-simpleleague="世界杯" data-matchnum="001" data-isend="1">
+          <td class="td td-betbtn">
+            <p class="betbtn" data-sp="1.30" data-type="nspf" data-value="3"></p>
+            <p class="betbtn" data-sp="4.15" data-type="nspf" data-value="1"></p>
+            <p class="betbtn" data-sp="8.40" data-type="nspf" data-value="0"></p>
+          </td>
+        </tr></table>
+        """
+
+        matches = m500.parse_html_or_raise(html, "2026-06-10")
+
+        self.assertEqual(matches[0].status, "closed")
 
 
 if __name__ == "__main__":

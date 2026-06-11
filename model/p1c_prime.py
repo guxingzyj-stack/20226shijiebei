@@ -24,6 +24,8 @@ class MatchRow:
     kickoff_at: datetime | None
     result_home: int | None
     result_away: int | None
+    home_team: str = ""
+    away_team: str = ""
 
 
 @dataclass(frozen=True)
@@ -62,7 +64,13 @@ def run(dry_run: bool = True) -> dict[str, Any]:
 
 def load_production_rows(conn: psycopg.Connection) -> dict[str, list[Any]]:
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-        cur.execute("SELECT match_id, status, kickoff_at, result_home, result_away FROM matches ORDER BY kickoff_at NULLS LAST")
+        cur.execute(
+            """
+            SELECT match_id, home_team, away_team, status, kickoff_at, result_home, result_away
+            FROM matches
+            ORDER BY kickoff_at NULLS LAST
+            """
+        )
         matches = [
             MatchRow(
                 match_id=str(row["match_id"]),
@@ -70,6 +78,8 @@ def load_production_rows(conn: psycopg.Connection) -> dict[str, list[Any]]:
                 kickoff_at=row.get("kickoff_at"),
                 result_home=_optional_int(row.get("result_home")),
                 result_away=_optional_int(row.get("result_away")),
+                home_team=str(row.get("home_team") or ""),
+                away_team=str(row.get("away_team") or ""),
             )
             for row in cur.fetchall()
         ]
@@ -108,42 +118,50 @@ def build_prospective_calibration_summary(
     predictions_by_match = _group_by_match(predictions)
     skipped = {
         "not_finished": 0,
-        "missing_result": 0,
+        "finished_but_missing_result": 0,
         "missing_kickoff": 0,
         "missing_had_market_odds": 0,
         "missing_prediction": 0,
         "unsupported_hhad_only": 0,
     }
+    skipped_match_details: list[dict[str, Any]] = []
     evaluable: list[dict[str, Any]] = []
     hhad_available_count = 0
     leakage_risk = False
     for match in matches:
         if match.status not in FINISHED_STATUSES:
             skipped["not_finished"] += 1
+            _append_skip_detail(skipped_match_details, match, "not_finished")
             continue
         if match.result_home is None or match.result_away is None:
-            skipped["missing_result"] += 1
+            skipped["finished_but_missing_result"] += 1
+            _append_skip_detail(skipped_match_details, match, "finished_but_missing_result")
             continue
         if match.kickoff_at is None:
             skipped["missing_kickoff"] += 1
+            _append_skip_detail(skipped_match_details, match, "missing_kickoff")
             continue
         close_odds = _latest_pre_kickoff_had(odds_by_match.get(match.match_id, []), match.kickoff_at)
         if close_odds is None:
             if _latest_pre_kickoff_hhad(odds_by_match.get(match.match_id, []), match.kickoff_at) is not None:
                 hhad_available_count += 1
                 skipped["unsupported_hhad_only"] += 1
+                _append_skip_detail(skipped_match_details, match, "unsupported_hhad_only")
             else:
                 skipped["missing_had_market_odds"] += 1
+                _append_skip_detail(skipped_match_details, match, "missing_had_market_odds")
             continue
         prediction = _latest_pre_kickoff_prediction(predictions_by_match.get(match.match_id, []), match.kickoff_at)
         if prediction is None:
             skipped["missing_prediction"] += 1
+            _append_skip_detail(skipped_match_details, match, "missing_prediction")
             if any(row.created_at is None for row in predictions_by_match.get(match.match_id, [])):
                 leakage_risk = True
             continue
         if prediction.created_at is None:
             leakage_risk = True
             skipped["missing_prediction"] += 1
+            _append_skip_detail(skipped_match_details, match, "missing_prediction")
             continue
         market = shin_devig_three_way({key: float(close_odds.odds[key]) for key in ("3", "1", "0")})
         dc = normalize_probs({"3": prediction.p_home, "1": prediction.p_draw, "0": prediction.p_away})
@@ -171,6 +189,7 @@ def build_prospective_calibration_summary(
             "hhad_available_count": hhad_available_count,
         },
         "skips": skipped,
+        "skipped_match_details": skipped_match_details,
         "metrics": {
             "market_rps": metrics["market_rps"] if metrics else None,
             "dc_rps": metrics["dc_rps"] if metrics else None,
@@ -188,6 +207,23 @@ def build_prospective_calibration_summary(
         "result": result,
         "blocker": blocker,
     }
+
+
+def _append_skip_detail(details: list[dict[str, Any]], match: MatchRow, reason: str) -> None:
+    if len(details) >= 20:
+        return
+    details.append(
+        {
+            "match_id": match.match_id,
+            "home_team": match.home_team,
+            "away_team": match.away_team,
+            "kickoff_at": match.kickoff_at.isoformat() if match.kickoff_at else None,
+            "status": match.status,
+            "home_score": match.result_home,
+            "away_score": match.result_away,
+            "skip_reason": reason,
+        }
+    )
 
 
 def _metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
@@ -268,6 +304,7 @@ def _not_checked(reason: str) -> dict[str, Any]:
             "min_required_matches": MIN_REQUIRED_MATCHES,
         },
         "skips": {},
+        "skipped_match_details": [],
         "metrics": {
             "market_rps": None,
             "dc_rps": None,
@@ -297,15 +334,33 @@ def print_report(report: dict[str, Any]) -> None:
     for key, value in report["skips"].items():
         print(f"- {key}: {value}")
     print("")
-    print("3. Metrics")
+    print("3. Skipped match details")
+    details = report.get("skipped_match_details", [])
+    if details:
+        for detail in details[:20]:
+            print(
+                "- "
+                f"match_id: {detail['match_id']}, "
+                f"home_team: {detail['home_team']}, "
+                f"away_team: {detail['away_team']}, "
+                f"kickoff_at: {detail['kickoff_at']}, "
+                f"status: {detail['status']}, "
+                f"home_score: {detail['home_score']}, "
+                f"away_score: {detail['away_score']}, "
+                f"skip_reason: {detail['skip_reason']}"
+            )
+    else:
+        print("- none")
+    print("")
+    print("4. Metrics")
     for key, value in report["metrics"].items():
         print(f"- {key}: {value}")
     print("")
-    print("4. Leakage")
+    print("5. Leakage")
     for key, value in report["leakage"].items():
         print(f"- {key}: {value}")
     print("")
-    print("5. Result")
+    print("6. Result")
     print(f"- result: {report['result']}")
     print(f"- blocker: {report['blocker']}")
 

@@ -205,8 +205,16 @@ def _parse_match_row(row: Tag, date_text: str) -> MatchOdds:
         home_team=home,
         away_team=away,
         kickoff_at=kickoff,
-        status="finished" if str(attrs.get("data-isend") or "") == "1" else "scheduled",
+        status=_status_from_sale_attrs(attrs),
     )
+
+
+def _status_from_sale_attrs(attrs: dict[str, object]) -> str:
+    isend = str(attrs.get("data-isend") or attrs.get("isend") or "").strip().lower()
+    sale_status = str(attrs.get("data-status") or attrs.get("status") or "").strip().lower()
+    if isend in {"1", "true", "yes"} or sale_status in {"closed", "sale_closed", "stop", "stopped"}:
+        return "closed"
+    return "scheduled"
 
 
 def _parse_button_odds(scope: Tag, allowed_types: set[str]) -> list[OddsEntry]:

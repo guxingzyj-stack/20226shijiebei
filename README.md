@@ -14,6 +14,8 @@ This repository powers a 2026 World Cup Jingcai prediction system and virtual-ba
 - 023 production security closeout: `PASS`.
 - P1-C historical market backtest: frozen / `WAIT`, 500.com trade date probe did not yield valid 2022 historical rows.
 - P1-C Prime prospective calibration: framework ready / `WAIT`, accumulating real finished matches.
+- Result safety: crawler sale-closed state is `closed`, not `finished`; `finished` is only evaluable when full-time scores exist.
+- Scheduler health: `/api/health` exposes `scheduler_last_seen` and `scheduler_stale`; ops_log age over 90 minutes is a health failure.
 - P3-D real team/player data: `WAIT`, missing reviewed real CSV.
 - GBM remains disabled for production impact: `w_gbm=0`.
 
@@ -71,6 +73,14 @@ curl.exe -sS https://fifa2026.zeabur.app/api/leaderboard -o .\probe_leaderboard.
 curl.exe -sS "https://fifa2026.zeabur.app/api/matches/500-1359172" -o .\probe_mexico.json
 curl.exe -sS "https://fifa2026.zeabur.app/api/matches/500-1359200" -o .\probe_germany.json
 $env:PYTHONPATH="."; python -m ops.probe_summary --mexico .\probe_mexico.json --germany .\probe_germany.json --leaderboard .\probe_leaderboard.json
+```
+
+Result and scheduler diagnostics:
+
+```bash
+python -m api.result_consistency_report
+python -m api.result_consistency_report --match-id 500-1359172
+python -m api.health_report
 ```
 
 P1-C/P3-D readiness:

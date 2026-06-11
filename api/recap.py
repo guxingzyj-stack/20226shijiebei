@@ -86,7 +86,15 @@ def calibration_curve_from_finished_matches() -> dict[str, Any]:
 def _finished_matches_count() -> int:
     try:
         with connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT count(*) FROM matches WHERE status = 'finished'")
+            cur.execute(
+                """
+                SELECT count(*)
+                FROM matches
+                WHERE status IN ('finished', 'completed')
+                  AND result_home IS NOT NULL
+                  AND result_away IS NOT NULL
+                """
+            )
             return int(cur.fetchone()[0])
     except Exception:
         return 0

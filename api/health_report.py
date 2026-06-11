@@ -7,6 +7,7 @@ from psycopg.rows import dict_row
 
 from api.db import connect
 from api.ops_log import recent_ops_log
+from api.scheduler_health import scheduler_freshness
 
 
 def generate_report() -> dict[str, Any]:
@@ -21,6 +22,12 @@ def generate_report() -> dict[str, Any]:
         "betting_enabled": os.getenv("BETTING_ENABLED", "false"),
         "api_scheduler_enabled": os.getenv("ENABLE_API_SCHEDULER", "false"),
         "recent ops_log": "NOT_CHECKED",
+        "latest_ops_log_at": "NOT_CHECKED",
+        "latest_results_sync_at": "NOT_CHECKED",
+        "latest_settlement_runner_at": "NOT_CHECKED",
+        "latest_ops_log_age_minutes": "NOT_CHECKED",
+        "scheduler_stale": "NOT_CHECKED",
+        "scheduler_stale_threshold_minutes": 90,
         "open_bets_count": "NOT_CHECKED",
         "test_users_count": "NOT_CHECKED",
         "test_matches_count": "NOT_CHECKED",
@@ -40,6 +47,7 @@ def generate_report() -> dict[str, Any]:
                 "results_sync": _safe_recent_ops_log("results_sync"),
                 "settlement_runner": _safe_recent_ops_log("settlement_runner"),
             }
+            report.update(scheduler_freshness())
             report["open_bets_count"] = _scalar(conn, "SELECT count(*) FROM bets WHERE status = 'open'")
             report["test_users_count"] = _scalar(conn, "SELECT count(*) FROM users WHERE username LIKE 'test_user_%%' OR username LIKE 'codex_blocker_%%'")
             report["test_matches_count"] = _scalar(conn, "SELECT count(*) FROM matches WHERE match_id LIKE 'test-%%'")
@@ -63,6 +71,12 @@ def print_report(report: dict[str, Any] | None = None) -> None:
         "betting_enabled",
         "api_scheduler_enabled",
         "recent ops_log",
+        "latest_ops_log_at",
+        "latest_results_sync_at",
+        "latest_settlement_runner_at",
+        "latest_ops_log_age_minutes",
+        "scheduler_stale",
+        "scheduler_stale_threshold_minutes",
         "open_bets_count",
         "test_users_count",
         "test_matches_count",
@@ -110,6 +124,8 @@ def _result(report: dict[str, Any]) -> str:
     if not str(report.get("database", "")).startswith("ok"):
         return "FAIL"
     if report.get("odds_snapshots count") in (0, None):
+        return "FAIL"
+    if report.get("scheduler_stale") is True:
         return "FAIL"
     if _enabled(report.get("betting_enabled")):
         return "WARN"

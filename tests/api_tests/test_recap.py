@@ -17,6 +17,36 @@ def test_calibration_curve_insufficient_finished_matches(monkeypatch):
     assert result["message"] == "完赛场次不足，复盘将在小组赛进行后生成。"
 
 
+def test_finished_matches_count_requires_full_time_result(monkeypatch):
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql):
+            assert "result_home IS NOT NULL" in sql
+            assert "result_away IS NOT NULL" in sql
+
+        def fetchone(self):
+            return [1]
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+    monkeypatch.setattr(recap, "connect", lambda: Conn())
+
+    assert recap._finished_matches_count() == 1
+
+
 def test_recap_api_returns_insufficient_placeholders(monkeypatch):
     monkeypatch.setattr(recap, "_finished_matches_count", lambda: 3)
     client = TestClient(app)

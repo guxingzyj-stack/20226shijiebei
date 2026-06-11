@@ -147,10 +147,21 @@ powershell -ExecutionPolicy Bypass -File deploy/backup_postgres.ps1
 Read-only health checks:
 
 ```bash
+curl -sS https://fifa2026.zeabur.app/api/health
 python -m api.health_report
+python -m api.result_consistency_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
 ```
+
+`/api/health` should include `scheduler_last_seen`, `scheduler_last_seen_age_minutes`,
+and `scheduler_stale`. If latest `ops_log` is older than 90 minutes,
+`api.health_report` must return `FAIL`.
+
+Sale closed / stop selling is not a match result. The crawler may write `closed`,
+but only `results_sync` may mark a real match `finished` after full-time scores are
+available. `finished` rows with missing `result_home` or `result_away` must be
+treated as not ready for settlement, recap, and P1-C Prime calibration.
 
 Test data cleanup requires explicit confirmation:
 

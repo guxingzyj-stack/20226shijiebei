@@ -24,6 +24,10 @@ class FakeDb:
                 "away_team": "B",
                 "kickoff_at": datetime.now(timezone.utc) + timedelta(hours=2),
                 "status": "scheduled",
+                "result_home": None,
+                "result_away": None,
+                "ht_home": None,
+                "ht_away": None,
             }
         }
         self.snapshots = {
@@ -220,6 +224,10 @@ def test_match_detail_includes_smoke_fields(monkeypatch):
         body = response.json()
         assert body["latest_odds"]
         assert body["latest_prediction"]["match_id"] == "m1"
+        assert "result_home" in body
+        assert "result_away" in body
+        assert "ht_home" in body
+        assert "ht_away" in body
         assert "score_matrix" not in body
         assert body["latest_prediction"]["score_matrix"] == [[0.1]]
         assert body["prediction_status"]["available"] is True
@@ -227,6 +235,41 @@ def test_match_detail_includes_smoke_fields(monkeypatch):
         assert body["ev_signals"][0]["research_only"] is True
     finally:
         app.dependency_overrides.clear()
+
+
+def test_match_detail_finished_missing_result_returns_warning(monkeypatch):
+    fake = FakeDb()
+    fake.matches["m1"]["status"] = "finished"
+    fake.matches["m1"]["result_home"] = None
+    fake.matches["m1"]["result_away"] = None
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/api/matches/m1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["prediction_status"]["reason"] == "finished_missing_result"
+        assert body["prediction_status"]["message"] == "已标记完赛，但赛果尚未回填"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_health_returns_scheduler_fields(monkeypatch):
+    monkeypatch.setattr(
+        "api.main.scheduler_freshness",
+        lambda: {"scheduler_last_seen": "2026-06-12T00:00:00+00:00", "scheduler_last_seen_age_minutes": 12, "scheduler_stale": False},
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "scheduler_last_seen": "2026-06-12T00:00:00+00:00",
+        "scheduler_last_seen_age_minutes": 12,
+        "scheduler_stale": False,
+    }
 
 
 def test_match_detail_without_current_prediction_returns_status(monkeypatch):

@@ -13,6 +13,7 @@ from api.betting import BETTING_DISABLED_MESSAGE, is_betting_enabled, place_bet,
 from api.db import Database, get_db
 from api import recap
 from api.scheduler import start_api_scheduler, stop_api_scheduler
+from api.scheduler_health import scheduler_freshness
 from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenResponse, UserCreate, UserLogin
 
 
@@ -52,8 +53,14 @@ def get_current_user(
 
 
 @app.get("/api/health")
-def health() -> dict[str, bool]:
-    return {"ok": True}
+def health() -> dict:
+    freshness = scheduler_freshness()
+    return {
+        "ok": True,
+        "scheduler_last_seen": freshness["scheduler_last_seen"],
+        "scheduler_last_seen_age_minutes": freshness["scheduler_last_seen_age_minutes"],
+        "scheduler_stale": freshness["scheduler_stale"],
+    }
 
 
 @app.post("/api/auth/register", response_model=TokenResponse)
@@ -80,7 +87,7 @@ def list_matches(status: str = Query("upcoming"), db: Database = Depends(get_db)
     for match in matches:
         prediction = db.latest_prediction(str(match["match_id"]))
         match["latest_prediction"] = prediction
-        match["prediction_status"] = _prediction_status(prediction)
+        match["prediction_status"] = _prediction_status(prediction, match)
         match["ev_signals"] = db.latest_ev_signals(str(match["match_id"])) if prediction else []
     return matches
 
@@ -93,7 +100,7 @@ def match_detail(match_id: str, db: Database = Depends(get_db)) -> dict:
     prediction = db.latest_prediction(match_id)
     match["latest_odds"] = db.latest_odds_by_match(match_id)
     match["latest_prediction"] = prediction
-    match["prediction_status"] = _prediction_status(prediction)
+    match["prediction_status"] = _prediction_status(prediction, match)
     match["ev_signals"] = db.latest_ev_signals(match_id) if prediction else []
     return match
 
@@ -170,7 +177,16 @@ def recap_plays() -> dict:
     return recap.recap_plays()
 
 
-def _prediction_status(prediction: dict | None) -> dict:
+def _prediction_status(prediction: dict | None, match: dict | None = None) -> dict:
+    match = match or {}
+    if str(match.get("status") or "").lower() in {"finished", "completed"}:
+        if match.get("result_home") is None or match.get("result_away") is None:
+            return {
+                "available": prediction is not None,
+                "reason": "finished_missing_result",
+                "message": "已标记完赛，但赛果尚未回填",
+            }
+        return {"available": prediction is not None, "reason": None, "message": "已完赛"}
     if prediction is not None:
         return {"available": True, "reason": None, "message": None}
     return {
