@@ -12,6 +12,8 @@ def generate_report() -> dict[str, Any]:
     safety = {
         "betting_enabled": False,
         "gbm_weight": p3d["gbm_status"]["w_gbm"],
+        "candidate_w_gbm": p3d["gbm_status"].get("candidate_w_gbm", 0),
+        "production_w_gbm": p3d["gbm_status"].get("production_w_gbm", 0),
         "would_write_db": bool(p3d["feature_readiness"].get("would_write_db", False)),
         "fake_data_used": False,
         "production_weight_changed": False,
@@ -35,8 +37,14 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print("2. P3-D")
     print(f"- result: {report['p3d']['result']}")
     print(f"- real_csv_exists: {str(report['p3d']['real_csv_validation']['real_csv_exists']).lower()}")
+    print(f"- real_performance_csv_exists: {str(report['p3d']['real_csv_validation']['real_performance_csv_exists']).lower()}")
     print(f"- rows_validated: {report['p3d']['real_csv_validation']['rows_validated']}")
+    print(f"- performance_rows_validated: {report['p3d']['real_csv_validation']['performance_rows_validated']}")
+    print(f"- performance_files: {_safe(report['p3d']['real_csv_validation']['performance_files'])}")
     print(f"- source_coverage: {_safe(report['p3d']['real_csv_validation']['source_coverage'])}")
+    print(f"- teams_below_70_percent: {_safe(report['p3d']['feature_readiness']['teams_below_70_percent'])}")
+    print(f"- candidate_w_gbm: {report['p3d']['gbm_status']['candidate_w_gbm']}")
+    print(f"- production_w_gbm: {report['p3d']['gbm_status']['production_w_gbm']}")
     print(f"- w_gbm: {report['p3d']['gbm_status']['w_gbm']}")
     print(f"- blocker: {report['p3d']['blocker']}")
     print("")

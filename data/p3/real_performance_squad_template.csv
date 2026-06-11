@@ -1,0 +1,3 @@
+team,player_name,club,minutes_recent,goals_recent,assists_recent,xg_recent,xa_recent,source,retrieved_at,confidence,notes
+EXAMPLE_ONLY_DO_NOT_USE,Example Player,Example Club,900,3,2,1.8,0.9,EXAMPLE_ONLY_DO_NOT_USE,2026-06-12,low,EXAMPLE_ONLY_DO_NOT_USE
+EXAMPLE_ONLY_DO_NOT_USE,Example Player Missing XG,Example Club,720,1,1,,,EXAMPLE_ONLY_DO_NOT_USE,2026-06-12,low,EXAMPLE_ONLY_DO_NOT_USE unavailable xg_recent xa_recent

@@ -21,7 +21,10 @@ def generate_report(dry_run: bool = True) -> dict[str, Any]:
         "real_csv_validation": {
             "status": validation["status"],
             "real_csv_exists": validation["real_csv_exists"],
+            "real_performance_csv_exists": bool(validation.get("details", {}).get("performance", {}).get("real_performance_csv_exists", False)),
             "rows_validated": validation["rows_validated"],
+            "performance_rows_validated": validation.get("performance_rows_validated", 0),
+            "performance_files": validation.get("performance_files", []),
             "validation_errors": _validation_errors(validation),
             "source_coverage": source_coverage,
             "retrieved_at_coverage": validation["retrieved_at_coverage"],
@@ -34,7 +37,10 @@ def generate_report(dry_run: bool = True) -> dict[str, Any]:
             "feature_preview": features["feature_preview"],
             "missing_indicators": features["missing_indicators"],
             "performance_coverage": features.get("performance_coverage", {}),
+            "coverage_by_team": features.get("coverage_by_team", {}),
+            "teams_below_70_percent": features.get("teams_below_70_percent", []),
             "gbm_ready": features.get("gbm_ready", False),
+            "candidate_w_gbm": features.get("candidate_w_gbm", 0),
             "would_write_db": features.get("would_write_db", False),
         },
         "data_audit": {
@@ -47,7 +53,15 @@ def generate_report(dry_run: bool = True) -> dict[str, Any]:
             "status": _gbm_status(features, gbm, dry_run=dry_run),
             "lightgbm_available": gbm.get("lightgbm_available", False),
             "w_gbm": features.get("w_gbm", 0),
+            "candidate_w_gbm": features.get("candidate_w_gbm", 0),
+            "production_w_gbm": 0,
             "affects_p1_predictions": False,
+        },
+        "production_safety": {
+            "requires_user_approval": True,
+            "would_write_db": False,
+            "fake_data_detected": bool(_fake_data_errors(validation)),
+            "betting_enabled_changed": False,
         },
     }
     report["blocker"] = _blocker(report)
@@ -67,7 +81,10 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print("2. Real CSV validation")
     print(f"- status: {report['real_csv_validation']['status']}")
     print(f"- real_csv_exists: {str(report['real_csv_validation']['real_csv_exists']).lower()}")
+    print(f"- real_performance_csv_exists: {str(report['real_csv_validation']['real_performance_csv_exists']).lower()}")
     print(f"- rows_validated: {report['real_csv_validation']['rows_validated']}")
+    print(f"- performance_rows_validated: {report['real_csv_validation']['performance_rows_validated']}")
+    print(f"- performance_files: {_safe(report['real_csv_validation']['performance_files'])}")
     print(f"- validation_errors: {_safe(report['real_csv_validation']['validation_errors'])}")
     print(f"- source_coverage: {_safe(report['real_csv_validation']['source_coverage'])}")
     print(f"- retrieved_at_coverage: {_safe(report['real_csv_validation']['retrieved_at_coverage'])}")
@@ -79,16 +96,27 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print(f"- teams: {_safe(report['feature_readiness']['teams'])}")
     print(f"- missing_indicators: {_safe(report['feature_readiness']['missing_indicators'])}")
     print(f"- performance_coverage: {_safe(report['feature_readiness']['performance_coverage'])}")
+    print(f"- coverage_by_team: {_safe(report['feature_readiness']['coverage_by_team'])}")
+    print(f"- teams_below_70_percent: {_safe(report['feature_readiness']['teams_below_70_percent'])}")
     print(f"- gbm_ready: {str(report['feature_readiness']['gbm_ready']).lower()}")
+    print(f"- candidate_w_gbm: {report['feature_readiness']['candidate_w_gbm']}")
     print(f"- would_write_db: {str(report['feature_readiness']['would_write_db']).lower()}")
     print("")
     print("4. GBM status")
     print(f"- lightgbm_available: {str(report['gbm_status']['lightgbm_available']).lower()}")
     print(f"- status: {report['gbm_status']['status']}")
     print(f"- w_gbm: {report['gbm_status']['w_gbm']}")
+    print(f"- candidate_w_gbm: {report['gbm_status']['candidate_w_gbm']}")
+    print(f"- production_w_gbm: {report['gbm_status']['production_w_gbm']}")
     print(f"- affects_p1_predictions: {str(report['gbm_status']['affects_p1_predictions']).lower()}")
     print("")
-    print("5. Data audit")
+    print("5. Production safety")
+    print(f"- requires_user_approval: {str(report['production_safety']['requires_user_approval']).lower()}")
+    print(f"- would_write_db: {str(report['production_safety']['would_write_db']).lower()}")
+    print(f"- fake_data_detected: {str(report['production_safety']['fake_data_detected']).lower()}")
+    print(f"- betting_enabled_changed: {str(report['production_safety']['betting_enabled_changed']).lower()}")
+    print("")
+    print("6. Data audit")
     print(f"- result: {report['data_audit']['result']}")
     print(f"- blocker: {report['data_audit']['blocker']}")
     print(f"- summary: {_safe(report['data_audit']['summary'])}")
@@ -106,6 +134,10 @@ def _validation_errors(validation: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _fake_data_errors(validation: dict[str, Any]) -> list[str]:
+    return [error for error in _validation_errors(validation) if "example/template row" in error]
+
+
 def _safe(value: Any) -> str:
     return str(value).encode("ascii", "backslashreplace").decode("ascii")
 
@@ -119,6 +151,10 @@ def _blocker(report: dict[str, Any]) -> str | None:
         return "real CSV validation failed"
     if report["real_csv_validation"]["rows_validated"] == 0:
         return "no_real_data_csv"
+    if not report["real_csv_validation"]["real_performance_csv_exists"]:
+        return "no_real_performance_csv"
+    if report["feature_readiness"]["teams_below_70_percent"]:
+        return "performance_coverage_below_threshold"
     if report["data_audit"]["result"] != "PASS":
         return str(report["data_audit"]["blocker"] or "player_data_audit_wait")
     if not report["feature_readiness"]["gbm_ready"]:
@@ -131,7 +167,13 @@ def _result(report: dict[str, Any]) -> str:
         return "FAIL"
     if report["gbm_status"]["w_gbm"] not in (0, 0.2) or report["gbm_status"]["affects_p1_predictions"]:
         return "FAIL"
+    if report["production_safety"]["fake_data_detected"]:
+        return "FAIL"
     if report["real_csv_validation"]["rows_validated"] == 0:
+        return "WAIT"
+    if not report["real_csv_validation"]["real_performance_csv_exists"]:
+        return "WAIT"
+    if report["feature_readiness"]["teams_below_70_percent"]:
         return "WAIT"
     if report["data_audit"]["result"] != "PASS":
         return "WAIT"
