@@ -82,3 +82,37 @@ DELETE FROM users WHERE username LIKE 'test_user_%' OR username LIKE 'codex_bloc
 ```
 
 These statements intentionally only target test prefixes.
+
+## 5. Scheduler Deployment
+
+Deploy scheduler code with scheduling disabled first:
+
+```text
+ENABLE_API_SCHEDULER=false
+BETTING_ENABLED=false
+```
+
+Run inside the P2 API container:
+
+```bash
+python -m api.apply_migrations
+python -m api.acceptance_report
+```
+
+After acceptance passes and settlement smoke has already returned `PASS`, enable scheduling in the Zeabur API service environment:
+
+```text
+ENABLE_API_SCHEDULER=true
+RESULTS_SYNC_INTERVAL_MINUTES=60
+SETTLEMENT_RUNNER_INTERVAL_MINUTES=30
+RUN_SCHEDULER_ON_STARTUP=false
+BETTING_ENABLED=false
+```
+
+Redeploy the API service, then observe logs and `ops_log` through:
+
+```bash
+python -m api.acceptance_report
+```
+
+Do not enable betting as part of scheduler rollout.

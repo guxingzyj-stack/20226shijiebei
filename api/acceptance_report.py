@@ -8,6 +8,7 @@ import os
 from api import db as api_db
 from api import main as api_main
 from api.betting import is_betting_enabled
+from api.ops_log import recent_ops_log
 from api.results_sync import ResultsSyncStats, fetch_results_html, parse_results_html, sync_results
 from api.settlement_runner import PostgresSettlementRepository, SettlementStats, run_settlement
 
@@ -22,6 +23,8 @@ def generate_report() -> dict[str, list[ReportLine]]:
     betting_enabled = is_betting_enabled()
     results_stats = _run_results_sync_dry_run()
     settlement_stats = _run_settlement_dry_run()
+    recent_results_log = _recent_ops_log("results_sync")
+    recent_settlement_log = _recent_ops_log("settlement_runner")
     return {
         "1. Environment": [
             ReportLine("BETTING_ENABLED", os.getenv("BETTING_ENABLED", "false")),
@@ -56,6 +59,14 @@ def generate_report() -> dict[str, list[ReportLine]]:
             ReportLine("settled_void", _stat(settlement_stats, "settled_void")),
             ReportLine("skipped_not_ready", _stat(settlement_stats, "skipped_not_ready")),
             ReportLine("errors", _stat(settlement_stats, "errors")),
+        ],
+        "6. Scheduler": [
+            ReportLine("ENABLE_API_SCHEDULER", os.getenv("ENABLE_API_SCHEDULER", "false")),
+            ReportLine("scheduler_enabled", os.getenv("ENABLE_API_SCHEDULER", "false").strip().lower() in {"1", "true", "yes", "on"}),
+            ReportLine("RESULTS_SYNC_INTERVAL_MINUTES", os.getenv("RESULTS_SYNC_INTERVAL_MINUTES", "60")),
+            ReportLine("SETTLEMENT_RUNNER_INTERVAL_MINUTES", os.getenv("SETTLEMENT_RUNNER_INTERVAL_MINUTES", "30")),
+            ReportLine("recent results_sync ops_log", recent_results_log),
+            ReportLine("recent settlement_runner ops_log", recent_settlement_log),
         ],
     }
 
@@ -94,6 +105,24 @@ def _stat(stats: Any, name: str) -> Any:
     if stats is None:
         return "NOT_CHECKED: dry-run failed"
     return getattr(stats, name)
+
+
+def _recent_ops_log(job_name: str) -> Any:
+    try:
+        rows = recent_ops_log(job_name, limit=3)
+    except Exception as exc:
+        if type(exc).__name__ in {"UndefinedTable", "ProgrammingError"}:
+            return "NOT_CHECKED: ops_log table missing"
+        return f"NOT_CHECKED: ops_log query failed: {type(exc).__name__}"
+    return [
+        {
+            "status": row.get("status"),
+            "started_at": str(row.get("started_at")),
+            "summary": row.get("summary"),
+            "error": row.get("error"),
+        }
+        for row in rows
+    ]
 
 
 def _cors_has_web_origin() -> Any:

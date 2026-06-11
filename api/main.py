@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from decimal import Decimal
 import os
 
@@ -10,10 +11,20 @@ from psycopg.errors import UniqueViolation
 from api.auth import create_access_token, current_user_claims, hash_password, verify_password
 from api.betting import BETTING_DISABLED_MESSAGE, is_betting_enabled, place_bet, suggested_stake
 from api.db import Database, get_db
+from api.scheduler import start_api_scheduler, stop_api_scheduler
 from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenResponse, UserCreate, UserLogin
 
 
-app = FastAPI(title="World Cup Jingcai Simulation API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_api_scheduler()
+    try:
+        yield
+    finally:
+        stop_api_scheduler()
+
+
+app = FastAPI(title="World Cup Jingcai Simulation API", lifespan=lifespan)
 
 cors_origins = [
     origin.strip()

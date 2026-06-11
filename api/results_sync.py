@@ -10,6 +10,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from api.db import connect
+from api.ops_log import record_ops_log, sanitize_error
 
 
 DEFAULT_RESULTS_URL = "https://trade.500.com/jczq/"
@@ -152,17 +153,41 @@ def print_stats(stats: ResultsSyncStats) -> None:
     print(f"- errors: {stats.errors}")
 
 
+def run_results_sync_job(dry_run: bool = False, record_log: bool = False) -> ResultsSyncStats:
+    started_at = datetime.now(timezone.utc)
+    try:
+        html = fetch_results_html()
+        results = parse_results_html(html)
+        stats = sync_results(results, PostgresResultsRepository(), dry_run=dry_run)
+        if record_log:
+            record_ops_log("results_sync", "ok" if stats.errors == 0 else "error", started_at, _stats_summary(stats), None if stats.errors == 0 else "results_sync row errors")
+        return stats
+    except Exception as exc:
+        if record_log:
+            record_ops_log("results_sync", "error", started_at, {}, sanitize_error(exc))
+        raise
+
+
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     command = args[0] if args else "once"
     if command not in {"once", "dry-run"}:
         print("usage: python -m api.results_sync [once|dry-run]", file=sys.stderr)
         return 2
-    html = fetch_results_html()
-    results = parse_results_html(html)
-    stats = sync_results(results, PostgresResultsRepository(), dry_run=command == "dry-run")
+    stats = run_results_sync_job(dry_run=command == "dry-run", record_log=False)
     print_stats(stats)
     return 0 if stats.errors == 0 else 1
+
+
+def _stats_summary(stats: ResultsSyncStats) -> dict[str, int]:
+    return {
+        "matches_seen": stats.matches_seen,
+        "finished_updated": stats.finished_updated,
+        "halftime_updated": stats.halftime_updated,
+        "postponed_updated": stats.postponed_updated,
+        "skipped": stats.skipped,
+        "errors": stats.errors,
+    }
 
 
 def _parse_row(attrs: dict[str, str], text: str) -> ParsedResult | None:

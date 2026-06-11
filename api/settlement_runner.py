@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
 import sys
 from typing import Any
@@ -8,6 +9,7 @@ from typing import Any
 from psycopg.rows import dict_row
 
 from api.db import connect
+from api.ops_log import record_ops_log, sanitize_error
 from api.settlement import MatchResult, settle_parlay
 
 
@@ -135,6 +137,19 @@ def print_stats(stats: SettlementStats) -> None:
     print(f"- errors: {stats.errors}")
 
 
+def run_settlement_job(dry_run: bool = False, record_log: bool = False) -> SettlementStats:
+    started_at = datetime.now(timezone.utc)
+    try:
+        stats = run_settlement(PostgresSettlementRepository(), dry_run=dry_run)
+        if record_log:
+            record_ops_log("settlement_runner", "ok" if stats.errors == 0 else "error", started_at, _stats_summary(stats), None if stats.errors == 0 else "settlement_runner row errors")
+        return stats
+    except Exception as exc:
+        if record_log:
+            record_ops_log("settlement_runner", "error", started_at, {}, sanitize_error(exc))
+        raise
+
+
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     command = args[0] if args else "once"
@@ -142,11 +157,22 @@ def main(argv: list[str] | None = None) -> int:
         print("usage: python -m api.settlement_runner [once|dry-run]", file=sys.stderr)
         return 2
     try:
-        stats = run_settlement(PostgresSettlementRepository(), dry_run=command == "dry-run")
+        stats = run_settlement_job(dry_run=command == "dry-run", record_log=False)
     except Exception:
         stats = SettlementStats(errors=1)
     print_stats(stats)
     return 0 if stats.errors == 0 else 1
+
+
+def _stats_summary(stats: SettlementStats) -> dict[str, int]:
+    return {
+        "open_bets_seen": stats.open_bets_seen,
+        "settled_won": stats.settled_won,
+        "settled_lost": stats.settled_lost,
+        "settled_void": stats.settled_void,
+        "skipped_not_ready": stats.skipped_not_ready,
+        "errors": stats.errors,
+    }
 
 
 def _match_ids(bet: dict[str, Any]) -> list[str]:
