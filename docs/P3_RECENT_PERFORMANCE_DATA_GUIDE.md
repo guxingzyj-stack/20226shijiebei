@@ -69,6 +69,48 @@ candidate_w_gbm=0.2
 
 This is only a candidate gray weight. It must not change P1 production fusion weights without a separate reviewed deployment.
 
+## Source Probe
+
+Before creating a real performance CSV, run:
+
+```bash
+PYTHONPATH=. python -m tools.p3_performance_source_probe
+```
+
+The probe does not collect player rows. It only checks whether a candidate source appears accessible, auditable, and capable of providing at least `minutes_recent`, `goals_recent`, and `assists_recent`.
+
+Current status:
+
+```text
+real_performance_squad.csv: missing
+blocker: no_legal_recent_performance_source
+```
+
+If the source probe returns `WAIT` or `FAIL`, do not generate `data/p3/real_performance_squad.csv`.
+
+## Building From User-Provided CSV
+
+If a compliant user-provided or licensed export exists, place it at:
+
+```text
+data/p3/real_performance_squad_source.csv
+```
+
+or put one or more CSV files in:
+
+```text
+data/p3/raw_performance/
+```
+
+Then run:
+
+```bash
+PYTHONPATH=. python -m tools.p3_build_real_performance_csv --dry-run
+PYTHONPATH=. python -m tools.p3_build_real_performance_csv --out data/p3/real_performance_squad.csv
+```
+
+The build command rejects unmatched players, missing `source`, missing `retrieved_at`, invalid `confidence`, and template rows. It reports `coverage_by_team` before writing the final CSV.
+
 ## Commands
 
 ```bash

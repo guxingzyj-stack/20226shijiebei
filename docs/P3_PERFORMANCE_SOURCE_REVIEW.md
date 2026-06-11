@@ -49,3 +49,35 @@ gbm_ready=false
 w_gbm=0
 result=WAIT
 ```
+
+## 034 Source Probe Result
+
+Current repository state:
+
+```text
+data/p3/real_performance_squad.csv: missing
+data/p3/real_performance_squad_source.csv: missing
+data/p3/raw_performance/: missing
+```
+
+The current blocker is:
+
+```text
+no_legal_recent_performance_source
+```
+
+Do not create a synthetic `real_performance_squad.csv` to force P3-D to `PASS`. A valid source must be reviewed first and each row must preserve `source`, `retrieved_at`, `confidence`, and `notes`.
+
+Excluded source classes:
+
+- FBref scraping or FBref-derived datasets without clear authorization.
+- Transfermarkt scraping or bypass.
+- OddsPortal / BetExplorer style anti-scraping sites.
+- Paid/login data where the user has not provided an authorized export.
+- Kaggle datasets explicitly sourced from FBref when authorization cannot be verified.
+
+Accepted next step:
+
+```text
+Provide an authorized CSV export, then run tools/p3_build_real_performance_csv.py.
+```
