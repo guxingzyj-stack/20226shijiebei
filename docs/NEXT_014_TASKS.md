@@ -4,6 +4,13 @@ These items must not drift again.
 
 ## 014-A Scheduler Integration
 
+Current 014-A status:
+
+```text
+settlement_smoke must PASS before enabling any automatic settlement schedule
+automatic scheduling is not enabled yet
+```
+
 Goal:
 
 ```text
@@ -25,6 +32,16 @@ Acceptance:
 no manual once command required
 logs are visible
 failures emit error logs
+```
+
+Concrete plan:
+
+```text
+results_sync: run every hour
+settlement_runner: run every 30 minutes
+recommended implementation: independent API scheduler service or APScheduler inside API
+required logging: ops_log table or equivalent structured error log before production enablement
+precondition: python -m api.settlement_smoke run returns PASS
 ```
 
 ## 014-B P1-C Four Backtest Numbers
