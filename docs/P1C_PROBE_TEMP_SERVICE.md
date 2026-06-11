@@ -8,35 +8,31 @@ This temporary service runs only the 10-second 500.com historical page probe for
 service_name: wc-p1c-probe-temp
 repo: https://github.com/guxingzyj-stack/20226shijiebei.git
 branch: main
-root directory: /
+root directory: /ops/p1c_probe_service
 provider: Docker / Dockerfile
 dockerfile: Dockerfile
 ```
 
-Zeabur auto-detection may only recognize the root-level standard filename:
+Use only the isolated probe service directory:
 
 ```text
-Dockerfile
+/ops/p1c_probe_service
 ```
 
-Do not deploy this as `static`. If Zeabur still shows `static`, the root `Dockerfile` is not being used by that service configuration.
+Do not use the repository root `/`. The repository root must not contain a `Dockerfile`, because Zeabur may otherwise auto-detect formal monorepo services such as `wc-p2-api` as the temporary probe container.
 
-The older explicit probe Dockerfile is also present:
+Do not deploy this as `static`. If Zeabur still shows `static`, the service is not using `/ops/p1c_probe_service` as its root directory.
 
-```text
-Dockerfile.p1c-probe
-```
+The older explicit `Dockerfile.p1c-probe` is retained only as a reference. The recommended Zeabur setup is the isolated directory `/ops/p1c_probe_service` with its local `Dockerfile`.
 
-Use the root `Dockerfile` for the temporary Zeabur probe service when auto-detecting the provider.
-
-Do not use this root `Dockerfile` for the formal API, Web, model-worker, or crawler services. Those services keep their existing service-specific build settings and must not be redeployed for this probe.
+Do not use the probe Dockerfile for the formal API, Web, model-worker, or crawler services. Those services keep their existing service-specific build settings and must not be redeployed for this probe.
 
 ## Default Command
 
-The Dockerfile default command is:
+The isolated Dockerfile default command is:
 
 ```bash
-python -m model.p1c_probe --start-date 2022-11-20 --end-date 2022-12-18 --timeout-seconds 10
+python p1c_probe_standalone.py --start-date 2022-11-20 --end-date 2022-12-18 --timeout-seconds 10
 ```
 
 The output should start with:
@@ -73,6 +69,7 @@ Summary:
 - Do not restart `wc-p0-odds-crawler`.
 - Do not modify `crawler/`.
 - Do not touch `wc-p2-api`, `wc-p2-web`, or `wc-p1-model-worker`.
+- Do not put a `Dockerfile` back in the repository root for this probe.
 - Do not run migrations.
 - Do not set `BETTING_ENABLED=true`.
 - Do not scrape 64 matches.
