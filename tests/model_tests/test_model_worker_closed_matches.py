@@ -3,7 +3,7 @@ from __future__ import annotations
 from model import db
 
 
-def test_fetch_upcoming_matches_includes_closed_but_not_finished() -> None:
+def test_fetch_upcoming_matches_scans_scheduled_and_closed_without_results() -> None:
     calls = []
 
     class Cursor:
@@ -27,7 +27,8 @@ def test_fetch_upcoming_matches_includes_closed_but_not_finished() -> None:
 
     sql = calls[0]
     assert "status IN ('scheduled', 'closed')" in sql
-    assert "finished" not in sql
     assert "result_home IS NULL" in sql
     assert "result_away IS NULL" in sql
     assert "kickoff_at >= now()" in sql
+    assert "completed" not in sql
+    assert "finished" not in sql

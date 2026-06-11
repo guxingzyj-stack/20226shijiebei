@@ -283,7 +283,7 @@ def test_match_detail_without_current_prediction_returns_status(monkeypatch):
         body = response.json()
         assert body["latest_prediction"] is None
         assert body["prediction_status"]["available"] is False
-        assert body["prediction_status"]["reason"] == "missing_current_market_odds"
+        assert body["prediction_status"]["reason"] == "prediction_pending"
         assert "score_matrix" not in body
         assert body["ev_signals"] == []
     finally:

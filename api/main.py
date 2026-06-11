@@ -63,6 +63,16 @@ def health() -> dict:
     }
 
 
+def _match_has_had_odds(match: dict) -> bool:
+    for snapshot in match.get("latest_odds") or []:
+        if str(snapshot.get("play_type") or "").lower() != "had":
+            continue
+        odds = snapshot.get("odds") or {}
+        if isinstance(odds, dict) and {"3", "1", "0"}.issubset(set(odds)):
+            return True
+    return False
+
+
 @app.post("/api/auth/register", response_model=TokenResponse)
 def register(payload: UserCreate, db: Database = Depends(get_db)) -> TokenResponse:
     try:
@@ -195,6 +205,12 @@ def _prediction_status(prediction: dict | None, match: dict | None = None) -> di
             "available": False,
             "reason": "no_market",
             "message": "暂未开售，等待竞彩赔率",
+        }
+    if match_status in {"scheduled", "closed"} and _match_has_had_odds(match):
+        return {
+            "available": False,
+            "reason": "prediction_pending",
+            "message": "prediction pending",
         }
     return {
         "available": False,

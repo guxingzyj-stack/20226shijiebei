@@ -32,7 +32,10 @@ def fetch_upcoming_matches(conn: psycopg.Connection) -> list[dict[str, Any]]:
             """
             SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status
             FROM matches
-            WHERE status IN ('scheduled', 'closed') AND kickoff_at >= now()
+            WHERE status IN ('scheduled', 'closed')
+              AND result_home IS NULL
+              AND result_away IS NULL
+              AND kickoff_at >= now()
             ORDER BY kickoff_at
             """
         )
