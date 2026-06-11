@@ -114,14 +114,19 @@ class Database:
             cur.execute(
                 """
                 SELECT match_id, play_type, selection, model_prob, odds, ev, snapshot_id, created_at
-                FROM ev_signals
-                WHERE match_id = %s
+                FROM (
+                  SELECT DISTINCT ON (play_type, selection)
+                         match_id, play_type, selection, model_prob, odds, ev, snapshot_id, created_at
+                  FROM ev_signals
+                  WHERE match_id = %s
+                  ORDER BY play_type, selection, created_at DESC
+                ) deduped
                 ORDER BY ev DESC, created_at DESC
                 LIMIT %s
                 """,
                 (match_id, limit),
             )
-            return [dict(row) for row in cur.fetchall()]
+            return _dedupe_and_sort_ev_signals([dict(row) for row in cur.fetchall()], limit)
 
     def odds_history(self, match_id: str, play_type: str | None = None) -> list[dict[str, Any]]:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
@@ -222,8 +227,13 @@ class Database:
             cur.execute(
                 """
                 SELECT match_id, play_type, selection, model_prob, odds, ev
-                FROM ev_signals
-                WHERE match_id = %s AND ev > 0
+                FROM (
+                  SELECT DISTINCT ON (play_type, selection)
+                         match_id, play_type, selection, model_prob, odds, ev, created_at
+                  FROM ev_signals
+                  WHERE match_id = %s AND ev > 0
+                  ORDER BY play_type, selection, created_at DESC
+                ) deduped
                 ORDER BY ev DESC, created_at DESC
                 LIMIT 1
                 """,
@@ -231,6 +241,20 @@ class Database:
             )
             row = cur.fetchone()
             return dict(row) if row else None
+
+
+def _dedupe_and_sort_ev_signals(rows: list[dict[str, Any]], limit: int = 20) -> list[dict[str, Any]]:
+    latest_by_selection: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (str(row["play_type"]), str(row["selection"]))
+        current = latest_by_selection.get(key)
+        if current is None or str(row.get("created_at") or "") > str(current.get("created_at") or ""):
+            latest_by_selection[key] = row
+    return sorted(
+        latest_by_selection.values(),
+        key=lambda row: (float(row.get("ev") or 0), str(row.get("created_at") or "")),
+        reverse=True,
+    )[:limit]
 
 
 def get_db() -> Database:

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
 import { apiGet } from "../api/client";
-import type { Match, OddsSnapshot, Suggestion } from "../api/types";
+import type { EvSignal, Match, OddsSnapshot, Suggestion } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { useBetSlip } from "../bet/BetSlipContext";
 import { BetSlipCompact } from "../components/BetSlip";
@@ -11,6 +11,20 @@ import { OddsHistoryMini } from "../components/OddsHistoryMini";
 import { ProbabilityBar } from "../components/ProbabilityBar";
 import { ScoreMatrix } from "../components/ScoreMatrix";
 import { formatDateTime, formatDecimal, formatMoney, formatPercent, playTypeLabel, selectionLabel } from "../utils/format";
+
+function dedupeAndSortEvSignals(rows: EvSignal[]): EvSignal[] {
+  const latest = new Map<string, EvSignal>();
+  for (const signal of rows) {
+    const key = `${signal.play_type}:${signal.selection}`;
+    const current = latest.get(key);
+    if (!current || String(signal.created_at || "") > String(current.created_at || "")) {
+      latest.set(key, signal);
+    }
+  }
+  return [...latest.values()]
+    .sort((left, right) => Number(right.ev || 0) - Number(left.ev || 0))
+    .slice(0, 20);
+}
 
 export function MatchDetailPage() {
   const { matchId = "" } = useParams();
@@ -29,6 +43,8 @@ export function MatchDetailPage() {
         setHistory(await apiGet<OddsSnapshot[]>(`/matches/${encodeURIComponent(matchId)}/odds-history?play_type=had`));
         if (token) {
           setSuggestion(await apiGet<Suggestion>(`/model/suggestion?match_id=${encodeURIComponent(matchId)}`, token));
+        } else {
+          setSuggestion(null);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "比赛详情加载失败");
@@ -39,6 +55,7 @@ export function MatchDetailPage() {
 
   const had = useMemo(() => match?.latest_odds?.find((row) => row.play_type === "had"), [match]);
   const matrix = match?.score_matrix || match?.latest_prediction?.score_matrix;
+  const evSignals = useMemo(() => dedupeAndSortEvSignals(match?.ev_signals || []), [match?.ev_signals]);
 
   if (error) return <div className="rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm">{error}</div>;
   if (!match) return <div className="rounded-lg border border-white/10 p-5 text-paper/65">比赛详情加载中</div>;
@@ -96,31 +113,34 @@ export function MatchDetailPage() {
 
         <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
           <h2 className="mb-4 text-lg font-semibold">EV 信号</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] text-sm">
-              <thead className="text-left text-paper/45">
-                <tr>
-                  <th className="py-2">玩法</th>
-                  <th>选项</th>
-                  <th>模型概率</th>
-                  <th>赔率</th>
-                  <th>EV</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(match.ev_signals || []).slice(0, 12).map((signal, index) => (
-                  <tr key={`${signal.play_type}-${signal.selection}-${index}`} className="border-t border-white/10">
-                    <td className="py-2">{playTypeLabel(signal.play_type)}</td>
-                    <td>{selectionLabel(signal.selection)}</td>
-                    <td>{formatPercent(signal.model_prob)}</td>
-                    <td>{formatDecimal(signal.odds)}</td>
-                    <td><EvBadge ev={signal.ev} /></td>
+          {evSignals.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] text-sm">
+                <thead className="text-left text-paper/45">
+                  <tr>
+                    <th className="py-2">玩法</th>
+                    <th>选项</th>
+                    <th>模型概率</th>
+                    <th>赔率</th>
+                    <th>EV</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!match.ev_signals?.length ? <p className="text-sm text-paper/60">暂无价值信号</p> : null}
+                </thead>
+                <tbody>
+                  {evSignals.map((signal) => (
+                    <tr key={`${signal.play_type}-${signal.selection}`} className="border-t border-white/10">
+                      <td className="py-2">{playTypeLabel(signal.play_type)}</td>
+                      <td>{selectionLabel(signal.selection)}</td>
+                      <td>{formatPercent(signal.model_prob)}</td>
+                      <td>{formatDecimal(signal.odds)}</td>
+                      <td><EvBadge ev={signal.ev} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-paper/60">暂无价值信号</p>
+          )}
         </section>
       </div>
 
