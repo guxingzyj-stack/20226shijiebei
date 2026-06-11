@@ -138,6 +138,7 @@ def insert_prediction(
 def insert_ev_signal(
     conn: psycopg.Connection,
     match_id: str,
+    model_version: int,
     play_type: str,
     selection: str,
     model_prob: float,
@@ -151,12 +152,12 @@ def insert_ev_signal(
         cur.execute(
             """
             INSERT INTO ev_signals (
-              match_id, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason
+              match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (match_id, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason),
+            (match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason),
         )
         signal_id = cur.fetchone()[0]
     conn.commit()

@@ -1,39 +1,105 @@
-# worldcup-jingcai
+# 2026 World Cup Jingcai Prediction System
 
-2026 世界杯竞彩预测系统 P0：赔率采集器。当前阶段只包含赔率数据源探测、PostgreSQL 表初始化、轮询采集、赔率变化检测与快照入库。
+This repository powers a World Cup prediction and virtual-bankroll simulation system. It does not provide real betting, ticket purchase, agency purchase, or payment integration.
 
-> 本项目为体育赛事预测研究与虚拟资金模拟游戏，不提供任何真实购彩、代购功能，不构成投注建议。竞彩固定奖金游戏理论返还率约 71%–73%，长期投注期望为负，请理性娱乐。
+## Current Status
 
-## Structure
+- P0 crawler: production odds collection is running; do not change `crawler/` without a dedicated P0 task.
+- P1 model-worker: Dixon-Coles + market fusion is live; matrix recalibration, EV fuse, and model-version isolation are implemented.
+- P2 API/Web: FastAPI and Web are live; `BETTING_ENABLED=false` remains mandatory.
+- P3-A: feature-model infrastructure and optional GBM stubs are present; GBM is zero-weight unless explicitly trained and validated.
+- P4: recap and knockout modules are skeletons only; no real knockout/champion probabilities are exposed yet.
 
-- `crawler/probe.py`: 数据源连通性探测脚本。
-- `crawler/main.py`: 常驻采集器入口。
-- `crawler/sources/sporttery.py`: 竞彩官网 webapi 适配器。
-- `crawler/sources/m500.py`: 500 彩票交易页备用适配器。
-- `crawler/db.py`: 建表、运行记录、比赛与赔率快照写入。
-- `crawler/schema.sql`: PostgreSQL DDL。
+## Production Services
 
-## Local Usage
+Use the actual service names shown in Zeabur or your self-hosting platform. The logical services are:
 
-```bash
-cd crawler
-cp ../.env.example .env
-python -m venv .venv
-pip install -r requirements.txt
-python probe.py
-python main.py
-```
+- PostgreSQL database
+- P0 crawler service
+- P1 model-worker service
+- P2 API service
+- P2 Web service
 
-`DATABASE_URL` must be provided through environment variables in production.
+Never commit production connection strings, passwords, JWT secrets, API keys, or tokens.
 
-## Tests
+## Environment Variables
 
-```bash
-PYTHONPATH=. python -m pytest tests/ -q
-```
+Required or commonly used variables:
 
-Windows PowerShell:
+- `DATABASE_URL`: PostgreSQL connection string, from the deployment environment only.
+- `JWT_SECRET`: API auth signing secret, from the deployment environment only.
+- `THE_ODDS_API_KEY`: optional historical odds key.
+- `BETTING_ENABLED=false`: must remain false until settlement and risk gates are explicitly approved.
+- `ENABLE_API_SCHEDULER=false`: scheduler is opt-in.
+- `RESULTS_SYNC_INTERVAL_MINUTES=60`
+- `SETTLEMENT_RUNNER_INTERVAL_MINUTES=30`
+- `RUN_SCHEDULER_ON_STARTUP=false`
+- `CORS_ORIGINS`: comma-separated browser origins.
+- `VITE_API_BASE_URL`: Web build-time API base URL.
+- `VITE_BETTING_ENABLED=false`
+
+## Commands
+
+Python tests:
 
 ```powershell
 $env:PYTHONPATH="."; python -m pytest tests/ -q
 ```
+
+Web build and typecheck:
+
+```bash
+cd web
+npm ci
+npm run build
+npm run typecheck
+```
+
+Docker Compose validation:
+
+```bash
+docker compose config
+```
+
+P1 acceptance:
+
+```bash
+python -m model.cli acceptance-report
+```
+
+P2 acceptance:
+
+```bash
+python -m api.acceptance_report
+python -m api.scheduler_observe
+```
+
+Safe settlement smoke, test data only:
+
+```bash
+python -m api.settlement_smoke run
+python -m api.settlement_smoke cleanup --prefix test-settlement-...
+```
+
+## Backup And Restore
+
+Self-hosted scripts live in `deploy/`:
+
+```bash
+bash deploy/backup_postgres.sh
+bash deploy/restore_postgres.sh backups/worldcup_YYYYmmdd_HHMMSS.sql
+```
+
+Always back up PostgreSQL before migration, restore, or infrastructure move. Never print database passwords in logs.
+
+## Safety Rules
+
+- Do not modify P0 table original fields: `matches`, `odds_snapshots`, `crawl_runs`.
+- Do not write fake scores to real `500-` match IDs or real Jingcai match numbers.
+- Test settlement data must use `test-settlement-*` matches and `codex_blocker_*` users.
+- Scheduler jobs must not create test data.
+- EV over 15% is research-only and must not enter model suggestions.
+
+## Disclaimer
+
+竞彩返还率约 71%–73%，长期期望为负。本系统为预测研究与虚拟资金模拟游戏，理性娱乐，不构成投注建议，不接入真实购彩。

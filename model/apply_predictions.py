@@ -153,6 +153,7 @@ def predict_once() -> dict[str, int]:
                 db.insert_ev_signal(
                     conn,
                     match_id=candidate["match_id"],
+                    model_version=model_version_id,
                     play_type=candidate["play_type"],
                     selection=candidate["selection"],
                     model_prob=candidate["model_prob"],

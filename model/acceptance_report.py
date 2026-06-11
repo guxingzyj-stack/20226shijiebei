@@ -36,9 +36,10 @@ def generate_report() -> dict[str, list[ReportLine]]:
             predictions = _predictions_for_version(conn, latest_version_id)
             upcoming_count = len(db.fetch_upcoming_matches(conn))
             market_counts = _market_source_counts(params)
-            ev_over_threshold = _ev_over_threshold_count(conn)
-            ev_over_threshold_unmarked = _ev_over_threshold_unmarked_count(conn)
-            suggestion_pool_contract_ok = _suggestion_pool_contract_ok()
+            ev_over_threshold = _ev_over_threshold_count(conn, latest_version_id)
+            ev_over_threshold_unmarked = _ev_over_threshold_unmarked_count(conn, latest_version_id)
+            suggestion_pool_contract_ok = _suggestion_pool_contract_ok(conn, latest_version_id)
+            ev_same_version = _ev_matches_latest_prediction_version(conn, latest_version_id)
     except Exception as exc:
         return _not_checked_report(f"database check failed: {type(exc).__name__}")
 
@@ -63,6 +64,7 @@ def generate_report() -> dict[str, list[ReportLine]]:
             ReportLine("latest_version_upcoming_matches", upcoming_count),
             ReportLine("score_matrix_11x11", all(matrix_checks) if predictions else "NOT_CHECKED: no latest-version predictions"),
             ReportLine("score_matrix_edges_match_prediction", all(edge_checks) if predictions else "NOT_CHECKED: no latest-version predictions"),
+            ReportLine("ev_matches_latest_prediction_version", ev_same_version),
             ReportLine("old_model_version_api_exposure_risk", "code_enforced_latest_model_version_only"),
         ],
         "3. Market Source": [
@@ -126,31 +128,69 @@ def _predictions_for_version(conn, model_version_id: int) -> list[dict[str, Any]
         return [dict(row) for row in cur.fetchall()]
 
 
-def _ev_over_threshold_count(conn) -> int:
+def _ev_over_threshold_count(conn, model_version_id: int) -> int:
     with conn.cursor() as cur:
-        cur.execute("SELECT count(*) FROM ev_signals WHERE ev > %s", (EV_RESEARCH_ONLY_THRESHOLD,))
+        cur.execute("SELECT count(*) FROM ev_signals WHERE model_version = %s AND ev > %s", (model_version_id, EV_RESEARCH_ONLY_THRESHOLD))
         return int(cur.fetchone()[0])
 
 
-def _ev_over_threshold_unmarked_count(conn) -> int:
+def _ev_over_threshold_unmarked_count(conn, model_version_id: int) -> int:
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT count(*)
             FROM ev_signals
-            WHERE ev > %s
+            WHERE model_version = %s
+              AND ev > %s
               AND (
                 COALESCE(research_only, false) = false
                 OR reason IS DISTINCT FROM 'model_market_divergence_too_large'
               )
             """,
-            (EV_RESEARCH_ONLY_THRESHOLD,),
+            (model_version_id, EV_RESEARCH_ONLY_THRESHOLD),
         )
         return int(cur.fetchone()[0])
 
 
-def _suggestion_pool_contract_ok() -> bool:
-    return True
+def _suggestion_pool_contract_ok(conn, model_version_id: int) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT count(*)
+            FROM ev_signals
+            WHERE model_version = %s
+              AND ev > 0
+              AND COALESCE(research_only, false) = false
+              AND (
+                play_type NOT IN ('had', 'hhad')
+                OR ev > %s
+              )
+            """,
+            (model_version_id, EV_RESEARCH_ONLY_THRESHOLD),
+        )
+        return int(cur.fetchone()[0]) == 0
+
+
+def _ev_matches_latest_prediction_version(conn, model_version_id: int) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT count(*)
+            FROM ev_signals ev
+            WHERE ev.model_version = %s
+              AND NOT EXISTS (
+                SELECT 1
+                FROM predictions p
+                WHERE p.match_id = ev.match_id
+                  AND p.model_version = ev.model_version
+              )
+            """,
+            (model_version_id,),
+        )
+        orphan_count = int(cur.fetchone()[0])
+        cur.execute("SELECT count(*) FROM ev_signals WHERE model_version IS NULL")
+        legacy_count = int(cur.fetchone()[0])
+        return orphan_count == 0 and legacy_count >= 0
 
 
 def _prediction_matrix_check(row: dict[str, Any]) -> bool:
@@ -203,6 +243,7 @@ def failed_checks(report: dict[str, list[ReportLine]]) -> list[str]:
     bool_checks = {
         "k_on_boundary": False,
         "score_matrix_edges_match_prediction": True,
+        "ev_matches_latest_prediction_version": True,
         "ev_gt_0_15_all_research_only": True,
         "suggestion_pool_only_had_hhad": True,
     }

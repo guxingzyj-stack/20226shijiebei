@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+      POSTGRES_PASSWORD: ci_postgres_password
+      DATABASE_URL: postgresql://worldcup_app:ci_postgres_password@postgres:5432/worldcup
+      JWT_SECRET: ci_jwt_secret
+      BETTING_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api/requirements.txt
+          pip install -r model/requirements.txt
+          pip install -r crawler/requirements.txt
+
+      - name: Run Python tests
+        run: python -m pytest tests/ -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build and typecheck Web
+        run: |
+          cd web
+          npm ci
+          npm run build
+          npm run typecheck
+
+      - name: Validate Docker Compose
+        run: docker compose config

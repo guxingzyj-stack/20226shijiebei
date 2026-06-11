@@ -29,3 +29,17 @@ def test_api_acceptance_contract_checks():
     assert acceptance_report._latest_prediction_filters_model_version() is True
     assert acceptance_report._detail_does_not_set_top_level_score_matrix() is True
     assert acceptance_report._leaderboard_hides_id() is True
+
+
+def test_ev_queries_filter_latest_model_version():
+    import inspect
+
+    from api.db import Database
+
+    latest_source = inspect.getsource(Database.latest_ev_signals)
+    best_source = inspect.getsource(Database.best_ev_signal)
+
+    assert "model_version = (" in latest_source
+    assert "SELECT id FROM model_versions" in latest_source
+    assert "model_version = (" in best_source
+    assert "SELECT id FROM model_versions" in best_source
