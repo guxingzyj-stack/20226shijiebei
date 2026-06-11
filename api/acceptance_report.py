@@ -9,6 +9,7 @@ from api import db as api_db
 from api import main as api_main
 from api.betting import is_betting_enabled
 from api.ops_log import recent_ops_log
+from api.recap import calibration_curve_from_finished_matches
 from api.results_sync import ResultsSyncStats, fetch_results_html, parse_results_html, sync_results
 from api.settlement_runner import PostgresSettlementRepository, SettlementStats, run_settlement
 
@@ -25,6 +26,8 @@ def generate_report() -> dict[str, list[ReportLine]]:
     settlement_stats = _run_settlement_dry_run()
     recent_results_log = _recent_ops_log("results_sync")
     recent_settlement_log = _recent_ops_log("settlement_runner")
+    p3_status = _p3_status()
+    p4_status = _p4_status()
     return {
         "1. Environment": [
             ReportLine("BETTING_ENABLED", os.getenv("BETTING_ENABLED", "false")),
@@ -67,6 +70,17 @@ def generate_report() -> dict[str, list[ReportLine]]:
             ReportLine("SETTLEMENT_RUNNER_INTERVAL_MINUTES", os.getenv("SETTLEMENT_RUNNER_INTERVAL_MINUTES", "30")),
             ReportLine("recent results_sync ops_log", recent_results_log),
             ReportLine("recent settlement_runner ops_log", recent_settlement_log),
+        ],
+        "7. P3": [
+            ReportLine("p3_tables_exist", p3_status["tables_exist"]),
+            ReportLine("gbm_enabled", p3_status["gbm_enabled"]),
+            ReportLine("gbm_weight", p3_status["gbm_weight"]),
+            ReportLine("status", p3_status["status"]),
+        ],
+        "8. P4": [
+            ReportLine("finished_matches", p4_status["finished_matches"]),
+            ReportLine("recap_available", p4_status["recap_available"]),
+            ReportLine("status", p4_status["status"]),
         ],
     }
 
@@ -153,6 +167,36 @@ class _NoWriteResultsRepository:
 
     def update_postponed(self, result):
         raise AssertionError("acceptance report must run results_sync in dry-run mode")
+
+
+def _p3_status() -> dict[str, Any]:
+    required = {"players", "player_season_stats", "injuries", "team_features", "gbm_versions", "gbm_predictions"}
+    try:
+        with api_db.connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name = ANY(%s)
+                """,
+                (list(required),),
+            )
+            existing = {row[0] for row in cur.fetchall()}
+    except Exception as exc:
+        return {"tables_exist": f"NOT_CHECKED: {type(exc).__name__}", "gbm_enabled": False, "gbm_weight": 0, "status": "not_checked"}
+    tables_exist = required <= existing
+    return {"tables_exist": tables_exist, "gbm_enabled": False, "gbm_weight": 0, "status": "p3a_infrastructure_ready" if tables_exist else "pending_migration"}
+
+
+def _p4_status() -> dict[str, Any]:
+    curve = calibration_curve_from_finished_matches()
+    finished = curve.get("finished_matches", 0) if isinstance(curve, dict) else 0
+    return {
+        "finished_matches": finished,
+        "recap_available": isinstance(curve, dict) and curve.get("status") not in {"insufficient_finished_matches"},
+        "status": curve.get("status", "unknown") if isinstance(curve, dict) else "unknown",
+    }
 
 
 if __name__ == "__main__":
