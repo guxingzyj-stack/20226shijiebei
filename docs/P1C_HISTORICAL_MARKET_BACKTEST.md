@@ -1,5 +1,9 @@
 # P1-C Historical Market Backtest
 
+Status: frozen / `WAIT`.
+
+The active replacement path is P1-C Prime prospective calibration. See `docs/P1C_PRIME_PROSPECTIVE_CALIBRATION.md`.
+
 P1-C is the market-fusion backtest gate. It must use real historical national-team market odds. It must not invent odds, reuse club-league odds as national-team evidence, or report fake RPS metrics.
 
 ## Commands

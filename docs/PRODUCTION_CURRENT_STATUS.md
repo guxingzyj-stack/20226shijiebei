@@ -61,12 +61,19 @@ Production read-only version is stable. `BETTING_ENABLED` remains `false`. P1-C 
 
 No real connection strings, passwords, tokens, or backup contents are stored in this repository.
 
-## 8. P1-C WAIT
+## 8. P1-C Historical WAIT
 
 - status: `WAIT`
 - blocker: 500.com trade date page returned 2026 rows for requested 2022 date; no valid historical odds CSV generated
 - tooling: `python -m model.p1c_acceptance_report`
 - current result must not be recorded as `PASS`.
+
+## 8b. P1-C Prime Prospective Calibration
+
+- status: framework ready / accumulating finished matches
+- tooling: `python -m model.p1c_prime_acceptance_report`
+- current expected result: `WAIT` until at least 30 evaluable finished matches exist
+- production weight changes: not automatic; `best_w_dc` is candidate evidence only
 
 ## 9. P3-D Small-Batch Dry-Run
 
@@ -87,6 +94,7 @@ No real connection strings, passwords, tokens, or backup contents are stored in 
 ## 11. Remaining Blockers
 
 - P1-C real historical market odds source and backtest numbers
+- P1-C Prime needs at least 30 evaluable finished matches
 - P3-D full reviewed real team/player/injury CSV with reliable numeric performance data
 - real-match settlement observation after actual completed matches
 - continued scheduler observation

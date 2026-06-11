@@ -12,7 +12,8 @@ This repository powers a 2026 World Cup Jingcai prediction system and virtual-ba
 - Betting remains closed: `BETTING_ENABLED=false`.
 - 019 emergency production repair: `PASS`.
 - 023 production security closeout: `PASS`.
-- P1-C historical market backtest: `WAIT`, 500.com trade date probe did not yield valid 2022 historical rows.
+- P1-C historical market backtest: frozen / `WAIT`, 500.com trade date probe did not yield valid 2022 historical rows.
+- P1-C Prime prospective calibration: framework ready / `WAIT`, accumulating real finished matches.
 - P3-D real team/player data: `WAIT`, missing reviewed real CSV.
 - GBM remains disabled for production impact: `w_gbm=0`.
 

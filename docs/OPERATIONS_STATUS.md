@@ -35,6 +35,13 @@ Current production posture:
 - blocker: 500.com trade date page returned current/future rows for requested 2022 dates; valid historical market odds CSV is still missing
 - note: do not mark as `PASS` until real historical national-team market odds produce real RPS metrics.
 
+### P1-C Prime
+
+- status: framework ready / `WAIT`
+- blocker: waiting for at least 30 evaluable finished matches
+- command: `python -m model.p1c_prime_acceptance_report`
+- note: any `best_w_dc` produced later is candidate evidence only and must not automatically update production fusion weights.
+
 ### P3-D
 
 - status: small-batch data ready / dry-run only
@@ -56,6 +63,7 @@ python -m api.health_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
 python -m model.p1c_acceptance_report
+python -m model.p1c_prime_acceptance_report
 python -m model.p3_acceptance_report --real-dry-run
 python -m ops.next_phase_acceptance
 ```
