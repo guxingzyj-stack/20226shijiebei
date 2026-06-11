@@ -23,6 +23,8 @@ scheduler settlement_runner: PASS
 scheduler results_sync: PASS
 health probe: PASS
 leaderboard probe: PASS, has roi, no internal id exposed
+cleanup: PASS, before bets=6 matches=2 users=8, after bets=0 matches=0 users=0
+probe_summary: PASS, leaderboard test_user_count=0, Mexico/Germany EV aligned
 betting: disabled
 ```
 
@@ -37,7 +39,15 @@ Original `cleanup_test_data run` failed because `bets.user_id` still referenced 
 4. test_user_* / codex_blocker_* users
 ```
 
-The fixed cleanup still requires the user to run the production commands. Codex has not run production cleanup.
+The fixed cleanup was later run by the user/operator after a safe dry-run.
+
+Recorded cleanup evidence:
+
+```text
+before: bets=6, matches=2, users=8
+run: PASS
+after: bets=0, matches=0, users=0
+```
 
 Dry-run must be first:
 
@@ -80,15 +90,29 @@ EV > 0.15 is protected by research_only=true or suggestion_eligible=false
 test_user_* / codex_blocker_* accounts are WARN, not PASS
 ```
 
-## Final 019 Evidence Still Required
+## Security Rotation Still Required
 
-Before declaring final 019 closeout, record:
+The database public endpoint was exposed during emergency operations, and connection material may have appeared in screenshots.
+
+Required user actions in Zeabur:
 
 ```text
-cleanup dry-run output summary
-cleanup run output summary, if dry-run is safe
-probe_summary output
-BETTING_ENABLED remains false
+1. Close PostgreSQL public endpoint 43.130.69.126:32644.
+2. Reset PostgreSQL password.
+3. Update wc-p0-odds-crawler, wc-p1-model-worker, and wc-p2-api DATABASE_URL.
+4. Ensure DATABASE_URL uses internal host postgresql.zeabur.internal.
+5. Redeploy the three services.
+6. Re-run public probes.
+```
+
+Do not claim this security rotation is complete until the user provides non-sensitive evidence:
+
+```text
+Test-NetConnection 43.130.69.126:32644 -> TcpTestSucceeded: False
+PostgreSQL password reset confirmed
+three service DATABASE_URL values updated to internal host
+three services redeployed
+public probes pass
 ```
 
 Do not open betting as part of 019 closeout.
