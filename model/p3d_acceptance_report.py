@@ -15,11 +15,19 @@ def generate_report(dry_run: bool = True) -> dict[str, Any]:
     report = {
         "source_plan": {
             "mode": "manual_real_csv_first",
+            "p3_mode": p3_ingest.P3_MODE,
+            "requires_xg_xa": p3_ingest.REQUIRES_XG_XA,
+            "xg_xa_optional": p3_ingest.XG_XA_OPTIONAL,
+            "light_required_fields": p3_ingest.LIGHT_REQUIRED_FIELDS,
             "external_scraping_enabled": False,
             "full_production_import_enabled": False,
         },
         "real_csv_validation": {
             "status": validation["status"],
+            "p3_mode": validation.get("p3_mode", p3_ingest.P3_MODE),
+            "requires_xg_xa": validation.get("requires_xg_xa", p3_ingest.REQUIRES_XG_XA),
+            "xg_xa_optional": validation.get("xg_xa_optional", p3_ingest.XG_XA_OPTIONAL),
+            "light_required_fields": validation.get("light_required_fields", p3_ingest.LIGHT_REQUIRED_FIELDS),
             "real_csv_exists": validation["real_csv_exists"],
             "real_performance_csv_exists": bool(validation.get("details", {}).get("performance", {}).get("real_performance_csv_exists", False)),
             "rows_validated": validation["rows_validated"],
@@ -33,6 +41,10 @@ def generate_report(dry_run: bool = True) -> dict[str, Any]:
         },
         "feature_readiness": {
             "status": features["status"],
+            "p3_mode": features.get("p3_mode", p3_ingest.P3_MODE),
+            "requires_xg_xa": features.get("requires_xg_xa", p3_ingest.REQUIRES_XG_XA),
+            "xg_xa_optional": features.get("xg_xa_optional", p3_ingest.XG_XA_OPTIONAL),
+            "light_required_fields": features.get("light_required_fields", p3_ingest.LIGHT_REQUIRED_FIELDS),
             "teams": features["teams"],
             "feature_preview": features["feature_preview"],
             "missing_indicators": features["missing_indicators"],
@@ -54,7 +66,7 @@ def generate_report(dry_run: bool = True) -> dict[str, Any]:
             "lightgbm_available": gbm.get("lightgbm_available", False),
             "w_gbm": features.get("w_gbm", 0),
             "candidate_w_gbm": features.get("candidate_w_gbm", 0),
-            "production_w_gbm": 0,
+            "production_w_gbm": p3_ingest.PRODUCTION_W_GBM,
             "affects_p1_predictions": False,
         },
         "production_safety": {
@@ -75,11 +87,19 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print("")
     print("1. Source plan")
     print(f"- mode: {report['source_plan']['mode']}")
+    print(f"- p3_mode: {report['source_plan']['p3_mode']}")
+    print(f"- requires_xg_xa: {str(report['source_plan']['requires_xg_xa']).lower()}")
+    print(f"- xg_xa_optional: {str(report['source_plan']['xg_xa_optional']).lower()}")
+    print(f"- light_required_fields: {_safe(report['source_plan']['light_required_fields'])}")
     print(f"- external_scraping_enabled: {str(report['source_plan']['external_scraping_enabled']).lower()}")
     print(f"- full_production_import_enabled: {str(report['source_plan']['full_production_import_enabled']).lower()}")
     print("")
     print("2. Real CSV validation")
     print(f"- status: {report['real_csv_validation']['status']}")
+    print(f"- p3_mode: {report['real_csv_validation']['p3_mode']}")
+    print(f"- requires_xg_xa: {str(report['real_csv_validation']['requires_xg_xa']).lower()}")
+    print(f"- xg_xa_optional: {str(report['real_csv_validation']['xg_xa_optional']).lower()}")
+    print(f"- light_required_fields: {_safe(report['real_csv_validation']['light_required_fields'])}")
     print(f"- real_csv_exists: {str(report['real_csv_validation']['real_csv_exists']).lower()}")
     print(f"- real_performance_csv_exists: {str(report['real_csv_validation']['real_performance_csv_exists']).lower()}")
     print(f"- rows_validated: {report['real_csv_validation']['rows_validated']}")
@@ -93,6 +113,10 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print("")
     print("3. Feature readiness")
     print(f"- status: {report['feature_readiness']['status']}")
+    print(f"- p3_mode: {report['feature_readiness']['p3_mode']}")
+    print(f"- requires_xg_xa: {str(report['feature_readiness']['requires_xg_xa']).lower()}")
+    print(f"- xg_xa_optional: {str(report['feature_readiness']['xg_xa_optional']).lower()}")
+    print(f"- light_required_fields: {_safe(report['feature_readiness']['light_required_fields'])}")
     print(f"- teams: {_safe(report['feature_readiness']['teams'])}")
     print(f"- missing_indicators: {_safe(report['feature_readiness']['missing_indicators'])}")
     print(f"- performance_coverage: {_safe(report['feature_readiness']['performance_coverage'])}")

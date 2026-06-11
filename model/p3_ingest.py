@@ -34,6 +34,10 @@ REAL_PLAYER_STATS_DATA_FILE = DATA_DIR / "manual_real_player_stats.csv"
 REAL_INJURIES_DATA_FILE = DATA_DIR / "manual_real_injuries.csv"
 GBM_COVERAGE_THRESHOLD = 0.70
 GBM_GRAY_WEIGHT = 0.20
+P3_MODE = "light"
+REQUIRES_XG_XA = False
+XG_XA_OPTIONAL = True
+PRODUCTION_W_GBM = 0
 
 REQUIRED_COLUMNS = {
     "squad": {"player_key", "name", "team", "position", "birth_date", "market_value", "source"},
@@ -92,10 +96,12 @@ PERFORMANCE_REQUIRED_VALUES = {
     "source",
     "retrieved_at",
     "confidence",
+    "notes",
 }
 PERFORMANCE_REQUIRED_NUMERIC_COLUMNS = {"minutes_recent", "goals_recent", "assists_recent"}
 PERFORMANCE_OPTIONAL_NUMERIC_COLUMNS = {"xg_recent", "xa_recent"}
 PERFORMANCE_NUMERIC_COLUMNS = PERFORMANCE_REQUIRED_NUMERIC_COLUMNS | PERFORMANCE_OPTIONAL_NUMERIC_COLUMNS
+LIGHT_REQUIRED_FIELDS = sorted((PERFORMANCE_REQUIRED_VALUES - {"team", "player_name"}) | PERFORMANCE_REQUIRED_NUMERIC_COLUMNS)
 REAL_NUMERIC_COLUMNS = {
     "age",
     "minutes_recent",
@@ -239,6 +245,10 @@ def validate_real(data_dir: Path = DATA_DIR, dry_run: bool = True) -> dict[str, 
         "status": status,
         "result": "WAIT" if status == "no_real_data_csv" else ("PASS" if ok else "FAIL"),
         "dry_run": dry_run,
+        "p3_mode": P3_MODE,
+        "requires_xg_xa": REQUIRES_XG_XA,
+        "xg_xa_optional": XG_XA_OPTIONAL,
+        "light_required_fields": LIGHT_REQUIRED_FIELDS,
         "real_csv_exists": real_csv_exists,
         "rows_validated": total_rows,
         "performance_rows_validated": performance_details["rows"],
@@ -263,6 +273,11 @@ def build_team_features_real(dry_run: bool = True, data_dir: Path = DATA_DIR) ->
             "would_write_db": False,
             "w_gbm": 0,
             "candidate_w_gbm": 0,
+            "production_w_gbm": PRODUCTION_W_GBM,
+            "p3_mode": P3_MODE,
+            "requires_xg_xa": REQUIRES_XG_XA,
+            "xg_xa_optional": XG_XA_OPTIONAL,
+            "light_required_fields": LIGHT_REQUIRED_FIELDS,
             "performance_coverage": empty_coverage,
             "coverage_by_team": {},
             "teams_below_70_percent": [],
@@ -285,6 +300,11 @@ def build_team_features_real(dry_run: bool = True, data_dir: Path = DATA_DIR) ->
         "teams_below_70_percent": _teams_below_threshold(performance_coverage),
         "gbm_ready": gbm_ready,
         "candidate_w_gbm": GBM_GRAY_WEIGHT if gbm_ready else 0,
+        "production_w_gbm": PRODUCTION_W_GBM,
+        "p3_mode": P3_MODE,
+        "requires_xg_xa": REQUIRES_XG_XA,
+        "xg_xa_optional": XG_XA_OPTIONAL,
+        "light_required_fields": LIGHT_REQUIRED_FIELDS,
         "w_gbm": 0 if dry_run else (GBM_GRAY_WEIGHT if gbm_ready else 0),
     }
 

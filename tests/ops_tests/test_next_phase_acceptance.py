@@ -7,6 +7,8 @@ def test_next_phase_acceptance_waits_without_production_risk() -> None:
     report = next_phase_acceptance.generate_report()
 
     assert report["overall_result"] == "WAIT"
+    assert report["p3d"]["source_plan"]["p3_mode"] == "light"
+    assert report["p3d"]["source_plan"]["requires_xg_xa"] is False
     assert report["production_safety"]["betting_enabled"] is False
     assert report["production_safety"]["gbm_weight"] == 0
     assert report["production_safety"]["candidate_w_gbm"] == 0

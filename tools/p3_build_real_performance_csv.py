@@ -41,6 +41,10 @@ def build_real_performance_csv(
         return {
             "ok": False,
             "result": "WAIT",
+            "p3_mode": p3_ingest.P3_MODE,
+            "requires_xg_xa": p3_ingest.REQUIRES_XG_XA,
+            "xg_xa_optional": p3_ingest.XG_XA_OPTIONAL,
+            "light_required_fields": p3_ingest.LIGHT_REQUIRED_FIELDS,
             "reason": "no_legal_recent_performance_source",
             "source_files": [],
             "would_write_db": False,
@@ -51,6 +55,8 @@ def build_real_performance_csv(
             "teams_below_70_percent": [],
             "unmatched_players": [],
             "fake_or_example_rows_detected": False,
+            "candidate_w_gbm": 0,
+            "production_w_gbm": p3_ingest.PRODUCTION_W_GBM,
             "output": str(out),
         }
     rows, read_errors = _read_source_rows(source_paths)
@@ -68,6 +74,10 @@ def build_real_performance_csv(
     return {
         "ok": ok,
         "result": "PASS" if ok else "FAIL",
+        "p3_mode": p3_ingest.P3_MODE,
+        "requires_xg_xa": p3_ingest.REQUIRES_XG_XA,
+        "xg_xa_optional": p3_ingest.XG_XA_OPTIONAL,
+        "light_required_fields": p3_ingest.LIGHT_REQUIRED_FIELDS,
         "reason": None if ok else "source_csv_validation_failed",
         "source_files": [str(path) for path in source_paths],
         "would_write_db": False,
@@ -79,6 +89,8 @@ def build_real_performance_csv(
         "unmatched_players": validation["unmatched_players"],
         "errors": read_errors + validation["errors"],
         "fake_or_example_rows_detected": validation["fake_or_example_rows_detected"],
+        "candidate_w_gbm": p3_ingest.GBM_GRAY_WEIGHT if ok and not teams_below else 0,
+        "production_w_gbm": p3_ingest.PRODUCTION_W_GBM,
         "output": str(out),
     }
 
@@ -87,6 +99,10 @@ def print_report(report: dict[str, Any]) -> None:
     print("P3 Real Performance CSV Build Report")
     for key in (
         "result",
+        "p3_mode",
+        "requires_xg_xa",
+        "xg_xa_optional",
+        "light_required_fields",
         "reason",
         "source_files",
         "output",
@@ -95,6 +111,8 @@ def print_report(report: dict[str, Any]) -> None:
         "teams_below_70_percent",
         "unmatched_players",
         "fake_or_example_rows_detected",
+        "candidate_w_gbm",
+        "production_w_gbm",
         "would_write_csv",
         "would_write_db",
     ):

@@ -83,6 +83,19 @@ def test_performance_optional_xg_xa_can_be_unavailable(tmp_path: Path) -> None:
     assert validation["performance_rows_validated"] == 1
 
 
+def test_p3_light_requires_notes_even_when_xg_xa_present(tmp_path: Path) -> None:
+    _write_real_rows(tmp_path, teams=("Mexico",), players_per_team=1)
+    (tmp_path / "real_performance_squad.csv").write_text(
+        PERFORMANCE_HEADER + "Mexico,Mexico Player 1,Club,900,1,1,0.5,0.2,manual,2026-06-12,high,\n",
+        encoding="utf-8",
+    )
+
+    validation = p3_ingest.validate_real(data_dir=tmp_path, dry_run=True)
+
+    assert validation["ok"] is False
+    assert "missing required notes" in str(validation["details"]["performance"]["errors"])
+
+
 def test_performance_rejects_players_outside_official_roster(tmp_path: Path) -> None:
     _write_real_rows(tmp_path, teams=("Mexico",), players_per_team=1)
     (tmp_path / "real_performance_squad.csv").write_text(
@@ -124,6 +137,18 @@ def test_performance_coverage_ready_reports_candidate_weight_only_in_dry_run(tmp
 
     assert features["gbm_ready"] is True
     assert features["teams_below_70_percent"] == []
+    assert features["p3_mode"] == "light"
+    assert features["requires_xg_xa"] is False
+    assert features["xg_xa_optional"] is True
+    assert features["light_required_fields"] == [
+        "assists_recent",
+        "confidence",
+        "goals_recent",
+        "minutes_recent",
+        "notes",
+        "retrieved_at",
+        "source",
+    ]
     assert features["candidate_w_gbm"] == 0.2
     assert features["w_gbm"] == 0
     assert features["would_write_db"] is False

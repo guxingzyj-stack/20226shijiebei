@@ -72,9 +72,11 @@ data/p3/real_performance_*.csv
 
 Use `data/p3/real_performance_squad_template.csv` only as a schema example. Rows marked `EXAMPLE_ONLY_DO_NOT_USE` are rejected by validation and must never be treated as real data.
 
-Recent performance files require `source`, `retrieved_at`, and `confidence` for every row. `minutes_recent`, `goals_recent`, and `assists_recent` are required numeric fields. `xg_recent` and `xa_recent` may be blank only when `notes` contains `unavailable`.
+Recent performance files require `source`, `retrieved_at`, `confidence`, and `notes` for every row. `minutes_recent`, `goals_recent`, and `assists_recent` are required numeric fields. `xg_recent` and `xa_recent` may be blank only when `notes` contains `unavailable`.
 
-GBM remains gated until every team reaches at least 70% complete recent performance coverage. Until then, `w_gbm=0` and P1 production predictions are unchanged.
+P3-Light gates GBM on `minutes_recent`, `goals_recent`, and `assists_recent` coverage only; xG/xA are optional and must not be faked. GBM remains gated until every team reaches at least 70% complete P3-Light recent performance coverage. Until then, `w_gbm=0` and P1 production predictions are unchanged.
+
+P3-Full is the later upgrade path for licensed xG/xA coverage. P3-Light may report `candidate_w_gbm=0.2` after coverage is sufficient, but `production_w_gbm` remains `0` until a separate reviewed deployment changes production weights.
 
 ## Safety
 

@@ -50,7 +50,7 @@ Performance CSV files must use:
 team,player_name,club,minutes_recent,goals_recent,assists_recent,xg_recent,xa_recent,source,retrieved_at,confidence,notes
 ```
 
-The `real_performance_*.csv` rows are strict: `minutes_recent`, `goals_recent`, `assists_recent`, `xg_recent`, and `xa_recent` must all be present and numeric. Empty performance values are rejected instead of silently treated as real model input.
+The `real_performance_*.csv` rows now follow P3-Light: `minutes_recent`, `goals_recent`, and `assists_recent` must be present and numeric. `xg_recent` and `xa_recent` are optional for P3-Light, but blank values require `notes` to contain `unavailable`. Unknown xG/xA must not be replaced with fake zeroes.
 
 Validation rules:
 

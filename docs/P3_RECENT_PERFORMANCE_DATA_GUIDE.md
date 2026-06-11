@@ -1,6 +1,21 @@
 # P3 Recent Performance Data Guide
 
-P3 recent performance data must be prepared as reviewed CSV. Do not scrape FBref or Transfermarkt, do not bypass rate limits or access controls, and do not invent player performance numbers.
+P3 recent performance data now uses P3-Light by default. P3-Light uses reviewed `minutes_recent`, `goals_recent`, and `assists_recent` first, while `xg_recent` and `xa_recent` are optional. Do not scrape FBref or Transfermarkt, do not bypass rate limits or access controls, and do not invent player performance numbers.
+
+## Modes
+
+P3-Light:
+
+- uses `minutes_recent`, `goals_recent`, and `assists_recent`;
+- allows blank `xg_recent` and `xa_recent` only when `notes` contains `unavailable`;
+- can report `candidate_w_gbm=0.2` after every team reaches 70% coverage;
+- never changes production P1 fusion weights automatically.
+
+P3-Full:
+
+- future upgrade path for licensed xG/xA data;
+- requires a higher-grade authorized data source;
+- should be evaluated separately before raising any GBM production weight.
 
 ## Target File
 
@@ -35,6 +50,7 @@ assists_recent
 source
 retrieved_at
 confidence
+notes
 ```
 
 `club` is recommended but may be blank when the source does not provide a current club. `xg_recent` and `xa_recent` may be blank only when `notes` contains `unavailable`.
@@ -44,6 +60,7 @@ confidence
 - `team` and `player_name` must match the official 48-team FIFA squad CSV already in `data/p3/manual_real_squad.csv`.
 - `minutes_recent`, `goals_recent`, and `assists_recent` must be numeric and greater than or equal to 0.
 - `xg_recent` and `xa_recent` must be numeric and greater than or equal to 0 when present.
+- `xg_recent` and `xa_recent` are not required for P3-Light; do not fill unknown values with fake `0`.
 - `confidence` must be `high`, `medium`, or `low`.
 - `source` must identify the licensed or manually reviewed source.
 - `retrieved_at` must be present so the dataset can be audited later.
@@ -51,7 +68,7 @@ confidence
 
 ## GBM Gate
 
-GBM remains disabled unless every team has at least 70% of official squad players with complete recent performance rows.
+GBM remains disabled unless every team has at least 70% of official squad players with complete P3-Light recent performance rows.
 
 Dry-run behavior:
 
@@ -65,6 +82,7 @@ When coverage is sufficient in a non-production build, the framework may report:
 
 ```text
 candidate_w_gbm=0.2
+production_w_gbm=0
 ```
 
 This is only a candidate gray weight. It must not change P1 production fusion weights without a separate reviewed deployment.

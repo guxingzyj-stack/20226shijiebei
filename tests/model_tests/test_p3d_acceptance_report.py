@@ -8,6 +8,11 @@ def test_p3d_acceptance_waits_for_full_real_csv_and_keeps_gbm_zero() -> None:
 
     assert report["result"] == "WAIT"
     assert report["blocker"] in {"no_real_performance_csv", "performance_coverage_below_threshold", "numeric_recent_stats_incomplete"}
+    assert report["source_plan"]["p3_mode"] == "light"
+    assert report["source_plan"]["requires_xg_xa"] is False
+    assert report["source_plan"]["xg_xa_optional"] is True
+    assert report["real_csv_validation"]["p3_mode"] == "light"
+    assert report["feature_readiness"]["p3_mode"] == "light"
     assert report["real_csv_validation"]["real_csv_exists"] is True
     assert report["real_csv_validation"]["real_performance_csv_exists"] is False
     assert report["real_csv_validation"]["performance_rows_validated"] == 0

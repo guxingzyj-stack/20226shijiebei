@@ -18,6 +18,9 @@ def test_builder_waits_without_source_csv(tmp_path: Path) -> None:
     )
 
     assert report["result"] == "WAIT"
+    assert report["p3_mode"] == "light"
+    assert report["requires_xg_xa"] is False
+    assert report["xg_xa_optional"] is True
     assert report["reason"] == "no_legal_recent_performance_source"
     assert report["would_write_csv"] is False
     assert not (tmp_path / "real_performance_squad.csv").exists()
@@ -102,9 +105,14 @@ def test_builder_writes_valid_csv_and_reports_coverage(tmp_path: Path, monkeypat
     )
 
     assert report["result"] == "PASS"
+    assert report["p3_mode"] == "light"
+    assert report["requires_xg_xa"] is False
+    assert report["xg_xa_optional"] is True
     assert report["rows"] == 1
     assert report["coverage_by_team"]["Mexico"]["ratio"] == 1.0
     assert report["teams_below_70_percent"] == []
+    assert report["candidate_w_gbm"] == 0.2
+    assert report["production_w_gbm"] == 0
     assert report["would_write_csv"] is True
     assert out.exists()
 

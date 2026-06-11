@@ -1,6 +1,8 @@
 # P3 Performance Source Review
 
-This project currently does not have a compliant recent performance CSV. Official 48-team squad/profile rows are present, but recent club minutes, goals, assists, xG, and xA still require a reviewed source.
+This project currently does not have a compliant recent performance CSV. Official 48-team squad/profile rows are present, but recent club minutes, goals, and assists still require a reviewed source.
+
+P3-Light does not require xG/xA. Blank `xg_recent` and `xa_recent` are acceptable only when `notes` contains `unavailable`; unknown xG/xA must not be replaced with fake zeroes.
 
 ## Reviewed Options
 
@@ -43,10 +45,15 @@ Use one of:
 Current gate:
 
 ```text
+p3_mode=light
+requires_xg_xa=false
+xg_xa_optional=true
 real_performance_csv_exists=false
 performance_rows_validated=0
 gbm_ready=false
 w_gbm=0
+candidate_w_gbm=0
+production_w_gbm=0
 result=WAIT
 ```
 
