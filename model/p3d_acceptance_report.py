@@ -58,16 +58,16 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print(f"- status: {report['real_csv_validation']['status']}")
     print(f"- real_csv_exists: {str(report['real_csv_validation']['real_csv_exists']).lower()}")
     print(f"- rows_validated: {report['real_csv_validation']['rows_validated']}")
-    print(f"- validation_errors: {report['real_csv_validation']['validation_errors']}")
-    print(f"- source_coverage: {report['real_csv_validation']['source_coverage']}")
-    print(f"- retrieved_at_coverage: {report['real_csv_validation']['retrieved_at_coverage']}")
+    print(f"- validation_errors: {_safe(report['real_csv_validation']['validation_errors'])}")
+    print(f"- source_coverage: {_safe(report['real_csv_validation']['source_coverage'])}")
+    print(f"- retrieved_at_coverage: {_safe(report['real_csv_validation']['retrieved_at_coverage'])}")
     print(f"- confidence_valid: {str(report['real_csv_validation']['confidence_valid']).lower()}")
     print(f"- would_write_db: {str(report['real_csv_validation']['would_write_db']).lower()}")
     print("")
     print("3. Feature readiness")
     print(f"- status: {report['feature_readiness']['status']}")
-    print(f"- teams: {report['feature_readiness']['teams']}")
-    print(f"- missing_indicators: {report['feature_readiness']['missing_indicators']}")
+    print(f"- teams: {_safe(report['feature_readiness']['teams'])}")
+    print(f"- missing_indicators: {_safe(report['feature_readiness']['missing_indicators'])}")
     print("")
     print("4. GBM status")
     print(f"- lightgbm_available: {str(report['gbm_status']['lightgbm_available']).lower()}")
@@ -85,6 +85,10 @@ def _validation_errors(validation: dict[str, Any]) -> list[str]:
         errors.extend(f"{name}: missing column {column}" for column in detail.get("missing_columns", []))
         errors.extend(detail.get("errors", []))
     return errors
+
+
+def _safe(value: Any) -> str:
+    return str(value).encode("ascii", "backslashreplace").decode("ascii")
 
 
 def _source_coverage(validation: dict[str, Any]) -> dict[str, int]:

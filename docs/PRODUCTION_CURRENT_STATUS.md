@@ -1,6 +1,6 @@
 # Production Current Status
 
-Production read-only version is stable. `BETTING_ENABLED` remains `false`. P1-C and P3-D are readiness-complete at the tooling level but are still waiting on real data.
+Production read-only version is stable. `BETTING_ENABLED` remains `false`. P1-C is still waiting on historical market odds. P3-D has a small-batch real CSV dry-run for four teams, but this is not full feature-model production enablement.
 
 ## 1. Public Endpoints
 
@@ -68,10 +68,13 @@ No real connection strings, passwords, tokens, or backup contents are stored in 
 - tooling: `python -m model.p1c_acceptance_report`
 - current result must not be recorded as `PASS`.
 
-## 9. P3-D WAIT
+## 9. P3-D Small-Batch Dry-Run
 
-- status: `WAIT`
-- blocker: missing reviewed real team/player/injury CSV
+- status: small-batch data ready / dry-run only
+- teams: Mexico, South Africa, Germany, Curaçao
+- rows: squad=40, player_stats=16, injuries=12
+- source/retrieved_at/confidence coverage: complete for included rows
+- production DB writes: no
 - tooling: `python -m model.p3_acceptance_report --real-dry-run`
 - GBM remains `w_gbm=0`.
 
@@ -84,7 +87,7 @@ No real connection strings, passwords, tokens, or backup contents are stored in 
 ## 11. Remaining Blockers
 
 - P1-C real historical market odds source and backtest numbers
-- P3-D reviewed real team/player/injury CSV
+- P3-D full reviewed real team/player/injury CSV with reliable numeric performance data
 - real-match settlement observation after actual completed matches
 - continued scheduler observation
 

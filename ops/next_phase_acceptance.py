@@ -35,7 +35,7 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print(f"- result: {report['p3d']['result']}")
     print(f"- real_csv_exists: {str(report['p3d']['real_csv_validation']['real_csv_exists']).lower()}")
     print(f"- rows_validated: {report['p3d']['real_csv_validation']['rows_validated']}")
-    print(f"- source_coverage: {report['p3d']['real_csv_validation']['source_coverage']}")
+    print(f"- source_coverage: {_safe(report['p3d']['real_csv_validation']['source_coverage'])}")
     print(f"- w_gbm: {report['p3d']['gbm_status']['w_gbm']}")
     print(f"- blocker: {report['p3d']['blocker']}")
     print("")
@@ -54,6 +54,10 @@ def _overall_result(p1c: dict[str, Any], p3d: dict[str, Any], safety: dict[str, 
     if p1c["result"] == "WAIT" or p3d["result"] == "WAIT":
         return "WAIT"
     return "PASS"
+
+
+def _safe(value: Any) -> str:
+    return str(value).encode("ascii", "backslashreplace").decode("ascii")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -37,9 +37,12 @@ Current production posture:
 
 ### P3-D
 
-- status: `WAIT`
-- blocker: missing reviewed real team/player/injury CSV
-- note: dry-run templates and validation are ready; no real CSV rows are imported.
+- status: small-batch data ready / dry-run only
+- teams: Mexico, South Africa, Germany, Curaçao
+- rows: squad=40, player_stats=16, injuries=12
+- production DB writes: no
+- GBM: `w_gbm=0`
+- note: this is not full P3-D completion and does not affect production predictions.
 
 ### Betting
 
@@ -80,5 +83,5 @@ bash deploy/backup_postgres.sh
 - Do not write fake scores to real `500-` matches.
 - Do not scrape external football data sites.
 - Do not mark P1-C as `PASS` without real historical national-team market odds.
-- Do not mark P3-D as `PASS` without reviewed real CSV data.
+- Do not mark full P3-D as complete without full reviewed real CSV data and reliable numeric performance fields.
 - Do not enable GBM weight from sample or header-only P3 data.

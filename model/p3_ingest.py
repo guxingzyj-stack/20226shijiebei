@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -568,7 +569,7 @@ def main(argv: list[str] | None = None) -> int:
         result = build_team_features_real(dry_run=args.dry_run)
     else:
         parser.error(f"unknown command: {args.command}")
-    print(result)
+    print(json.dumps(result, ensure_ascii=True, default=str))
     return 0 if result.get("ok", True) is not False else 1
 
 
