@@ -32,7 +32,7 @@ Current production posture:
 ### P1-C
 
 - status: `WAIT`
-- blocker: missing real historical market odds
+- blocker: 500.com trade date page returned current/future rows for requested 2022 dates; valid historical market odds CSV is still missing
 - note: do not mark as `PASS` until real historical national-team market odds produce real RPS metrics.
 
 ### P3-D

@@ -64,7 +64,7 @@ No real connection strings, passwords, tokens, or backup contents are stored in 
 ## 8. P1-C WAIT
 
 - status: `WAIT`
-- blocker: missing real historical national-team market odds
+- blocker: 500.com trade date page returned 2026 rows for requested 2022 date; no valid historical odds CSV generated
 - tooling: `python -m model.p1c_acceptance_report`
 - current result must not be recorded as `PASS`.
 

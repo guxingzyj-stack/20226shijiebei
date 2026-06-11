@@ -42,6 +42,15 @@ Weights are searched over `w_dc` in `[0, 1]` at step `0.05`.
 
 ## Current Acceptance State
 
+The 500.com historical route was probed after the temporary service reported page access. A stricter backfill probe rejected the page because `https://trade.500.com/jczq/?date=2022-11-20` returned current/future World Cup rows with `data-matchdate` in 2026, not the requested 2022 historical date.
+
+Current blocker:
+
+```text
+500.com date parameter does not return 2022 historical rows in the probed trade page.
+manual_validation_odds.csv has not been generated.
+```
+
 If no real historical market odds source is available, the correct result is:
 
 ```text
@@ -50,4 +59,3 @@ result: WAIT
 ```
 
 Do not write `PASS` until real historical market odds are available and the report produces real metrics.
-

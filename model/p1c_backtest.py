@@ -15,6 +15,7 @@ from model.metrics import rps_three_way
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data" / "p1c"
 MANUAL_MARKET_ODDS_TEMPLATE = DATA_DIR / "manual_historical_market_odds_template.csv"
+MANUAL_VALIDATION_ODDS = DATA_DIR / "manual_validation_odds.csv"
 MIN_BACKTEST_MATCHES = 30
 WEIGHT_GRID = [step / 20 for step in range(21)]
 REQUIRED_COLUMNS = {
@@ -68,12 +69,14 @@ def discover_sources() -> dict[str, Any]:
         },
         "manual_csv": {
             "template_exists": MANUAL_MARKET_ODDS_TEMPLATE.exists(),
-            "path": str(MANUAL_MARKET_ODDS_TEMPLATE),
+            "validation_exists": MANUAL_VALIDATION_ODDS.exists(),
+            "path": str(_default_manual_csv_path()),
         },
     }
 
 
-def validate_manual_csv(path: Path = MANUAL_MARKET_ODDS_TEMPLATE) -> dict[str, Any]:
+def validate_manual_csv(path: Path | None = None) -> dict[str, Any]:
+    path = path or _default_manual_csv_path()
     if not path.exists():
         return {"ok": False, "rows": 0, "missing_columns": sorted(REQUIRED_COLUMNS), "errors": [f"missing file: {path}"]}
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
@@ -85,7 +88,8 @@ def validate_manual_csv(path: Path = MANUAL_MARKET_ODDS_TEMPLATE) -> dict[str, A
     return {"ok": not missing and not errors, "rows": len(rows), "missing_columns": missing, "errors": errors}
 
 
-def load_manual_rows(path: Path = MANUAL_MARKET_ODDS_TEMPLATE) -> list[BacktestRow]:
+def load_manual_rows(path: Path | None = None) -> list[BacktestRow]:
+    path = path or _default_manual_csv_path()
     report = validate_manual_csv(path)
     if not report["ok"]:
         raise ValueError(f"manual historical market CSV validation failed: {report}")
@@ -155,7 +159,8 @@ def run_backtest(
     }
 
 
-def run_manual_backtest(dry_run: bool = False, path: Path = MANUAL_MARKET_ODDS_TEMPLATE) -> dict[str, Any]:
+def run_manual_backtest(dry_run: bool = False, path: Path | None = None) -> dict[str, Any]:
+    path = path or _default_manual_csv_path()
     validation = validate_manual_csv(path)
     if not validation["ok"]:
         return {
@@ -169,6 +174,7 @@ def run_manual_backtest(dry_run: bool = False, path: Path = MANUAL_MARKET_ODDS_T
     result["dry_run"] = dry_run
     result["would_write_db"] = False
     result["source"] = "manual_csv"
+    result["path"] = str(path)
     result["validation"] = validation
     return result
 
@@ -181,6 +187,10 @@ def fetch_odds_api_dry_run() -> dict[str, Any]:
         "reason": "key is present; historical quota/support must be checked outside tests without printing the key",
         "would_write_db": False,
     }
+
+
+def _default_manual_csv_path() -> Path:
+    return MANUAL_VALIDATION_ODDS if MANUAL_VALIDATION_ODDS.exists() else MANUAL_MARKET_ODDS_TEMPLATE
 
 
 def _row_from_csv(row: dict[str, str]) -> BacktestRow:
