@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, CalendarDays, LogIn, Medal, ReceiptText, Ticket } from "lucide-react";
+import { BarChart3, CalendarDays, History, LogIn, Medal, ReceiptText, Ticket } from "lucide-react";
 import { Disclaimer } from "./Disclaimer";
 import { useAuth } from "../auth/AuthContext";
 
@@ -8,6 +8,7 @@ const navItems = [
   { to: "/bet", label: "注单", icon: Ticket },
   { to: "/bets", label: "我的", icon: ReceiptText },
   { to: "/leaderboard", label: "排行", icon: Medal },
+  { to: "/recap", label: "复盘", icon: History },
   { to: "/auth", label: "登录", icon: LogIn },
 ];
 
@@ -55,7 +56,7 @@ export function Layout() {
         <Outlet />
       </main>
       <div className="fixed bottom-0 left-0 right-0 z-40 md:static">
-        <nav className="grid grid-cols-5 border-t border-white/10 bg-pitch/95 px-1 py-1 backdrop-blur md:hidden">
+        <nav className="grid grid-cols-6 border-t border-white/10 bg-pitch/95 px-1 py-1 backdrop-blur md:hidden">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (

@@ -6,6 +6,7 @@ import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { MatchDetailPage } from "./pages/MatchDetailPage";
 import { MatchesPage } from "./pages/MatchesPage";
 import { MyBetsPage } from "./pages/MyBetsPage";
+import { RecapPage } from "./pages/RecapPage";
 
 export function App() {
   return (
@@ -16,6 +17,7 @@ export function App() {
         <Route path="/bet" element={<BetPage />} />
         <Route path="/bets" element={<MyBetsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/recap" element={<RecapPage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

@@ -30,3 +30,10 @@ def test_gbm_unavailable_gets_zero_weight():
     result = choose_p3_weights({"w_dc": 0.3, "w_market": 0.7}, "gbm_unavailable")
 
     assert result["weights"]["w_gbm"] == 0
+
+
+def test_gbm_not_worse_than_p1_can_receive_requested_weight():
+    result = choose_p3_weights({"w_dc": 0.3, "w_market": 0.7}, "ok", p1_rps=0.20, gbm_rps=0.19, requested_w_gbm=0.2)
+
+    assert result["status"] == "ok"
+    assert result["weights"]["w_gbm"] > 0

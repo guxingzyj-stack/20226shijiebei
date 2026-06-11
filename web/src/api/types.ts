@@ -95,3 +95,12 @@ export type LeaderboardEntry = {
   roi?: string | number;
   settled_bets?: number;
 };
+
+export type RecapStatus = {
+  status: string;
+  message?: string;
+  finished_matches?: number;
+  buckets?: unknown[];
+  points?: unknown[];
+  rows?: unknown[];
+};

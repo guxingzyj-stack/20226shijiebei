@@ -11,6 +11,7 @@ from psycopg.errors import UniqueViolation
 from api.auth import create_access_token, current_user_claims, hash_password, verify_password
 from api.betting import BETTING_DISABLED_MESSAGE, is_betting_enabled, place_bet, suggested_stake
 from api.db import Database, get_db
+from api import recap
 from api.scheduler import start_api_scheduler, stop_api_scheduler
 from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenResponse, UserCreate, UserLogin
 
@@ -147,6 +148,26 @@ def model_suggestion(
         ev=float(signal["ev"]),
         suggested_stake=stake,
     )
+
+
+@app.get("/api/recap/status")
+def recap_status() -> dict:
+    return recap.recap_status()
+
+
+@app.get("/api/recap/calibration")
+def recap_calibration() -> dict:
+    return recap.recap_calibration()
+
+
+@app.get("/api/recap/funds")
+def recap_funds() -> dict:
+    return recap.recap_funds()
+
+
+@app.get("/api/recap/plays")
+def recap_plays() -> dict:
+    return recap.recap_plays()
 
 
 def _prediction_status(prediction: dict | None) -> dict:

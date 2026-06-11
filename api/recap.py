@@ -6,10 +6,42 @@ from typing import Any
 from api.db import connect
 
 
+MIN_FINISHED_MATCHES = 8
+INSUFFICIENT_MESSAGE = "完赛场次不足，复盘将在小组赛进行后生成。"
 INSUFFICIENT = {
     "status": "insufficient_finished_matches",
-    "message": "完赛场次不足，复盘将在小组赛进行后生成。",
+    "message": INSUFFICIENT_MESSAGE,
 }
+
+
+def recap_status() -> dict[str, Any]:
+    finished = _finished_matches_count()
+    if finished < MIN_FINISHED_MATCHES:
+        return {**INSUFFICIENT, "finished_matches": finished}
+    return {"status": "ready", "message": "recap data available", "finished_matches": finished}
+
+
+def recap_calibration() -> dict[str, Any]:
+    count = _finished_matches_count()
+    if count < MIN_FINISHED_MATCHES:
+        return {**INSUFFICIENT, "finished_matches": count, "buckets": []}
+    return {"status": "not_implemented", "finished_matches": count, "buckets": []}
+
+
+def recap_funds(user_id: int | None = None) -> dict[str, Any]:
+    if _finished_matches_count() < MIN_FINISHED_MATCHES:
+        return {**INSUFFICIENT, "points": []}
+    if user_id is None:
+        return {"status": "not_implemented", "points": []}
+    curve = compute_user_balance_curve(user_id)
+    return {"status": "ready", "points": curve} if isinstance(curve, list) else {**curve, "points": []}
+
+
+def recap_plays() -> dict[str, Any]:
+    count = _finished_matches_count()
+    if count < MIN_FINISHED_MATCHES:
+        return {**INSUFFICIENT, "finished_matches": count, "rows": []}
+    return {"status": "not_implemented", "finished_matches": count, "rows": []}
 
 
 def compute_user_balance_curve(user_id: int) -> list[dict[str, Any]] | dict[str, str]:
@@ -39,7 +71,7 @@ def compute_user_balance_curve(user_id: int) -> list[dict[str, Any]] | dict[str,
 
 
 def compute_model_follow_curve() -> list[dict[str, Any]] | dict[str, str]:
-    return INSUFFICIENT if _finished_matches_count() < 8 else []
+    return INSUFFICIENT if _finished_matches_count() < MIN_FINISHED_MATCHES else []
 
 
 def compute_random_baseline_stub(seed: int = 2026) -> dict[str, Any]:
@@ -48,10 +80,7 @@ def compute_random_baseline_stub(seed: int = 2026) -> dict[str, Any]:
 
 
 def calibration_curve_from_finished_matches() -> dict[str, Any]:
-    count = _finished_matches_count()
-    if count < 8:
-        return {**INSUFFICIENT, "finished_matches": count}
-    return {"status": "not_implemented", "finished_matches": count, "buckets": []}
+    return recap_calibration()
 
 
 def _finished_matches_count() -> int:
