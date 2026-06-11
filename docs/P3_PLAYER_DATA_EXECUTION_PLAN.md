@@ -45,6 +45,20 @@ xa_recent
 
 Blank values are allowed during collection, but they keep the team incomplete.
 
+Reviewed recent performance rows should be added as:
+
+```text
+data/p3/real_performance_*.csv
+```
+
+Required performance columns:
+
+```text
+team,player_name,club,minutes_recent,goals_recent,assists_recent,xg_recent,xa_recent,source,retrieved_at,confidence,notes
+```
+
+Every performance row must contain complete numeric values for minutes, goals, assists, xG, and xA. GBM gray release requires at least 70% complete recent performance coverage for every tournament team.
+
 ## Commands
 
 Audit current coverage:
@@ -95,6 +109,7 @@ Use that file as the working queue. Do not delete rows manually to make the repo
 - Each row must keep `source`, `retrieved_at`, and `confidence`.
 - If a source only confirms squad membership but not recent minutes or xG/xA, leave numeric fields blank and keep the team incomplete.
 - `w_gbm` remains `0` until the P3 feature model beats or matches P1 in backtest.
+- P3 dry-run reports `gbm_ready` when performance coverage is high enough, but keeps `w_gbm=0`; local/test non-dry-run can report gray `w_gbm=0.2` without changing P1 production fusion weights.
 - P3 data does not open betting; keep `BETTING_ENABLED=false`.
 
 ## Immediate Work Order

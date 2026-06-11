@@ -165,7 +165,11 @@ def row_to_dict(row: TeamCoverage) -> dict[str, Any]:
 def _coverage_for_team(team: str, first_match: dict[str, str], real_rows: dict[str, list[dict[str, str]]]) -> TeamCoverage:
     canonical = _canonical_team(team)
     squad = [row for row in real_rows.get("squad", []) if _canonical_team(row.get("team", "")) == canonical]
-    stats = [row for row in real_rows.get("player_stats", []) if _canonical_team(row.get("team", "")) == canonical]
+    stats = [
+        row
+        for row in real_rows.get("player_stats", []) + real_rows.get("performance", [])
+        if _canonical_team(row.get("team", "")) == canonical
+    ]
     injuries = [row for row in real_rows.get("injuries", []) if _canonical_team(row.get("team", "")) == canonical]
     all_rows = squad + stats + injuries
     return TeamCoverage(

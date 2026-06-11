@@ -6,9 +6,9 @@ from typing import Any
 from model import p3_data_audit, p3_ingest, p3_train
 
 
-def generate_report() -> dict[str, Any]:
+def generate_report(dry_run: bool = True) -> dict[str, Any]:
     validation = p3_ingest.validate_real(dry_run=True)
-    features = p3_ingest.build_team_features_real(dry_run=True)
+    features = p3_ingest.build_team_features_real(dry_run=dry_run)
     gbm = p3_train.train(dry_run=True, sample=False)
     source_coverage = _source_coverage(validation)
     data_audit = p3_data_audit.generate_report()
@@ -33,6 +33,9 @@ def generate_report() -> dict[str, Any]:
             "teams": features["teams"],
             "feature_preview": features["feature_preview"],
             "missing_indicators": features["missing_indicators"],
+            "performance_coverage": features.get("performance_coverage", {}),
+            "gbm_ready": features.get("gbm_ready", False),
+            "would_write_db": features.get("would_write_db", False),
         },
         "data_audit": {
             "result": data_audit["result"],
@@ -41,9 +44,9 @@ def generate_report() -> dict[str, Any]:
             "next_backlog": data_audit["next_backlog"][:20],
         },
         "gbm_status": {
-            "status": "disabled_for_p3d_dry_run",
+            "status": _gbm_status(features, gbm, dry_run=dry_run),
             "lightgbm_available": gbm.get("lightgbm_available", False),
-            "w_gbm": 0,
+            "w_gbm": features.get("w_gbm", 0),
             "affects_p1_predictions": False,
         },
     }
@@ -75,6 +78,9 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print(f"- status: {report['feature_readiness']['status']}")
     print(f"- teams: {_safe(report['feature_readiness']['teams'])}")
     print(f"- missing_indicators: {_safe(report['feature_readiness']['missing_indicators'])}")
+    print(f"- performance_coverage: {_safe(report['feature_readiness']['performance_coverage'])}")
+    print(f"- gbm_ready: {str(report['feature_readiness']['gbm_ready']).lower()}")
+    print(f"- would_write_db: {str(report['feature_readiness']['would_write_db']).lower()}")
     print("")
     print("4. GBM status")
     print(f"- lightgbm_available: {str(report['gbm_status']['lightgbm_available']).lower()}")
@@ -115,25 +121,40 @@ def _blocker(report: dict[str, Any]) -> str | None:
         return "no_real_data_csv"
     if report["data_audit"]["result"] != "PASS":
         return str(report["data_audit"]["blocker"] or "player_data_audit_wait")
+    if not report["feature_readiness"]["gbm_ready"]:
+        return "gbm_coverage_below_threshold"
     return None
 
 
 def _result(report: dict[str, Any]) -> str:
     if report["real_csv_validation"]["validation_errors"]:
         return "FAIL"
-    if report["gbm_status"]["w_gbm"] != 0 or report["gbm_status"]["affects_p1_predictions"]:
+    if report["gbm_status"]["w_gbm"] not in (0, 0.2) or report["gbm_status"]["affects_p1_predictions"]:
         return "FAIL"
     if report["real_csv_validation"]["rows_validated"] == 0:
         return "WAIT"
     if report["data_audit"]["result"] != "PASS":
         return "WAIT"
+    if not report["feature_readiness"]["gbm_ready"]:
+        return "WAIT"
     return "PASS"
+
+
+def _gbm_status(features: dict[str, Any], gbm: dict[str, Any], dry_run: bool) -> str:
+    if not features.get("gbm_ready"):
+        return "coverage_below_threshold"
+    if dry_run:
+        return "gbm_gray_ready_dry_run"
+    if not gbm.get("lightgbm_available", False):
+        return "gbm_gray_weight_ready_lightgbm_unavailable"
+    return "gbm_gray_weight_ready"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="P3-D real data readiness report")
-    parser.parse_args(argv)
-    report = generate_report()
+    parser.add_argument("--dry-run", action="store_true", default=True)
+    args = parser.parse_args(argv)
+    report = generate_report(dry_run=args.dry_run)
     print_report(report)
     return 0 if report["result"] != "FAIL" else 1
 

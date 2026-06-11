@@ -32,6 +32,8 @@ REAL_INJURIES_FILE = DATA_DIR / "manual_real_injuries_template.csv"
 REAL_SQUAD_DATA_FILE = DATA_DIR / "manual_real_squad.csv"
 REAL_PLAYER_STATS_DATA_FILE = DATA_DIR / "manual_real_player_stats.csv"
 REAL_INJURIES_DATA_FILE = DATA_DIR / "manual_real_injuries.csv"
+GBM_COVERAGE_THRESHOLD = 0.70
+GBM_GRAY_WEIGHT = 0.20
 
 REQUIRED_COLUMNS = {
     "squad": {"player_key", "name", "team", "position", "birth_date", "market_value", "source"},
@@ -67,6 +69,22 @@ REAL_REQUIRED_COLUMNS = {
     "notes",
 }
 REAL_REQUIRED_VALUES = {"team", "player_name", "source", "retrieved_at", "confidence"}
+PERFORMANCE_REQUIRED_COLUMNS = {
+    "team",
+    "player_name",
+    "club",
+    "minutes_recent",
+    "goals_recent",
+    "assists_recent",
+    "xg_recent",
+    "xa_recent",
+    "source",
+    "retrieved_at",
+    "confidence",
+    "notes",
+}
+PERFORMANCE_REQUIRED_VALUES = PERFORMANCE_REQUIRED_COLUMNS - {"notes"}
+PERFORMANCE_NUMERIC_COLUMNS = {"minutes_recent", "goals_recent", "assists_recent", "xg_recent", "xa_recent"}
 REAL_NUMERIC_COLUMNS = {
     "age",
     "minutes_recent",
@@ -201,6 +219,9 @@ def validate_real(data_dir: Path = DATA_DIR, dry_run: bool = True) -> dict[str, 
         total_rows += len(rows)
         details[name] = {"ok": not missing and not errors, "rows": len(rows), "missing_columns": missing, "errors": errors}
         ok = ok and not missing and not errors
+    performance_details, performance_ok = _validate_performance_files(data_dir)
+    details["performance"] = performance_details
+    ok = ok and performance_ok
     status = "no_real_data_csv" if total_rows == 0 and ok else ("ok" if ok else "validation_failed")
     return {
         "ok": ok,
@@ -209,6 +230,8 @@ def validate_real(data_dir: Path = DATA_DIR, dry_run: bool = True) -> dict[str, 
         "dry_run": dry_run,
         "real_csv_exists": real_csv_exists,
         "rows_validated": total_rows,
+        "performance_rows_validated": performance_details["rows"],
+        "performance_files": performance_details["files"],
         "would_write_db": False,
         "retrieved_at_coverage": _coverage(details, "retrieved_at", data_dir),
         "confidence_valid": ok and not _confidence_errors(details),
@@ -231,6 +254,8 @@ def build_team_features_real(dry_run: bool = True, data_dir: Path = DATA_DIR) ->
     rows = _read_real_rows(data_dir)
     manual = _real_rows_to_manual_data(rows)
     snapshots = build_feature_snapshots_from_manual_data(manual, ratings={})
+    performance_coverage = _performance_coverage(rows)
+    gbm_ready = _gbm_coverage_ready(performance_coverage)
     return {
         "status": "dry_run" if dry_run else "not_enabled",
         "result": "PASS",
@@ -238,7 +263,9 @@ def build_team_features_real(dry_run: bool = True, data_dir: Path = DATA_DIR) ->
         "feature_preview": snapshots,
         "missing_indicators": _missing_indicators(snapshots),
         "would_write_db": False,
-        "w_gbm": 0,
+        "performance_coverage": performance_coverage,
+        "gbm_ready": gbm_ready,
+        "w_gbm": 0 if dry_run else (GBM_GRAY_WEIGHT if gbm_ready else 0),
     }
 
 
@@ -428,6 +455,10 @@ def _real_csv_exists(data_dir: Path) -> bool:
     )
 
 
+def _performance_paths(data_dir: Path) -> list[Path]:
+    return sorted(data_dir.glob("real_performance_*.csv"))
+
+
 def _read_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         return [dict(row) for row in csv.DictReader(handle)]
@@ -473,6 +504,55 @@ def _validate_real_rows(name: str, rows: list[dict[str, str]]) -> list[str]:
     return errors
 
 
+def _validate_performance_files(data_dir: Path) -> tuple[dict[str, Any], bool]:
+    paths = _performance_paths(data_dir)
+    if not paths:
+        return {"ok": True, "rows": 0, "files": [], "missing_columns": [], "errors": []}, True
+    rows_total = 0
+    errors: list[str] = []
+    missing_columns: list[str] = []
+    for path in paths:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            columns = set(reader.fieldnames or [])
+            missing = sorted(PERFORMANCE_REQUIRED_COLUMNS - columns)
+            if missing:
+                missing_columns.extend(f"{path.name}:{column}" for column in missing)
+                continue
+            rows = [dict(row) for row in reader]
+        rows_total += len(rows)
+        errors.extend(_validate_performance_rows(path.name, rows))
+    ok = not missing_columns and not errors
+    return {
+        "ok": ok,
+        "rows": rows_total,
+        "files": [path.name for path in paths],
+        "missing_columns": missing_columns,
+        "errors": errors,
+    }, ok
+
+
+def _validate_performance_rows(filename: str, rows: list[dict[str, str]]) -> list[str]:
+    errors: list[str] = []
+    for index, row in enumerate(rows, start=2):
+        for column in PERFORMANCE_REQUIRED_VALUES:
+            if not str(row.get(column) or "").strip():
+                errors.append(f"{filename}:{index}: missing required {column}")
+        confidence = str(row.get("confidence") or "").strip().lower()
+        if confidence and confidence not in REAL_CONFIDENCE_VALUES:
+            errors.append(f"{filename}:{index}: confidence must be high, medium, or low")
+        for column in PERFORMANCE_NUMERIC_COLUMNS:
+            value = str(row.get(column) or "").strip()
+            if not value:
+                errors.append(f"{filename}:{index}: missing required numeric {column}")
+                continue
+            try:
+                float(value)
+            except ValueError:
+                errors.append(f"{filename}:{index}: invalid numeric {column}")
+    return errors
+
+
 def _coverage(details: dict[str, Any], column: str, data_dir: Path) -> dict[str, int]:
     coverage: dict[str, int] = {}
     for name, detail in details.items():
@@ -494,7 +574,12 @@ def _confidence_errors(details: dict[str, Any]) -> bool:
 
 def _read_real_rows(data_dir: Path) -> dict[str, list[dict[str, str]]]:
     paths = _real_paths(data_dir)
-    return {name: _read_rows(path) for name, path in paths.items()}
+    rows = {name: _read_rows(path) for name, path in paths.items()}
+    performance: list[dict[str, str]] = []
+    for path in _performance_paths(data_dir):
+        performance.extend(_read_rows(path))
+    rows["performance"] = performance
+    return rows
 
 
 def _real_rows_to_manual_data(rows: dict[str, list[dict[str, str]]]) -> ManualData:
@@ -525,19 +610,20 @@ def _real_rows_to_manual_data(rows: dict[str, list[dict[str, str]]]) -> ManualDa
                         "source": row.get("source", ""),
                     }
                 )
-            stats.append(
-                {
-                    "player_key": player_key,
-                    "season": "recent",
-                    "club": row.get("club", ""),
-                    "minutes": row.get("minutes_recent", ""),
-                    "goals": row.get("goals_recent", ""),
-                    "assists": row.get("assists_recent", ""),
-                    "xg": row.get("xg_recent", ""),
-                    "xa": row.get("xa_recent", ""),
-                    "source": row.get("source", ""),
-                }
-            )
+            if _has_any_recent_performance(row):
+                stats.append(
+                    {
+                        "player_key": player_key,
+                        "season": "recent",
+                        "club": row.get("club", ""),
+                        "minutes": row.get("minutes_recent", ""),
+                        "goals": row.get("goals_recent", ""),
+                        "assists": row.get("assists_recent", ""),
+                        "xg": row.get("xg_recent", ""),
+                        "xa": row.get("xa_recent", ""),
+                        "source": row.get("source", ""),
+                    }
+                )
             if str(row.get("injury_status") or "").strip():
                 injuries.append(
                     {
@@ -561,6 +647,60 @@ def _real_player_key(row: dict[str, str]) -> str:
 def _project_team_name(value: str | None) -> str:
     text = str(value or "").strip()
     return REAL_TEAM_NAME_ALIASES.get(text, text)
+
+
+def _has_any_recent_performance(row: dict[str, str]) -> bool:
+    return any(str(row.get(column) or "").strip() for column in PERFORMANCE_NUMERIC_COLUMNS)
+
+
+def _has_complete_recent_performance(row: dict[str, str]) -> bool:
+    return all(_parse_number(row.get(column)) is not None for column in PERFORMANCE_NUMERIC_COLUMNS)
+
+
+def _parse_number(value: Any) -> float | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _performance_coverage(rows: dict[str, list[dict[str, str]]]) -> dict[str, Any]:
+    squad_rows = rows.get("squad", [])
+    performance_rows = [row for row in rows.get("performance", []) if _has_complete_recent_performance(row)]
+    squad_by_team: dict[str, set[str]] = {}
+    performance_by_team: dict[str, set[str]] = {}
+    for row in squad_rows:
+        team = _project_team_name(row.get("team", ""))
+        player = _real_player_key(row)
+        if team and player:
+            squad_by_team.setdefault(team, set()).add(player)
+    for row in performance_rows:
+        team = _project_team_name(row.get("team", ""))
+        player = _real_player_key(row)
+        if team and player:
+            performance_by_team.setdefault(team, set()).add(player)
+
+    teams: dict[str, dict[str, Any]] = {}
+    for team in sorted(squad_by_team):
+        total = len(squad_by_team[team])
+        complete = len(squad_by_team[team] & performance_by_team.get(team, set()))
+        ratio = complete / total if total else 0.0
+        teams[team] = {"players": total, "complete": complete, "ratio": ratio, "meets_threshold": ratio >= GBM_COVERAGE_THRESHOLD}
+    ready_teams = sum(1 for row in teams.values() if row["meets_threshold"])
+    return {
+        "threshold": GBM_COVERAGE_THRESHOLD,
+        "teams_total": len(teams),
+        "teams_ready": ready_teams,
+        "all_teams_ready": bool(teams) and ready_teams == len(teams),
+        "teams": teams,
+    }
+
+
+def _gbm_coverage_ready(performance_coverage: dict[str, Any]) -> bool:
+    return bool(performance_coverage.get("all_teams_ready"))
 
 
 def _missing_indicators(snapshots: list[dict[str, Any]]) -> dict[str, list[str]]:

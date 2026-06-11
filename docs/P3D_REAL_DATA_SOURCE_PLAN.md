@@ -33,6 +33,7 @@ When real reviewed data is ready, place it in:
 data/p3/manual_real_squad.csv
 data/p3/manual_real_player_stats.csv
 data/p3/manual_real_injuries.csv
+data/p3/real_performance_*.csv
 ```
 
 The dry-run loader prefers these real CSV files when present. If they are absent, it validates the header-only templates and returns `WAIT`.
@@ -43,12 +44,21 @@ Required fields:
 team,player_name,position,age,club,minutes_recent,goals_recent,assists_recent,xg_recent,xa_recent,injury_status,source,retrieved_at,confidence,notes
 ```
 
+Performance CSV files must use:
+
+```text
+team,player_name,club,minutes_recent,goals_recent,assists_recent,xg_recent,xa_recent,source,retrieved_at,confidence,notes
+```
+
+The `real_performance_*.csv` rows are strict: `minutes_recent`, `goals_recent`, `assists_recent`, `xg_recent`, and `xa_recent` must all be present and numeric. Empty performance values are rejected instead of silently treated as real model input.
+
 Validation rules:
 
 - `source` must be nonempty.
 - `retrieved_at` must be nonempty.
 - `confidence` must be `high`, `medium`, or `low`.
 - Numeric fields must parse as numbers when provided.
+- GBM gray release requires every tournament team to have complete recent performance rows for at least 70% of its official squad.
 
 ## Source Policy
 
@@ -86,11 +96,15 @@ rows_validated: 3744
 source_coverage: squad=1248, player_stats=1248, injuries=1248
 teams_with_official_profile: 48 / 48
 teams_with_numeric_recent_stats: 0 / 48
+performance_files: none
+gbm_ready: false
 would_write_db: false
 w_gbm: 0
 ```
 
 This is full official squad/profile coverage, not full P3-D model readiness. It does not write production DB and does not enable GBM. Numeric performance fields remain intentionally blank because no permitted reviewed source has been collected for recent minutes, goals, assists, xG, or xA.
+
+When compliant `real_performance_*.csv` files are added and every team reaches the 70% coverage threshold, dry-run reports `gbm_ready=true` but keeps `w_gbm=0`. Non-dry-run local/test mode can report gray `w_gbm=0.2`; production P1 fusion weights are not changed automatically.
 
 Official source:
 

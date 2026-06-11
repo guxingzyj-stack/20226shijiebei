@@ -54,6 +54,8 @@ Current production posture:
 - GBM: `w_gbm=0`
 - full tournament complete teams: 0 / 48
 - teams with numeric recent stats: 0 / 48
+- performance files: no committed `data/p3/real_performance_*.csv` yet
+- GBM gray readiness: false, `w_gbm=0`
 - note: FIFA official squad/profile data is complete, but recent minutes/goals/assists/xG/xA are still missing. This does not affect production predictions. Continue with `python -m model.p3_data_audit --write-backlog`.
 
 ### Betting

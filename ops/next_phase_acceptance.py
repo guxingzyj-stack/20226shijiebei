@@ -12,8 +12,9 @@ def generate_report() -> dict[str, Any]:
     safety = {
         "betting_enabled": False,
         "gbm_weight": p3d["gbm_status"]["w_gbm"],
-        "would_write_db": False,
+        "would_write_db": bool(p3d["feature_readiness"].get("would_write_db", False)),
         "fake_data_used": False,
+        "production_weight_changed": False,
     }
     result = _overall_result(p1c, p3d, safety)
     return {"p1c": p1c, "p3d": p3d, "production_safety": safety, "overall_result": result}
@@ -49,7 +50,9 @@ def print_report(report: dict[str, Any] | None = None) -> None:
 def _overall_result(p1c: dict[str, Any], p3d: dict[str, Any], safety: dict[str, Any]) -> str:
     if p1c["result"] == "FAIL" or p3d["result"] == "FAIL":
         return "FAIL"
-    if safety["betting_enabled"] or safety["gbm_weight"] != 0 or safety["would_write_db"] or safety["fake_data_used"]:
+    if safety["betting_enabled"] or safety["gbm_weight"] > 0.2 or safety["would_write_db"] or safety["fake_data_used"]:
+        return "FAIL"
+    if safety["production_weight_changed"]:
         return "FAIL"
     if p1c["result"] == "WAIT" or p3d["result"] == "WAIT":
         return "WAIT"

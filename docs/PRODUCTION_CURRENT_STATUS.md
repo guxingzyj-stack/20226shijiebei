@@ -86,6 +86,8 @@ No real connection strings, passwords, tokens, or backup contents are stored in 
 - source/retrieved_at/confidence coverage: complete for included rows
 - tournament teams covered completely: 0 / 48
 - teams with numeric recent player stats: 0 / 48
+- performance files: no committed `data/p3/real_performance_*.csv` yet
+- GBM gray readiness: false, `w_gbm=0`
 - production DB writes: no
 - official source: `https://fdp.fifa.org/assetspublic/ce281/pdf/SquadLists-English.pdf`
 - tooling:
