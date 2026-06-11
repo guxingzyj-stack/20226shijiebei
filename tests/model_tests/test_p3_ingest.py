@@ -76,4 +76,7 @@ def test_build_team_features_dry_run_handles_missing_data(monkeypatch):
 
     result = p3_ingest.build_team_features(dry_run=True)
 
-    assert result == {"status": "dry_run", "teams": 1, "team_features": 1}
+    assert result["status"] == "dry_run"
+    assert result["teams"] == 1
+    assert result["team_features"] == 1
+    assert result["missing_indicators"]["Team A"]

@@ -15,16 +15,32 @@ from model.features import build_team_feature_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data" / "p3"
+SAMPLE_DIR = DATA_DIR / "samples"
 SOURCE = "manual_csv"
+SAMPLE_CONFIRM_TOKEN = "IMPORT_SAMPLE_DATA"
 
 SQUAD_FILE = DATA_DIR / "manual_squad_template.csv"
 PLAYER_STATS_FILE = DATA_DIR / "manual_player_stats_template.csv"
 INJURIES_FILE = DATA_DIR / "manual_injuries_template.csv"
+SAMPLE_SQUAD_FILE = SAMPLE_DIR / "sample_squad.csv"
+SAMPLE_PLAYER_STATS_FILE = SAMPLE_DIR / "sample_player_stats.csv"
+SAMPLE_INJURIES_FILE = SAMPLE_DIR / "sample_injuries.csv"
 
 REQUIRED_COLUMNS = {
     "squad": {"player_key", "name", "team", "position", "birth_date", "market_value", "source"},
     "player_stats": {"player_key", "season", "club", "minutes", "goals", "assists", "xg", "xa", "source"},
     "injuries": {"player_key", "team", "status", "injury_type", "expected_return", "source"},
+}
+
+REQUIRED_VALUES = {
+    "squad": {"player_key", "name", "team"},
+    "player_stats": {"player_key", "season"},
+    "injuries": {"player_key", "team", "status"},
+}
+NUMERIC_COLUMNS = {
+    "squad": {"market_value"},
+    "player_stats": {"minutes", "goals", "assists", "xg", "xa"},
+    "injuries": set(),
 }
 
 
@@ -35,8 +51,8 @@ class ManualData:
     injuries: list[dict[str, str]]
 
 
-def validate(data_dir: Path = DATA_DIR) -> dict[str, Any]:
-    paths = _paths(data_dir)
+def validate(data_dir: Path = DATA_DIR, sample: bool = False) -> dict[str, Any]:
+    paths = _paths(data_dir, sample=sample)
     details: dict[str, Any] = {}
     ok = True
     for name, path in paths.items():
@@ -48,17 +64,18 @@ def validate(data_dir: Path = DATA_DIR) -> dict[str, Any]:
             reader = csv.DictReader(handle)
             columns = set(reader.fieldnames or [])
             missing = sorted(REQUIRED_COLUMNS[name] - columns)
-            row_count = sum(1 for _ in reader)
-        details[name] = {"ok": not missing, "rows": row_count, "missing_columns": missing}
-        ok = ok and not missing
-    return {"ok": ok, "details": details}
+            rows = [dict(row) for row in reader]
+        errors = [] if missing else _validate_rows(name, rows)
+        details[name] = {"ok": not missing and not errors, "rows": len(rows), "missing_columns": missing, "errors": errors}
+        ok = ok and not missing and not errors
+    return {"ok": ok, "sample": sample, "details": details}
 
 
-def load_manual_data(data_dir: Path = DATA_DIR) -> ManualData:
-    report = validate(data_dir)
+def load_manual_data(data_dir: Path = DATA_DIR, sample: bool = False) -> ManualData:
+    report = validate(data_dir, sample=sample)
     if not report["ok"]:
         raise ValueError(f"manual CSV validation failed: {report['details']}")
-    paths = _paths(data_dir)
+    paths = _paths(data_dir, sample=sample)
     return ManualData(
         squad=_read_rows(paths["squad"]),
         player_stats=_read_rows(paths["player_stats"]),
@@ -66,21 +83,34 @@ def load_manual_data(data_dir: Path = DATA_DIR) -> ManualData:
     )
 
 
-def import_manual_data(dry_run: bool = False, data_dir: Path = DATA_DIR) -> dict[str, Any]:
-    manual = load_manual_data(data_dir)
+def import_manual_data(dry_run: bool = False, data_dir: Path = DATA_DIR, sample: bool = False, confirm: str | None = None) -> dict[str, Any]:
+    if sample and not dry_run and confirm != SAMPLE_CONFIRM_TOKEN:
+        raise ValueError(f"import --sample requires --confirm {SAMPLE_CONFIRM_TOKEN}")
+    manual = load_manual_data(data_dir, sample=sample)
     counts = {
         "players": len(manual.squad),
         "player_season_stats": len(manual.player_stats),
         "injuries": len(manual.injuries),
     }
     if dry_run:
-        return {"status": "dry_run", "source": SOURCE, **counts}
+        return {"status": "dry_run", "sample": sample, "source": SOURCE, "would_write_db": False, **counts}
     with db.get_conn() as conn:
         written = _write_manual_data(conn, manual)
-    return {"status": "imported", "source": SOURCE, **written}
+    return {"status": "imported", "sample": sample, "source": SOURCE, "would_write_db": True, **written}
 
 
-def build_team_features(dry_run: bool = False) -> dict[str, Any]:
+def build_team_features(dry_run: bool = False, sample: bool = False) -> dict[str, Any]:
+    if sample and dry_run:
+        manual = load_manual_data(sample=True)
+        snapshots = build_feature_snapshots_from_manual_data(manual, ratings={})
+        return {
+            "status": "dry_run",
+            "sample": True,
+            "teams": len(snapshots),
+            "team_features": len(snapshots),
+            "features": snapshots,
+            "missing_indicators": _missing_indicators(snapshots),
+        }
     with db.get_conn() as conn:
         players = _fetch_players(conn)
         stats = _fetch_player_stats(conn)
@@ -89,9 +119,18 @@ def build_team_features(dry_run: bool = False) -> dict[str, Any]:
         teams = sorted({str(row["team"]).strip() for row in players if str(row.get("team") or "").strip()})
         snapshots = [build_team_feature_snapshot(team, ratings, players, stats, injuries) for team in teams]
         if dry_run:
-            return {"status": "dry_run", "teams": len(teams), "team_features": len(snapshots)}
+            return {"status": "dry_run", "sample": sample, "teams": len(teams), "team_features": len(snapshots), "features": snapshots, "missing_indicators": _missing_indicators(snapshots)}
         written = _write_team_features(conn, snapshots)
     return {"status": "built", "teams": len(teams), "team_features": written}
+
+
+def build_feature_snapshots_from_manual_data(manual: ManualData, ratings: dict[str, float] | None = None) -> list[dict[str, Any]]:
+    ratings = ratings or {}
+    players = [{**row, "market_value": row.get("market_value")} for row in manual.squad]
+    stats = [dict(row) for row in manual.player_stats]
+    injuries = [dict(row) for row in manual.injuries]
+    teams = sorted({str(row["team"]).strip() for row in players if str(row.get("team") or "").strip()})
+    return [build_team_feature_snapshot(team, ratings, players, stats, injuries) for team in teams]
 
 
 def _write_manual_data(conn: psycopg.Connection, manual: ManualData) -> dict[str, int]:
@@ -240,7 +279,13 @@ def _fetch_injuries(conn: psycopg.Connection) -> list[dict[str, Any]]:
         return [dict(row) for row in cur.fetchall()]
 
 
-def _paths(data_dir: Path) -> dict[str, Path]:
+def _paths(data_dir: Path, sample: bool = False) -> dict[str, Path]:
+    if sample:
+        return {
+            "squad": SAMPLE_SQUAD_FILE,
+            "player_stats": SAMPLE_PLAYER_STATS_FILE,
+            "injuries": SAMPLE_INJURIES_FILE,
+        }
     return {
         "squad": data_dir / SQUAD_FILE.name,
         "player_stats": data_dir / PLAYER_STATS_FILE.name,
@@ -258,22 +303,49 @@ def _empty_to_none(value: Any) -> Any:
     return value or None
 
 
+def _validate_rows(name: str, rows: list[dict[str, str]]) -> list[str]:
+    errors: list[str] = []
+    for index, row in enumerate(rows, start=2):
+        for column in REQUIRED_VALUES[name]:
+            if not str(row.get(column) or "").strip():
+                errors.append(f"{name}:{index}: missing required {column}")
+        for column in NUMERIC_COLUMNS[name]:
+            value = str(row.get(column) or "").strip()
+            if value:
+                try:
+                    float(value)
+                except ValueError:
+                    errors.append(f"{name}:{index}: invalid numeric {column}")
+    return errors
+
+
+def _missing_indicators(snapshots: list[dict[str, Any]]) -> dict[str, list[str]]:
+    indicators: dict[str, list[str]] = {}
+    for snapshot in snapshots:
+        indicators[str(snapshot["team"])] = sorted(key for key, value in snapshot.items() if key.startswith("missing_") and value is True)
+    return indicators
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="P3 manual CSV ingest")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("validate")
+    validate_parser = subparsers.add_parser("validate")
+    validate_parser.add_argument("--sample", action="store_true")
     import_parser = subparsers.add_parser("import")
     import_parser.add_argument("--dry-run", action="store_true")
+    import_parser.add_argument("--sample", action="store_true")
+    import_parser.add_argument("--confirm")
     build_parser = subparsers.add_parser("build-team-features")
     build_parser.add_argument("--dry-run", action="store_true")
+    build_parser.add_argument("--sample", action="store_true")
     args = parser.parse_args(argv)
 
     if args.command == "validate":
-        result = validate()
+        result = validate(sample=args.sample)
     elif args.command == "import":
-        result = import_manual_data(dry_run=args.dry_run)
+        result = import_manual_data(dry_run=args.dry_run, sample=args.sample, confirm=args.confirm)
     elif args.command == "build-team-features":
-        result = build_team_features(dry_run=args.dry_run)
+        result = build_team_features(dry_run=args.dry_run, sample=args.sample)
     else:
         parser.error(f"unknown command: {args.command}")
     print(result)

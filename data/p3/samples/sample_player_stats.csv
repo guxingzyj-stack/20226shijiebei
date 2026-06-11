@@ -1,0 +1,7 @@
+player_key,season,club,minutes,goals,assists,xg,xa,source
+sample-mex-1,2025,Sample Club MX,900,9,2,7.2,1.8,sample_csv
+sample-mex-2,2025,Sample Club MX,850,3,6,2.1,4.4,sample_csv
+sample-mex-3,2025,Sample Club MX,780,1,1,0.6,0.9,sample_csv
+sample-rsa-1,2025,Sample Club ZA,820,7,3,5.8,2.0,sample_csv
+sample-rsa-2,2025,Sample Club ZA,790,2,5,1.7,3.5,sample_csv
+sample-rsa-3,2025,Sample Club ZA,760,0,1,0.4,0.8,sample_csv

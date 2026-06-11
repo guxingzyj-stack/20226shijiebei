@@ -1,0 +1,3 @@
+player_key,team,status,injury_type,expected_return,source
+sample-mex-2,Mexico,available,,,
+sample-rsa-3,South Africa,doubtful,sample knock,2026-06-30,sample_csv

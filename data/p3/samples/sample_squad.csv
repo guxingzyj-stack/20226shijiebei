@@ -1,0 +1,7 @@
+player_key,name,team,position,birth_date,market_value,source
+sample-mex-1,Sample Mexico Player 1,Mexico,FW,1998-02-01,12000000,sample_csv
+sample-mex-2,Sample Mexico Player 2,Mexico,MF,1996-05-12,8000000,sample_csv
+sample-mex-3,Sample Mexico Player 3,Mexico,DF,1994-09-20,6000000,sample_csv
+sample-rsa-1,Sample South Africa Player 1,South Africa,FW,1999-03-15,7000000,sample_csv
+sample-rsa-2,Sample South Africa Player 2,South Africa,MF,1997-11-03,5000000,sample_csv
+sample-rsa-3,Sample South Africa Player 3,South Africa,DF,1995-07-27,4000000,sample_csv

@@ -44,9 +44,28 @@ python -m model.p3_ingest build-team-features --dry-run
 python -m model.p3_ingest build-team-features
 ```
 
+P3-C sample pipeline commands:
+
+```bash
+python -m model.p3_ingest validate --sample
+python -m model.p3_ingest import --sample --dry-run
+python -m model.p3_ingest build-team-features --sample --dry-run
+python -m model.p3_train train --sample --dry-run
+python -m model.p3_acceptance_report --sample
+```
+
+The files in `data/p3/samples/` are a minimal engineering sample for pipeline tests, not official production player data. P3-C validates the engineering chain only:
+
+```text
+manual CSV -> validate -> dry-run import -> team_features dry-run -> GBM unavailable/insufficient -> w_gbm=0
+```
+
+This does not mean real player data has been connected. It does not affect P1 production predictions, and GBM weight remains `0`.
+
 ## Safety
 
 - Missing player data should produce `missing_*` feature flags, not a crash.
 - `team_features` is additive and does not change P1 predictions.
 - Do not write fake injuries, market values, minutes, xG, or xA.
 - Keep `BETTING_ENABLED=false`; P3 data does not open betting.
+- `import --sample` without `--dry-run` requires `--confirm IMPORT_SAMPLE_DATA`.
