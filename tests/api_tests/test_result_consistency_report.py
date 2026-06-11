@@ -116,6 +116,55 @@ def test_result_consistency_report_warns_on_scheduler_stale(monkeypatch):
     assert report["result"] == "WARN"
 
 
+def test_optional_match_id_parameters_are_cast_to_text(monkeypatch):
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            calls.append((sql, params))
+
+        def fetchall(self):
+            return []
+
+        def fetchone(self):
+            return [0]
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, *args, **kwargs):
+            return Cursor()
+
+    monkeypatch.setattr(result_consistency_report, "connect", lambda: Conn())
+    monkeypatch.setattr(
+        result_consistency_report,
+        "scheduler_freshness",
+        lambda: {
+            "latest_ops_log_at": None,
+            "latest_results_sync_at": None,
+            "latest_settlement_runner_at": None,
+            "latest_ops_log_age_minutes": None,
+            "scheduler_stale": False,
+        },
+    )
+
+    result_consistency_report.generate_report(match_id=None)
+
+    assert calls
+    assert all("%s::text IS NULL OR match_id = %s" in sql for sql, _ in calls)
+    assert all(params == (None, None) for _, params in calls)
+
+
 def test_repair_finished_null_dry_run_lists_targets_without_update(monkeypatch):
     calls = []
 

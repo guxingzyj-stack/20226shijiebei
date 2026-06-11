@@ -21,7 +21,7 @@ def generate_report(match_id: str | None = None) -> dict[str, Any]:
             FROM matches
             WHERE status IN ('finished', 'completed')
               AND (result_home IS NULL OR result_away IS NULL)
-              AND (%s IS NULL OR match_id = %s)
+              AND (%s::text IS NULL OR match_id = %s)
             ORDER BY kickoff_at NULLS LAST, match_id
             LIMIT 20
             """,
@@ -35,7 +35,7 @@ def generate_report(match_id: str | None = None) -> dict[str, Any]:
             FROM matches
             WHERE status NOT IN ('finished', 'completed')
               AND (result_home IS NOT NULL OR result_away IS NOT NULL)
-              AND (%s IS NULL OR match_id = %s)
+              AND (%s::text IS NULL OR match_id = %s)
             ORDER BY kickoff_at NULLS LAST, match_id
             LIMIT 20
             """,
@@ -49,7 +49,7 @@ def generate_report(match_id: str | None = None) -> dict[str, Any]:
             WHERE status IN ('finished', 'completed')
               AND result_home IS NOT NULL
               AND result_away IS NOT NULL
-              AND (%s IS NULL OR match_id = %s)
+              AND (%s::text IS NULL OR match_id = %s)
             """,
             (match_id, match_id),
         )
@@ -60,7 +60,7 @@ def generate_report(match_id: str | None = None) -> dict[str, Any]:
             FROM matches
             WHERE status IN ('finished', 'completed')
               AND (result_home IS NULL OR result_away IS NULL)
-              AND (%s IS NULL OR match_id = %s)
+              AND (%s::text IS NULL OR match_id = %s)
             """,
             (match_id, match_id),
         )
