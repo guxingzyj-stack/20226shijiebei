@@ -9,15 +9,27 @@ service_name: wc-p1c-probe-temp
 repo: https://github.com/guxingzyj-stack/20226shijiebei.git
 branch: main
 root directory: /
-provider: Dockerfile / Docker
-dockerfile: Dockerfile.p1c-probe
+provider: Docker / Dockerfile
+dockerfile: Dockerfile
 ```
 
-Do not deploy this as `static`. If Zeabur auto-detects `static`, override the provider to Dockerfile / Docker and explicitly set:
+Zeabur auto-detection may only recognize the root-level standard filename:
+
+```text
+Dockerfile
+```
+
+Do not deploy this as `static`. If Zeabur still shows `static`, the root `Dockerfile` is not being used by that service configuration.
+
+The older explicit probe Dockerfile is also present:
 
 ```text
 Dockerfile.p1c-probe
 ```
+
+Use the root `Dockerfile` for the temporary Zeabur probe service when auto-detecting the provider.
+
+Do not use this root `Dockerfile` for the formal API, Web, model-worker, or crawler services. Those services keep their existing service-specific build settings and must not be redeployed for this probe.
 
 ## Default Command
 
