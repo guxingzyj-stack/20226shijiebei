@@ -40,3 +40,60 @@ def test_team_feature_snapshot_uses_explicit_age_when_birth_date_missing():
 
     assert snapshot["avg_age"] == 26
     assert snapshot["missing_avg_age"] is False
+
+
+def test_team_feature_snapshot_uses_official_profile_fields():
+    snapshot = build_team_feature_snapshot(
+        "A",
+        {},
+        [
+            {
+                "player_key": "a1",
+                "team": "A",
+                "age": "26",
+                "height_cm": "180",
+                "caps": "50",
+                "national_team_goals": "10",
+            },
+            {
+                "player_key": "a2",
+                "team": "A",
+                "age": "30",
+                "height_cm": "190",
+                "caps": "20",
+                "national_team_goals": "2",
+            },
+        ],
+        [],
+        [],
+    )
+
+    assert snapshot["avg_height_cm"] == 185
+    assert snapshot["squad_caps_total"] == 70
+    assert snapshot["squad_goals_total"] == 12
+    assert snapshot["missing_avg_height_cm"] is False
+    assert snapshot["missing_squad_caps_total"] is False
+    assert snapshot["missing_squad_goals_total"] is False
+
+
+def test_match_features_include_official_profile_diffs():
+    home = build_team_feature_snapshot(
+        "A",
+        {},
+        [{"player_key": "a1", "team": "A", "height_cm": "190", "caps": "100", "national_team_goals": "30"}],
+        [],
+        [],
+    )
+    away = build_team_feature_snapshot(
+        "B",
+        {},
+        [{"player_key": "b1", "team": "B", "height_cm": "180", "caps": "40", "national_team_goals": "5"}],
+        [],
+        [],
+    )
+
+    features = build_match_features("A", "B", home, away)
+
+    assert features["avg_height_cm_diff"] == 10
+    assert features["squad_caps_total_diff"] == 60
+    assert features["squad_goals_total_diff"] == 25

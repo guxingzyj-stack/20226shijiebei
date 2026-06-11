@@ -13,6 +13,9 @@ FEATURE_KEYS = (
     "core_minutes_share",
     "core_xg_xa_per90",
     "avg_age",
+    "avg_height_cm",
+    "squad_caps_total",
+    "squad_goals_total",
     "injured_core_count",
 )
 
@@ -38,6 +41,9 @@ def build_team_feature_snapshot(
     core_minutes_for_rate = sum(_number(row.get("minutes")) or 0.0 for row in core_stats)
     core_xg_xa = sum((_number(row.get("xg")) or 0.0) + (_number(row.get("xa")) or 0.0) for row in core_stats)
     ages = [_player_age(row) for row in team_players if _player_age(row) is not None]
+    heights = [_number(row.get("height_cm")) for row in team_players if _number(row.get("height_cm")) is not None]
+    caps = [_number(row.get("caps")) for row in team_players if _number(row.get("caps")) is not None]
+    goals = [_number(row.get("national_team_goals")) for row in team_players if _number(row.get("national_team_goals")) is not None]
 
     feature_values = {
         "elo": float(ratings.get(team, 1500.0)),
@@ -46,6 +52,9 @@ def build_team_feature_snapshot(
         "core_minutes_share": core_minutes / total_minutes if total_minutes > 0 else None,
         "core_xg_xa_per90": core_xg_xa / core_minutes_for_rate * 90 if core_minutes_for_rate > 0 else None,
         "avg_age": sum(ages) / len(ages) if ages else None,
+        "avg_height_cm": sum(heights) / len(heights) if heights else None,
+        "squad_caps_total": sum(caps) if caps else None,
+        "squad_goals_total": sum(goals) if goals else None,
         "injured_core_count": _injured_core_count(team_injuries, core_keys),
     }
     output: dict[str, Any] = {"team": team}
@@ -72,6 +81,9 @@ def build_match_features(
         "core_minutes_share_diff": home["core_minutes_share"] - away["core_minutes_share"],
         "core_xg_xa_per90_diff": home["core_xg_xa_per90"] - away["core_xg_xa_per90"],
         "avg_age_diff": home["avg_age"] - away["avg_age"],
+        "avg_height_cm_diff": home["avg_height_cm"] - away["avg_height_cm"],
+        "squad_caps_total_diff": home["squad_caps_total"] - away["squad_caps_total"],
+        "squad_goals_total_diff": home["squad_goals_total"] - away["squad_goals_total"],
         "injured_core_count_diff": home["injured_core_count"] - away["injured_core_count"],
         "is_home": 1,
     }

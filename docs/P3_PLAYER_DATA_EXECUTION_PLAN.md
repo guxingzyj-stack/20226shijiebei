@@ -9,13 +9,16 @@ Current real CSV state:
 ```text
 teams_total: 48
 complete_teams: 0
-partial_teams: 4
-missing_teams: 44
+partial_teams: 48
+missing_teams: 0
+teams_with_official_profile: 48
 teams_with_numeric_stats: 0
 result: WAIT
 ```
 
-The four partial teams are useful for validating the pipeline, but they are not enough to enable GBM or change P1 predictions.
+The official FIFA squad profile layer is now complete for all 48 tournament teams: 26 players per team, 1,248 players total. This covers player name, position, club, age, height, national-team caps, and national-team goals.
+
+P3 still waits because recent club performance fields are intentionally blank until a permitted reviewed source is available. Do not enable GBM or change P1 predictions from official profile data alone.
 
 ## Acceptance Gates
 
@@ -24,6 +27,7 @@ A team is considered complete only when it has:
 ```text
 >= 10 reviewed squad rows
 >= 4 reviewed player_stats rows
+>= 10 official profile rows with position, club, age, height, caps, and national-team goals
 >= 4 player_stats rows with numeric recent performance fields
 >= 1 injury/status row
 source, retrieved_at, confidence on all rows
@@ -87,6 +91,7 @@ Use that file as the working queue. Do not delete rows manually to make the repo
 
 - No FBref / Transfermarkt automated scraping.
 - No fake players, fake minutes, fake xG/xA, or assumed injury status.
+- Official FIFA squad PDF rows may be used for squad/profile metadata, but not for recent club performance metrics.
 - Each row must keep `source`, `retrieved_at`, and `confidence`.
 - If a source only confirms squad membership but not recent minutes or xG/xA, leave numeric fields blank and keep the team incomplete.
 - `w_gbm` remains `0` until the P3 feature model beats or matches P1 in backtest.
@@ -94,9 +99,18 @@ Use that file as the working queue. Do not delete rows manually to make the repo
 
 ## Immediate Work Order
 
-1. Fill teams from `data/p3/p3_collection_backlog.csv`.
-2. For each team, collect at least 10 squad rows.
-3. For core players, collect recent minutes/goals/assists/xG/xA only from allowed reviewed sources.
-4. Add one injury/status row per team; use `unknown` when no reliable injury source exists, with a note.
-5. Re-run `model.p3_data_audit`.
-6. Import to production only after audit is `PASS` and a database backup exists.
+1. Use `data/p3/p3_collection_backlog.csv` as the remaining numeric-stats queue.
+2. For each team, collect recent minutes/goals/assists/xG/xA only from allowed reviewed sources.
+3. Replace `unknown` injury rows only when a source-backed injury report exists.
+4. Re-run `model.p3_data_audit`.
+5. Import to production only after audit is `PASS`, GBM backtest is acceptable, and a database backup exists.
+
+## Reproducibility
+
+The official squad CSVs can be regenerated from the FIFA squad PDF with:
+
+```bash
+python -m model.p3_fifa_squad_pdf --pdf path/to/SquadLists-English.pdf --output-dir data/p3 --retrieved-at 2026-06-12
+```
+
+Do not commit the downloaded PDF file itself.

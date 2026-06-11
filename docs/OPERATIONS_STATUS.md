@@ -47,13 +47,14 @@ Current production posture:
 ### P3-D
 
 - status: WAIT
-- teams: Mexico, South Africa, Germany, Curaçao
-- rows: squad=40, player_stats=16, injuries=12
+- official profile coverage: 48 / 48 teams
+- players: 1,248 official FIFA squad rows
+- rows: squad=1248, player_stats=1248, injuries=1248
 - production DB writes: no
 - GBM: `w_gbm=0`
 - full tournament complete teams: 0 / 48
 - teams with numeric recent stats: 0 / 48
-- note: this is not full P3-D completion and does not affect production predictions. Continue with `python -m model.p3_data_audit --write-backlog`.
+- note: FIFA official squad/profile data is complete, but recent minutes/goals/assists/xG/xA are still missing. This does not affect production predictions. Continue with `python -m model.p3_data_audit --write-backlog`.
 
 ### Betting
 

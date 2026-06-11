@@ -67,8 +67,29 @@ REAL_REQUIRED_COLUMNS = {
     "notes",
 }
 REAL_REQUIRED_VALUES = {"team", "player_name", "source", "retrieved_at", "confidence"}
-REAL_NUMERIC_COLUMNS = {"age", "minutes_recent", "goals_recent", "assists_recent", "xg_recent", "xa_recent"}
+REAL_NUMERIC_COLUMNS = {
+    "age",
+    "minutes_recent",
+    "goals_recent",
+    "assists_recent",
+    "xg_recent",
+    "xa_recent",
+    "height_cm",
+    "caps",
+    "national_team_goals",
+}
 REAL_CONFIDENCE_VALUES = {"high", "medium", "low"}
+REAL_TEAM_NAME_ALIASES = {
+    "Bosnia And Herzegovina": "Bosnia & Herzegovina",
+    "Cabo Verde": "Cape Verde",
+    "Congo DR": "DR Congo",
+    "Curaçao": "Curacao",
+    "Czechia": "Czech Republic",
+    "Côte D'Ivoire": "Ivory Coast",
+    "IR Iran": "Iran",
+    "Korea Republic": "South Korea",
+    "Türkiye": "Turkey",
+}
 
 
 @dataclass(frozen=True)
@@ -488,14 +509,18 @@ def _real_rows_to_manual_data(rows: dict[str, list[dict[str, str]]]) -> ManualDa
                 continue
             if player_key not in seen_players:
                 seen_players.add(player_key)
+                team = _project_team_name(row.get("team", ""))
                 squad.append(
                     {
                         "player_key": player_key,
                         "name": row.get("player_name", ""),
-                        "team": row.get("team", ""),
+                        "team": team,
                         "position": row.get("position", ""),
                         "birth_date": "",
                         "age": row.get("age", ""),
+                        "height_cm": row.get("height_cm", ""),
+                        "caps": row.get("caps", ""),
+                        "national_team_goals": row.get("national_team_goals", ""),
                         "market_value": "",
                         "source": row.get("source", ""),
                     }
@@ -517,7 +542,7 @@ def _real_rows_to_manual_data(rows: dict[str, list[dict[str, str]]]) -> ManualDa
                 injuries.append(
                     {
                         "player_key": player_key,
-                        "team": row.get("team", ""),
+                        "team": _project_team_name(row.get("team", "")),
                         "status": row.get("injury_status", ""),
                         "injury_type": "",
                         "expected_return": "",
@@ -528,9 +553,14 @@ def _real_rows_to_manual_data(rows: dict[str, list[dict[str, str]]]) -> ManualDa
 
 
 def _real_player_key(row: dict[str, str]) -> str:
-    team = str(row.get("team") or "").strip().lower().replace(" ", "_")
+    team = _project_team_name(row.get("team", "")).lower().replace(" ", "_").replace("&", "and")
     player = str(row.get("player_name") or "").strip().lower().replace(" ", "_")
     return f"real_{team}_{player}" if team and player else ""
+
+
+def _project_team_name(value: str | None) -> str:
+    text = str(value or "").strip()
+    return REAL_TEAM_NAME_ALIASES.get(text, text)
 
 
 def _missing_indicators(snapshots: list[dict[str, Any]]) -> dict[str, list[str]]:

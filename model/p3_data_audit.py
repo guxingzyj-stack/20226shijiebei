@@ -4,7 +4,7 @@ import argparse
 import csv
 import json
 import re
-from collections import defaultdict
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +20,7 @@ BACKLOG_PATH = DATA_DIR / "p3_collection_backlog.csv"
 MIN_SQUAD_ROWS_PER_TEAM = 10
 MIN_STATS_ROWS_PER_TEAM = 4
 MIN_NUMERIC_STATS_ROWS_PER_TEAM = 4
+MIN_OFFICIAL_PROFILE_ROWS_PER_TEAM = 10
 FIRST_PHASE_MATCHES = 24
 
 
@@ -32,6 +33,7 @@ class TeamCoverage:
     first_opponent: str
     squad_rows: int
     player_stats_rows: int
+    official_profile_rows: int
     numeric_stats_rows: int
     injuries_rows: int
     source_rows: int
@@ -45,6 +47,8 @@ class TeamCoverage:
             missing.append("squad")
         if self.player_stats_rows < MIN_STATS_ROWS_PER_TEAM:
             missing.append("player_stats")
+        if self.official_profile_rows < MIN_OFFICIAL_PROFILE_ROWS_PER_TEAM:
+            missing.append("official_profile")
         if self.numeric_stats_rows < MIN_NUMERIC_STATS_ROWS_PER_TEAM:
             missing.append("numeric_recent_stats")
         if self.injuries_rows < 1:
@@ -77,6 +81,7 @@ def generate_report(data_dir: Path = DATA_DIR, schedule_path: Path = SCHEDULE_PA
         "missing_teams": sum(1 for row in coverage if row.status == "missing"),
         "first_phase_total": sum(1 for row in coverage if row.priority == "P0"),
         "first_phase_complete": sum(1 for row in coverage if row.priority == "P0" and row.status == "complete"),
+        "teams_with_official_profile": sum(1 for row in coverage if row.official_profile_rows >= MIN_OFFICIAL_PROFILE_ROWS_PER_TEAM),
         "teams_with_numeric_stats": sum(1 for row in coverage if row.numeric_stats_rows >= MIN_NUMERIC_STATS_ROWS_PER_TEAM),
     }
     blocker = None
@@ -90,6 +95,7 @@ def generate_report(data_dir: Path = DATA_DIR, schedule_path: Path = SCHEDULE_PA
         "thresholds": {
             "min_squad_rows_per_team": MIN_SQUAD_ROWS_PER_TEAM,
             "min_stats_rows_per_team": MIN_STATS_ROWS_PER_TEAM,
+            "min_official_profile_rows_per_team": MIN_OFFICIAL_PROFILE_ROWS_PER_TEAM,
             "min_numeric_stats_rows_per_team": MIN_NUMERIC_STATS_ROWS_PER_TEAM,
         },
         "summary": summary,
@@ -109,6 +115,7 @@ def write_backlog(report: dict[str, Any], path: Path = BACKLOG_PATH) -> Path:
         "status",
         "squad_rows",
         "player_stats_rows",
+        "official_profile_rows",
         "numeric_stats_rows",
         "injuries_rows",
         "missing_items",
@@ -128,6 +135,7 @@ def write_backlog(report: dict[str, Any], path: Path = BACKLOG_PATH) -> Path:
                     "status": row["status"],
                     "squad_rows": row["squad_rows"],
                     "player_stats_rows": row["player_stats_rows"],
+                    "official_profile_rows": row["official_profile_rows"],
                     "numeric_stats_rows": row["numeric_stats_rows"],
                     "injuries_rows": row["injuries_rows"],
                     "missing_items": "|".join(row["missing_items"]),
@@ -147,6 +155,7 @@ def row_to_dict(row: TeamCoverage) -> dict[str, Any]:
         "status": row.status,
         "squad_rows": row.squad_rows,
         "player_stats_rows": row.player_stats_rows,
+        "official_profile_rows": row.official_profile_rows,
         "numeric_stats_rows": row.numeric_stats_rows,
         "injuries_rows": row.injuries_rows,
         "missing_items": row.missing_items,
@@ -167,6 +176,7 @@ def _coverage_for_team(team: str, first_match: dict[str, str], real_rows: dict[s
         first_opponent=first_match["opponent"],
         squad_rows=len(squad),
         player_stats_rows=len(stats),
+        official_profile_rows=sum(1 for row in squad if _has_official_profile(row)),
         numeric_stats_rows=sum(1 for row in stats if _has_numeric_recent_stat(row)),
         injuries_rows=len(injuries),
         source_rows=sum(1 for row in all_rows if str(row.get("source") or "").strip()),
@@ -197,6 +207,14 @@ def _has_numeric_recent_stat(row: dict[str, str]) -> bool:
     return any(_is_number(row.get(column)) for column in ("minutes_recent", "goals_recent", "assists_recent", "xg_recent", "xa_recent"))
 
 
+def _has_official_profile(row: dict[str, str]) -> bool:
+    text_fields = ("position", "club")
+    numeric_fields = ("age", "height_cm", "caps", "national_team_goals")
+    return all(str(row.get(column) or "").strip() for column in text_fields) and all(
+        _is_number(row.get(column)) for column in numeric_fields
+    )
+
+
 def _is_number(value: Any) -> bool:
     text = str(value or "").strip()
     if not text:
@@ -220,19 +238,32 @@ TEAM_ALIASES = {
     "bosniaandherzegovina": "bosniaherzegovina",
     "czechia": "czechrepublic",
     "czechrepublic": "czechrepublic",
+    "caboverde": "capeverde",
+    "capeverde": "capeverde",
+    "iriran": "iran",
+    "iran": "iran",
+    "korearepublic": "southkorea",
+    "southkorea": "southkorea",
+    "turkiye": "turkey",
+    "turkey": "turkey",
     "usa": "usa",
     "unitedstates": "usa",
 }
 
 
 def _canonical_team(value: str) -> str:
-    normalized = re.sub(r"[\s\u3000'’.\-&/()]+", "", str(value or "")).lower()
+    ascii_folded = "".join(
+        char for char in unicodedata.normalize("NFKD", str(value or "")) if not unicodedata.combining(char)
+    )
+    normalized = re.sub(r"[\s\u3000'’.\-&/()]+", "", ascii_folded).lower()
     return TEAM_ALIASES.get(normalized, normalized)
 
 
 def _suggested_action(missing_items: list[str]) -> str:
     if "squad" in missing_items:
         return "collect reviewed squad rows first"
+    if "official_profile" in missing_items:
+        return "collect FIFA official profile rows: position, club, age, height, caps, goals"
     if "numeric_recent_stats" in missing_items:
         return "collect recent minutes/goals/assists/xg/xa for core players"
     if "injury_status" in missing_items:
@@ -255,7 +286,8 @@ def print_report(report: dict[str, Any]) -> None:
     for row in report["next_backlog"][:20]:
         print(
             f"- {row['priority']} {row['team']}: status={row['status']} "
-            f"squad={row['squad_rows']} stats={row['player_stats_rows']} numeric={row['numeric_stats_rows']} "
+            f"squad={row['squad_rows']} stats={row['player_stats_rows']} "
+            f"official_profile={row['official_profile_rows']} numeric={row['numeric_stats_rows']} "
             f"injuries={row['injuries_rows']} missing={','.join(row['missing_items'])}"
         )
     print("")

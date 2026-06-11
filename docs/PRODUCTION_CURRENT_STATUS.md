@@ -1,6 +1,6 @@
 # Production Current Status
 
-Production read-only version is stable. `BETTING_ENABLED` remains `false`. P1-C is still waiting on historical market odds. P3-D has a small-batch real CSV dry-run for four teams, but full player data remains `WAIT` and does not affect production predictions.
+Production read-only version is stable. `BETTING_ENABLED` remains `false`. P1-C is still waiting on historical market odds. P3-D now has complete official FIFA squad/profile CSV coverage for all 48 teams, but recent numeric performance data remains `WAIT` and does not affect production predictions.
 
 ## 1. Public Endpoints
 
@@ -80,12 +80,14 @@ No real connection strings, passwords, tokens, or backup contents are stored in 
 ## 9. P3-D Player Data
 
 - status: `WAIT`
-- teams: Mexico, South Africa, Germany, Curaçao
-- rows: squad=40, player_stats=16, injuries=12
+- official profile coverage: 48 / 48 teams
+- players: 1,248 official FIFA squad rows
+- rows: squad=1248, player_stats=1248, injuries=1248
 - source/retrieved_at/confidence coverage: complete for included rows
 - tournament teams covered completely: 0 / 48
 - teams with numeric recent player stats: 0 / 48
 - production DB writes: no
+- official source: `https://fdp.fifa.org/assetspublic/ce281/pdf/SquadLists-English.pdf`
 - tooling:
   - `python -m model.p3_data_audit --write-backlog`
   - `python -m model.p3_acceptance_report --real-dry-run`

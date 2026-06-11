@@ -66,13 +66,15 @@ Not allowed:
 
 ## Current Acceptance State
 
-First small-batch real CSV rows are now present for:
+Official FIFA squad profile CSV rows are now present for all 48 teams:
 
 ```text
-Mexico
-South Africa
-Germany
-Curaçao
+teams: 48
+players: 1,248
+squad rows: 1,248
+player_stats rows: 1,248
+injury rows: 1,248
+official profile rows: 1,248
 ```
 
 Current dry-run status:
@@ -80,16 +82,30 @@ Current dry-run status:
 ```text
 status: ok
 result: WAIT
-rows_validated: 68
-source_coverage: squad=40, player_stats=16, injuries=12
+rows_validated: 3744
+source_coverage: squad=1248, player_stats=1248, injuries=1248
+teams_with_official_profile: 48 / 48
+teams_with_numeric_recent_stats: 0 / 48
 would_write_db: false
 w_gbm: 0
 ```
 
-This is a small-batch pipeline-readiness check only. It is not full P3-D completion, does not write production DB, and does not enable GBM. Many numeric performance fields remain intentionally blank because no reliable public source was collected for recent minutes, goals, assists, xG, or xA in this dry-run.
+This is full official squad/profile coverage, not full P3-D model readiness. It does not write production DB and does not enable GBM. Numeric performance fields remain intentionally blank because no permitted reviewed source has been collected for recent minutes, goals, assists, xG, or xA.
+
+Official source:
+
+```text
+https://fdp.fifa.org/assetspublic/ce281/pdf/SquadLists-English.pdf
+```
 
 Use the player data audit before claiming P3 completion:
 
 ```bash
 python -m model.p3_data_audit --write-backlog
+```
+
+Regenerate the official CSVs from a local copy of the FIFA PDF:
+
+```bash
+python -m model.p3_fifa_squad_pdf --pdf path/to/SquadLists-English.pdf --output-dir data/p3 --retrieved-at 2026-06-12
 ```
