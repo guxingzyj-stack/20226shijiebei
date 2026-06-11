@@ -8,6 +8,8 @@ from psycopg.rows import dict_row
 from api.db import connect
 from api.scheduler_health import SCHEDULER_STALE_THRESHOLD_MINUTES, scheduler_freshness
 
+REPAIR_CONFIRM_TOKEN = "REPAIR_FINISHED_NULL"
+
 
 def generate_report(match_id: str | None = None) -> dict[str, Any]:
     with connect() as conn:
@@ -107,6 +109,61 @@ def print_report(report: dict[str, Any]) -> None:
     print(f"- {report['result']}")
 
 
+def repair_finished_null(dry_run: bool = True, confirm: str | None = None) -> dict[str, Any]:
+    if not dry_run and confirm != REPAIR_CONFIRM_TOKEN:
+        return {
+            "mode": "run",
+            "ok": False,
+            "error": f"--confirm {REPAIR_CONFIRM_TOKEN} is required",
+            "matches": [],
+            "would_update_count": 0,
+            "updated_count": 0,
+        }
+    with connect() as conn:
+        targets = _repair_targets(conn)
+        if dry_run:
+            return {
+                "mode": "dry-run",
+                "ok": True,
+                "matches": targets,
+                "would_update_count": len(targets),
+                "updated_count": 0,
+            }
+        with conn.transaction():
+            updated = _update_finished_null_to_closed(conn)
+        return {
+            "mode": "run",
+            "ok": True,
+            "matches": targets,
+            "would_update_count": len(targets),
+            "updated_count": len(updated),
+            "updated_match_ids": updated,
+        }
+
+
+def print_repair_report(report: dict[str, Any]) -> None:
+    print("Repair Finished Null Report")
+    print(f"- mode: {report['mode']}")
+    print(f"- ok: {report['ok']}")
+    if report.get("error"):
+        print(f"- error: {report['error']}")
+    print("- matches:")
+    for row in report.get("matches", []):
+        print(
+            "  - "
+            f"match_id: {row.get('match_id')}, "
+            f"match_num: {row.get('match_num')}, "
+            f"home_team: {row.get('home_team')}, "
+            f"away_team: {row.get('away_team')}, "
+            f"kickoff_at: {row.get('kickoff_at')}, "
+            f"status: {row.get('status')}, "
+            f"result_home: {row.get('result_home')}, "
+            f"result_away: {row.get('result_away')}"
+        )
+    print(f"- would_update_count: {report['would_update_count']}")
+    print(f"- updated_count: {report['updated_count']}")
+
+
 def _print_match_section(section: dict[str, Any]) -> None:
     print(f"- count: {section['count']}")
     print("- matches:")
@@ -139,10 +196,50 @@ def _scalar(conn, sql: str, params: tuple[Any, ...]) -> int:
         return int(row[0]) if row else 0
 
 
+def _repair_targets(conn) -> list[dict[str, Any]]:
+    return _rows(
+        conn,
+        """
+        SELECT match_id, match_num, home_team, away_team, kickoff_at, status,
+               result_home, result_away, ht_home, ht_away
+        FROM matches
+        WHERE status IN ('finished', 'completed')
+          AND result_home IS NULL
+          AND result_away IS NULL
+        ORDER BY kickoff_at NULLS LAST, match_id
+        """,
+        (),
+    )
+
+
+def _update_finished_null_to_closed(conn) -> list[str]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE matches
+            SET status = 'closed',
+                updated_at = now()
+            WHERE status IN ('finished', 'completed')
+              AND result_home IS NULL
+              AND result_away IS NULL
+            RETURNING match_id
+            """
+        )
+        return [str(row[0]) for row in cur.fetchall()]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="read-only result consistency diagnostics")
+    subparsers = parser.add_subparsers(dest="command")
+    repair_parser = subparsers.add_parser("repair-finished-null")
+    repair_parser.add_argument("--dry-run", action="store_true")
+    repair_parser.add_argument("--confirm")
     parser.add_argument("--match-id")
     args = parser.parse_args(argv)
+    if args.command == "repair-finished-null":
+        repair = repair_finished_null(dry_run=bool(args.dry_run), confirm=args.confirm)
+        print_repair_report(repair)
+        return 0 if repair["ok"] else 2
     report = generate_report(match_id=args.match_id)
     print_report(report)
     return 0 if report["result"] in {"PASS", "WARN"} else 1
@@ -150,4 +247,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

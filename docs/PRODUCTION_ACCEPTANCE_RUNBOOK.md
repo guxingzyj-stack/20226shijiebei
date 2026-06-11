@@ -163,6 +163,23 @@ but only `results_sync` may mark a real match `finished` after full-time scores 
 available. `finished` rows with missing `result_home` or `result_away` must be
 treated as not ready for settlement, recap, and P1-C Prime calibration.
 
+If old data contains `finished/completed` rows with both full-time scores still
+`NULL`, first inspect the exact target list:
+
+```bash
+python -m api.result_consistency_report repair-finished-null --dry-run
+```
+
+Only after the dry-run target list is confirmed safe, downgrade those rows to
+`closed`:
+
+```bash
+python -m api.result_consistency_report repair-finished-null --confirm REPAIR_FINISHED_NULL
+```
+
+This repair command does not write scores. It only updates rows matching
+`status IN ('finished','completed') AND result_home IS NULL AND result_away IS NULL`.
+
 Test data cleanup requires explicit confirmation:
 
 ```bash
