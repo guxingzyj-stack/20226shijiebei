@@ -4,6 +4,7 @@ import argparse
 
 from model.apply_migrations import main as apply_migrations_main
 from model.apply_predictions import predict_once
+from model.acceptance_report import main as acceptance_report_main
 from model.backtest import backtest_market_from_source, print_market_backtest_report
 from model.fit_dc import fit_dixon_coles_with_diagnostics, prepare_training_frame
 from model.history import download_results
@@ -28,6 +29,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.command == "apply-migrations":
         return apply_migrations_main()
+    if args.command == "acceptance-report":
+        return acceptance_report_main()
     if args.command == "smoke-check":
         return smoke_check_main()
     if args.command == "download-history":
