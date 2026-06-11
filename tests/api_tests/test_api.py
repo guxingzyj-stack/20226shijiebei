@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from api.auth import hash_password
 from api.betting import BETTING_DISABLED_MESSAGE
-from api.db import get_db
+from api.db import _mark_research_only, get_db
 from api.main import app, get_current_user
 
 
@@ -75,7 +75,7 @@ class FakeDb:
         return self.prediction if match_id == "m1" else None
 
     def latest_ev_signals(self, match_id, limit=20):
-        return [self.ev_signal] if match_id == "m1" else []
+        return _mark_research_only([dict(self.ev_signal)]) if match_id == "m1" else []
 
     def latest_odds(self, match_id, play_type):
         return self.snapshots.get((match_id, play_type))
@@ -101,10 +101,15 @@ class FakeDb:
         return self.bets
 
     def leaderboard(self):
-        return sorted(self.users.values(), key=lambda item: item["balance"], reverse=True)
+        return [
+            {"username": user["username"], "balance": user["balance"], "roi": 0, "settled_bets": 0}
+            for user in sorted(self.users.values(), key=lambda item: item["balance"], reverse=True)
+        ]
 
     def best_ev_signal(self, match_id):
-        return self.ev_signal if match_id == "m1" else None
+        if match_id != "m1":
+            return None
+        return self.ev_signal if self.ev_signal["play_type"] in {"had", "hhad"} and self.ev_signal["ev"] <= 0.15 else None
 
 
 def test_register_and_login_return_token(monkeypatch):
@@ -196,8 +201,29 @@ def test_match_detail_includes_smoke_fields(monkeypatch):
         body = response.json()
         assert body["latest_odds"]
         assert body["latest_prediction"]["match_id"] == "m1"
-        assert body["score_matrix"] == [[0.1]]
+        assert "score_matrix" not in body
+        assert body["latest_prediction"]["score_matrix"] == [[0.1]]
+        assert body["prediction_status"]["available"] is True
         assert body["ev_signals"][0]["selection"] == "3"
+        assert body["ev_signals"][0]["research_only"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_match_detail_without_current_prediction_returns_status(monkeypatch):
+    fake = FakeDb()
+    fake.prediction = None
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/api/matches/m1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["latest_prediction"] is None
+        assert body["prediction_status"]["available"] is False
+        assert body["prediction_status"]["reason"] == "missing_current_market_odds"
+        assert "score_matrix" not in body
+        assert body["ev_signals"] == []
     finally:
         app.dependency_overrides.clear()
 
@@ -242,6 +268,7 @@ def test_bet_placement_rejects_insufficient_balance(monkeypatch):
 def test_model_suggestion_caps_kelly_at_five_percent(monkeypatch):
     fake = FakeDb()
     fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    fake.ev_signal = {"match_id": "m1", "play_type": "had", "selection": "3", "model_prob": 0.76, "odds": 1.50, "ev": 0.14}
     app.dependency_overrides[get_db] = lambda: fake
     app.dependency_overrides[get_current_user] = lambda: fake.users[1]
     try:
@@ -249,5 +276,38 @@ def test_model_suggestion_caps_kelly_at_five_percent(monkeypatch):
         response = client.get("/api/model/suggestion?match_id=m1")
         assert response.status_code == 200
         assert response.json()["suggested_stake"] == "50.00"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_model_suggestion_filters_research_only_and_non_had_hhad(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    fake.ev_signal = {"match_id": "m1", "play_type": "crs", "selection": "1:0", "model_prob": 0.20, "odds": 9.0, "ev": 0.80}
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.get("/api/model/suggestion?match_id=m1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["suggested_stake"] == "0"
+        assert body["reason"] == "no_calibrated_value_signal"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_leaderboard_does_not_expose_internal_id(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/api/leaderboard")
+        assert response.status_code == 200
+        body = response.json()
+        assert body[0]["username"] == "bob"
+        assert "id" not in body[0]
+        assert "settled_bets" in body[0]
     finally:
         app.dependency_overrides.clear()

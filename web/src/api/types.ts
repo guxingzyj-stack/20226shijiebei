@@ -31,6 +31,8 @@ export type EvSignal = {
   ev: string | number;
   snapshot_id?: number | null;
   created_at?: string;
+  research_only?: boolean;
+  reason?: string | null;
 };
 
 export type Match = {
@@ -45,7 +47,11 @@ export type Match = {
   ht_away?: number | null;
   latest_odds?: OddsSnapshot[];
   latest_prediction?: Prediction | null;
-  score_matrix?: number[][] | null;
+  prediction_status?: {
+    available: boolean;
+    reason: string | null;
+    message: string | null;
+  };
   ev_signals?: EvSignal[];
 };
 
@@ -57,6 +63,7 @@ export type Suggestion = {
   odds: number | null;
   ev: number | null;
   suggested_stake: string | number;
+  reason?: string | null;
 };
 
 export type BetLeg = {
@@ -83,7 +90,6 @@ export type Bet = {
 };
 
 export type LeaderboardEntry = {
-  id?: number;
   username: string;
   balance: string | number;
   roi?: string | number;

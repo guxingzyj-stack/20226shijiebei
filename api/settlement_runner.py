@@ -141,7 +141,10 @@ def main(argv: list[str] | None = None) -> int:
     if command not in {"once", "dry-run"}:
         print("usage: python -m api.settlement_runner [once|dry-run]", file=sys.stderr)
         return 2
-    stats = run_settlement(PostgresSettlementRepository(), dry_run=command == "dry-run")
+    try:
+        stats = run_settlement(PostgresSettlementRepository(), dry_run=command == "dry-run")
+    except Exception:
+        stats = SettlementStats(errors=1)
     print_stats(stats)
     return 0 if stats.errors == 0 else 1
 

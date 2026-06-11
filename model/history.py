@@ -10,6 +10,8 @@ RESULTS_URL = "https://raw.githubusercontent.com/martj42/international_results/m
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 DEFAULT_RESULTS_PATH = DATA_DIR / "international_results.csv"
 REQUIRED_COLUMNS = ["date", "home_team", "away_team", "home_score", "away_score", "tournament", "neutral"]
+ELO_START_DATE = "2000-01-01"
+TRAINING_START_DATE = "2015-01-01"
 
 
 def download_results(path: Path = DEFAULT_RESULTS_PATH, url: str = RESULTS_URL) -> Path:
@@ -20,7 +22,7 @@ def download_results(path: Path = DEFAULT_RESULTS_PATH, url: str = RESULTS_URL) 
     return path
 
 
-def load_results(path: Path = DEFAULT_RESULTS_PATH, since: str = "2015-01-01") -> pd.DataFrame:
+def load_results(path: Path = DEFAULT_RESULTS_PATH, since: str = ELO_START_DATE) -> pd.DataFrame:
     data = pd.read_csv(path, usecols=REQUIRED_COLUMNS, parse_dates=["date"])
     data = data[data["date"] >= pd.Timestamp(since)].copy()
     data = data.dropna(subset=REQUIRED_COLUMNS)

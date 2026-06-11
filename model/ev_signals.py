@@ -3,8 +3,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from model.dixon_coles import score_matrix, three_way_probs
+from model.dixon_coles import score_matrix
 from model.market import normalize_probs
+
+
+EV_RESEARCH_ONLY_THRESHOLD = 0.15
 
 
 def handicap_three_way_probs(matrix: list[list[float]], goal_line: float) -> dict[str, float]:
@@ -81,6 +84,22 @@ def hafu_probs_from_lambdas(
     return normalize_probs(probs)
 
 
+def calibrate_hafu_probs_to_final_three_way(
+    hafu_probs: dict[str, float],
+    final_three_way: dict[str, float],
+) -> dict[str, float]:
+    full_time_sums = {"3": 0.0, "1": 0.0, "0": 0.0}
+    for key, probability in hafu_probs.items():
+        full_time_sums[key[1]] += probability
+    target = normalize_probs({key: float(final_three_way[key]) for key in ("3", "1", "0")})
+    calibrated: dict[str, float] = {}
+    for key, probability in hafu_probs.items():
+        full_time_region = key[1]
+        source = full_time_sums[full_time_region]
+        calibrated[key] = probability * (target[full_time_region] / source if source > 0 else 0.0)
+    return normalize_probs(calibrated)
+
+
 def normalize_hafu_selection_key(raw_key: str) -> str:
     value = str(raw_key).strip()
     compact = value.replace("-", "").replace("_", "").replace(" ", "")
@@ -120,7 +139,10 @@ def selection_model_probs(
     if play_type == "ttg":
         return total_goals_probs(matrix)
     if play_type == "hafu" and lambda_home is not None and lambda_away is not None and rho is not None:
-        return hafu_probs_from_lambdas(lambda_home, lambda_away, rho)
+        return calibrate_hafu_probs_to_final_three_way(
+            hafu_probs_from_lambdas(lambda_home, lambda_away, rho),
+            final_three_way,
+        )
     return {}
 
 
@@ -161,6 +183,8 @@ def ev_candidates(
                         "odds": float(odd),
                         "ev": ev,
                         "snapshot_id": snapshot["id"],
+                        "research_only": ev > EV_RESEARCH_ONLY_THRESHOLD,
+                        "reason": "model_market_divergence_too_large" if ev > EV_RESEARCH_ONLY_THRESHOLD else None,
                     }
                 )
     return candidates

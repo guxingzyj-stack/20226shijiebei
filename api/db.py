@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 
 DATABASE_URL_MESSAGE = "DATABASE_URL is required"
+EV_RESEARCH_ONLY_THRESHOLD = 0.15
 
 
 def get_database_url() -> str:
@@ -101,6 +102,9 @@ class Database:
                        score_matrix, lambda_home, lambda_away, created_at
                 FROM predictions
                 WHERE match_id = %s
+                  AND model_version = (
+                    SELECT id FROM model_versions ORDER BY trained_at DESC, id DESC LIMIT 1
+                  )
                 ORDER BY created_at DESC, id DESC
                 LIMIT 1
                 """,
@@ -126,7 +130,7 @@ class Database:
                 """,
                 (match_id, limit),
             )
-            return _dedupe_and_sort_ev_signals([dict(row) for row in cur.fetchall()], limit)
+            return _mark_research_only(_dedupe_and_sort_ev_signals([dict(row) for row in cur.fetchall()], limit))
 
     def odds_history(self, match_id: str, play_type: str | None = None) -> list[dict[str, Any]]:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
@@ -214,9 +218,14 @@ class Database:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
-                SELECT id, username, balance
-                FROM users
-                ORDER BY balance DESC, id
+                SELECT u.username,
+                       u.balance,
+                       0::numeric AS roi,
+                       COALESCE(count(b.id) FILTER (WHERE b.status IN ('won', 'lost', 'void')), 0) AS settled_bets
+                FROM users u
+                LEFT JOIN bets b ON b.user_id = u.id
+                GROUP BY u.id, u.username, u.balance
+                ORDER BY u.balance DESC, u.id
                 LIMIT 50
                 """
             )
@@ -231,13 +240,16 @@ class Database:
                   SELECT DISTINCT ON (play_type, selection)
                          match_id, play_type, selection, model_prob, odds, ev, created_at
                   FROM ev_signals
-                  WHERE match_id = %s AND ev > 0
+                  WHERE match_id = %s
+                    AND ev > 0
+                    AND ev <= %s
+                    AND play_type IN ('had', 'hhad')
                   ORDER BY play_type, selection, created_at DESC
                 ) deduped
                 ORDER BY ev DESC, created_at DESC
                 LIMIT 1
                 """,
-                (match_id,),
+                (match_id, EV_RESEARCH_ONLY_THRESHOLD),
             )
             row = cur.fetchone()
             return dict(row) if row else None
@@ -255,6 +267,14 @@ def _dedupe_and_sort_ev_signals(rows: list[dict[str, Any]], limit: int = 20) -> 
         key=lambda row: (float(row.get("ev") or 0), str(row.get("created_at") or "")),
         reverse=True,
     )[:limit]
+
+
+def _mark_research_only(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    for row in rows:
+        research_only = float(row.get("ev") or 0) > EV_RESEARCH_ONLY_THRESHOLD
+        row["research_only"] = research_only
+        row["reason"] = "model_market_divergence_too_large" if research_only else None
+    return rows
 
 
 def get_db() -> Database:

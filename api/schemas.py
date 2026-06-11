@@ -52,3 +52,4 @@ class SuggestionResponse(BaseModel):
     odds: float | None = None
     ev: float | None = None
     suggested_stake: Decimal
+    reason: str | None = None

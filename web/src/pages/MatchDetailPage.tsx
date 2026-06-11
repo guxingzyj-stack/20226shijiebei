@@ -54,7 +54,7 @@ export function MatchDetailPage() {
   }, [matchId, token]);
 
   const had = useMemo(() => match?.latest_odds?.find((row) => row.play_type === "had"), [match]);
-  const matrix = match?.score_matrix || match?.latest_prediction?.score_matrix;
+  const matrix = match?.latest_prediction?.score_matrix || null;
   const evSignals = useMemo(() => dedupeAndSortEvSignals(match?.ev_signals || []), [match?.ev_signals]);
 
   if (error) return <div className="rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm">{error}</div>;
@@ -69,7 +69,11 @@ export function MatchDetailPage() {
             {match.home_team} <span className="text-paper/35">vs</span> {match.away_team}
           </h1>
           <div className="mt-5">
-            <ProbabilityBar prediction={match.latest_prediction} />
+            {match.latest_prediction ? (
+              <ProbabilityBar prediction={match.latest_prediction} />
+            ) : (
+              <p className="text-sm text-paper/60">{match.prediction_status?.message || "该场暂未开售胜平负，预测生成中"}</p>
+            )}
           </div>
         </section>
 
@@ -108,7 +112,7 @@ export function MatchDetailPage() {
 
         <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
           <h2 className="mb-4 text-lg font-semibold">11x11 比分矩阵</h2>
-          <ScoreMatrix matrix={matrix} />
+          {matrix ? <ScoreMatrix matrix={matrix} /> : <p className="text-sm text-paper/60">该场暂未开售胜平负，预测生成中</p>}
         </section>
 
         <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
@@ -123,6 +127,7 @@ export function MatchDetailPage() {
                     <th>模型概率</th>
                     <th>赔率</th>
                     <th>EV</th>
+                    <th>状态</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -133,6 +138,7 @@ export function MatchDetailPage() {
                       <td>{formatPercent(signal.model_prob)}</td>
                       <td>{formatDecimal(signal.odds)}</td>
                       <td><EvBadge ev={signal.ev} /></td>
+                      <td className="text-paper/60">{signal.research_only ? "分歧过大，仅供研究" : "可观察"}</td>
                     </tr>
                   ))}
                 </tbody>

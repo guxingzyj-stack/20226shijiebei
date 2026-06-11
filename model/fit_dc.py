@@ -10,6 +10,7 @@ from scipy.optimize import minimize
 
 from model.dixon_coles import lambdas_from_elo, score_probability
 from model.elo import add_rolling_elo_columns
+from model.history import ELO_START_DATE, TRAINING_START_DATE
 
 
 XI = 0.0015
@@ -43,7 +44,10 @@ class DCFitResult:
 
 
 def prepare_training_frame(matches: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, float]]:
-    return add_rolling_elo_columns(matches)
+    warmup_matches = matches[matches["date"] >= pd.Timestamp(ELO_START_DATE)].copy()
+    enriched, ratings = add_rolling_elo_columns(warmup_matches)
+    training = enriched[enriched["date"] >= pd.Timestamp(TRAINING_START_DATE)].reset_index(drop=True)
+    return training, ratings
 
 
 def fit_dixon_coles(matches_with_elo: pd.DataFrame, xi: float = XI) -> DCParams:
@@ -119,6 +123,8 @@ def model_version_params(dc_params: DCParams, blend_weight: float, extra: dict[s
             "source": "temporary_market_prior_until_historical_backtest_complete",
             "todo": "replace with backtest-optimized weights after verified historical market odds",
         },
+        "elo_start_date": ELO_START_DATE,
+        "training_start_date": TRAINING_START_DATE,
     }
     if extra:
         payload.update(extra)

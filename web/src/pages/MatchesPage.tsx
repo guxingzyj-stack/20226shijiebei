@@ -66,7 +66,7 @@ export function MatchesPage() {
           <h2 className="text-sm font-semibold text-gold">{date}</h2>
           <div className="grid gap-3 lg:grid-cols-2">
             {rows.map((match) => {
-              const topEv = match.ev_signals?.[0];
+              const topEv = match.ev_signals?.find((signal) => !signal.research_only);
               return (
                 <Link
                   key={match.match_id}

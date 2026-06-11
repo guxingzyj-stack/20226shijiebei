@@ -64,7 +64,13 @@ def login(payload: UserLogin, db: Database = Depends(get_db)) -> TokenResponse:
 
 @app.get("/api/matches")
 def list_matches(status: str = Query("upcoming"), db: Database = Depends(get_db)) -> list[dict]:
-    return db.list_matches(status=status)
+    matches = db.list_matches(status=status)
+    for match in matches:
+        prediction = db.latest_prediction(str(match["match_id"]))
+        match["latest_prediction"] = prediction
+        match["prediction_status"] = _prediction_status(prediction)
+        match["ev_signals"] = db.latest_ev_signals(str(match["match_id"])) if prediction else []
+    return matches
 
 
 @app.get("/api/matches/{match_id}")
@@ -73,11 +79,10 @@ def match_detail(match_id: str, db: Database = Depends(get_db)) -> dict:
     if match is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="match not found")
     prediction = db.latest_prediction(match_id)
-    ev_signals = db.latest_ev_signals(match_id)
     match["latest_odds"] = db.latest_odds_by_match(match_id)
     match["latest_prediction"] = prediction
-    match["score_matrix"] = prediction.get("score_matrix") if prediction else None
-    match["ev_signals"] = ev_signals
+    match["prediction_status"] = _prediction_status(prediction)
+    match["ev_signals"] = db.latest_ev_signals(match_id) if prediction else []
     return match
 
 
@@ -116,7 +121,11 @@ def model_suggestion(
     signal = db.best_ev_signal(match_id)
     balance = Decimal(str(user["balance"]))
     if signal is None:
-        return SuggestionResponse(match_id=match_id, suggested_stake=Decimal("0"))
+        return SuggestionResponse(
+            match_id=match_id,
+            suggested_stake=Decimal("0"),
+            reason="no_calibrated_value_signal",
+        )
     stake = suggested_stake(balance, float(signal["model_prob"]), float(signal["odds"]))
     return SuggestionResponse(
         match_id=match_id,
@@ -127,3 +136,13 @@ def model_suggestion(
         ev=float(signal["ev"]),
         suggested_stake=stake,
     )
+
+
+def _prediction_status(prediction: dict | None) -> dict:
+    if prediction is not None:
+        return {"available": True, "reason": None, "message": None}
+    return {
+        "available": False,
+        "reason": "missing_current_market_odds",
+        "message": "该场暂未开售胜平负，预测生成中",
+    }

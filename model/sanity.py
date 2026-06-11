@@ -7,6 +7,7 @@ from model.market import normalize_probs
 
 
 DEFAULT_SANITY_PARAMS = {"c": 0.2739041058888925, "k": 0.5, "H": 165.2903826781101, "rho": -0.037923562385050666}
+STRONG_TEAMS = ("Argentina", "Brazil", "France", "Germany", "Spain", "England")
 
 
 def scenario_probs(
@@ -31,6 +32,7 @@ def scenario_probs(
 
 
 def sanity_report(params: dict[str, float] | None = None) -> dict[str, dict[str, float]]:
+    strong_team_ratings: dict[str, float] | None = None
     if params is None and DEFAULT_RESULTS_PATH.exists():
         matches = load_results(DEFAULT_RESULTS_PATH)
         enriched, ratings = prepare_training_frame(matches)
@@ -38,6 +40,7 @@ def sanity_report(params: dict[str, float] | None = None) -> dict[str, dict[str,
         params = fit_result.params.as_dict()
         argentina = ratings.get("Argentina", 1900)
         haiti = ratings.get("Haiti", 1100)
+        strong_team_ratings = {team: ratings.get(team, 1500.0) for team in STRONG_TEAMS}
     elif params is None:
         download_results(DEFAULT_RESULTS_PATH)
         matches = load_results(DEFAULT_RESULTS_PATH)
@@ -46,13 +49,17 @@ def sanity_report(params: dict[str, float] | None = None) -> dict[str, dict[str,
         params = fit_result.params.as_dict()
         argentina = ratings.get("Argentina", 1900)
         haiti = ratings.get("Haiti", 1100)
+        strong_team_ratings = {team: ratings.get(team, 1500.0) for team in STRONG_TEAMS}
     else:
         argentina = 1900
         haiti = 1100
-    return {
+    report = {
         "Argentina vs Haiti": scenario_probs(argentina, haiti, True, params),
         "Equal Elo neutral": scenario_probs(1500, 1500, False, params),
     }
+    if strong_team_ratings is not None:
+        report["Strong teams Elo"] = strong_team_ratings
+    return report
 
 
 def main() -> int:

@@ -6,6 +6,12 @@ from model import db
 from model.dixon_coles import lambdas_from_elo, score_matrix, three_way_probs
 from model.ev_signals import ev_candidates
 from model.market import normalize_probs, proportional_devig, shin_devig_three_way
+from model.matrix_calibration import (
+    hhad_region_sums_from_matrix,
+    recalibrate_score_matrix_to_hhad,
+    recalibrate_score_matrix_to_three_way,
+    region_sums_from_matrix,
+)
 from model.team_names import to_english_team_name
 
 
@@ -30,10 +36,18 @@ def market_three_way_from_snapshots(snapshots: list[dict[str, Any]]) -> dict[str
     return None
 
 
+def _latest_three_way_snapshot(snapshots: list[dict[str, Any]], play_type: str) -> dict[str, Any] | None:
+    for snapshot in snapshots:
+        if snapshot["play_type"] == play_type and set(snapshot["odds"]) == {"3", "1", "0"}:
+            return snapshot
+    return None
+
+
 def production_weights_for_match(snapshots: list[dict[str, Any]], params: dict[str, Any]) -> dict[str, float | str]:
     production = params.get("production_weights") or DEFAULT_MODEL_PARAMS["production_weights"]
     has_had = any(snapshot["play_type"] == "had" and set(snapshot["odds"]) == {"3", "1", "0"} for snapshot in snapshots)
-    if has_had:
+    has_hhad = any(snapshot["play_type"] == "hhad" and set(snapshot["odds"]) == {"3", "1", "0"} for snapshot in snapshots)
+    if has_had or has_hhad:
         return {
             "production_weight_source": str(production.get("source", "temporary_market_prior_until_historical_backtest_complete")),
             "w_dc": float(production.get("w_dc", 0.3)),
@@ -60,6 +74,8 @@ def predict_once() -> dict[str, int]:
         prediction_count = 0
         ev_count = 0
         market_fused_count = 0
+        market_source_had_count = 0
+        market_source_hhad_count = 0
         skipped_missing_market_count = 0
         dc_only_count = 0
         for match in db.fetch_upcoming_matches(conn):
@@ -72,9 +88,8 @@ def predict_once() -> dict[str, int]:
             dc_home, dc_draw, dc_away = three_way_probs(matrix)
             dc_probs = normalize_probs({"3": dc_home, "1": dc_draw, "0": dc_away})
             snapshots = db.fetch_latest_snapshots_for_match(conn, match["match_id"])
-            market_probs = market_three_way_from_snapshots(snapshots)
             weights = production_weights_for_match(snapshots, params)
-            if market_probs is None or weights["production_weight_source"] == "missing_current_market_odds":
+            if weights["production_weight_source"] == "missing_current_market_odds":
                 skipped_missing_market_count += 1
                 continue
             w_dc = float(weights["w_dc"])
@@ -82,8 +97,25 @@ def predict_once() -> dict[str, int]:
             if w_mkt <= 0:
                 skipped_missing_market_count += 1
                 continue
+            had_snapshot = _latest_three_way_snapshot(snapshots, "had")
+            hhad_snapshot = _latest_three_way_snapshot(snapshots, "hhad")
+            if had_snapshot is not None:
+                market_probs = shin_devig_three_way({key: float(value) for key, value in had_snapshot["odds"].items()})
+                final = normalize_probs({key: w_dc * dc_probs[key] + w_mkt * market_probs[key] for key in ("3", "1", "0")})
+                calibrated_matrix = recalibrate_score_matrix_to_three_way(matrix, final)
+                market_source_had_count += 1
+            elif hhad_snapshot is not None and hhad_snapshot.get("goal_line") is not None:
+                goal_line = float(hhad_snapshot["goal_line"])
+                market_hhad = shin_devig_three_way({key: float(value) for key, value in hhad_snapshot["odds"].items()})
+                dc_hhad = hhad_region_sums_from_matrix(matrix, goal_line)
+                final_hhad = normalize_probs({key: w_dc * dc_hhad[key] + w_mkt * market_hhad[key] for key in ("3", "1", "0")})
+                calibrated_matrix = recalibrate_score_matrix_to_hhad(matrix, goal_line, final_hhad)
+                final = region_sums_from_matrix(calibrated_matrix)
+                market_source_hhad_count += 1
+            else:
+                skipped_missing_market_count += 1
+                continue
             market_fused_count += 1
-            final = normalize_probs({key: w_dc * dc_probs[key] + w_mkt * market_probs[key] for key in ("3", "1", "0")})
             db.insert_prediction(
                 conn,
                 match["match_id"],
@@ -91,7 +123,7 @@ def predict_once() -> dict[str, int]:
                 final["3"],
                 final["1"],
                 final["0"],
-                matrix,
+                calibrated_matrix,
                 lambda_home,
                 lambda_away,
             )
@@ -99,17 +131,28 @@ def predict_once() -> dict[str, int]:
             for candidate in ev_candidates(
                 snapshots,
                 final,
-                matrix,
+                calibrated_matrix,
                 lambda_home=lambda_home,
                 lambda_away=lambda_away,
                 rho=dc_params["rho"],
             ):
-                db.insert_ev_signal(conn, **candidate)
+                db.insert_ev_signal(
+                    conn,
+                    match_id=candidate["match_id"],
+                    play_type=candidate["play_type"],
+                    selection=candidate["selection"],
+                    model_prob=candidate["model_prob"],
+                    odds=candidate["odds"],
+                    ev=candidate["ev"],
+                    snapshot_id=candidate["snapshot_id"],
+                )
                 ev_count += 1
         return {
             "predictions": prediction_count,
             "ev_signals": ev_count,
             "market_fused_matches": market_fused_count,
+            "market_source_had_count": market_source_had_count,
+            "market_source_hhad_count": market_source_hhad_count,
             "skipped_missing_market_matches": skipped_missing_market_count,
             "dc_only_matches": dc_only_count,
         }
