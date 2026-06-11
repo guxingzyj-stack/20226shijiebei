@@ -59,6 +59,19 @@ def test_real_feature_dry_run_generates_preview(tmp_path: Path) -> None:
     assert result["w_gbm"] == 0
 
 
+def test_real_feature_dry_run_uses_age_for_avg_age(tmp_path: Path) -> None:
+    header = "team,player_name,position,age,club,minutes_recent,goals_recent,assists_recent,xg_recent,xa_recent,injury_status,source,retrieved_at,confidence,notes\n"
+    rows = header + "Mexico,Player A,FW,25,Club,,,,,,,manual,2026-06-11,high,test\n"
+    for name in ("manual_real_squad_template.csv", "manual_real_player_stats_template.csv", "manual_real_injuries_template.csv"):
+        (tmp_path / name).write_text(rows, encoding="utf-8")
+
+    result = p3_ingest.build_team_features_real(dry_run=True, data_dir=tmp_path)
+    mexico = result["feature_preview"][0]
+
+    assert mexico["avg_age"] == 25
+    assert mexico["missing_avg_age"] is False
+
+
 def test_real_data_files_are_preferred_over_templates(tmp_path: Path) -> None:
     header = "team,player_name,position,age,club,minutes_recent,goals_recent,assists_recent,xg_recent,xa_recent,injury_status,source,retrieved_at,confidence,notes\n"
     good = header + "Mexico,Player A,FW,25,Club,100,1,0,0.5,0.2,,manual,2026-06-11,high,test\n"

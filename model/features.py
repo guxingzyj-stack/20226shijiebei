@@ -37,7 +37,7 @@ def build_team_feature_snapshot(
     core_stats = [row for row in team_stats if str(row.get("player_key")) in core_keys]
     core_minutes_for_rate = sum(_number(row.get("minutes")) or 0.0 for row in core_stats)
     core_xg_xa = sum((_number(row.get("xg")) or 0.0) + (_number(row.get("xa")) or 0.0) for row in core_stats)
-    ages = [_age(row.get("birth_date")) for row in team_players if _age(row.get("birth_date")) is not None]
+    ages = [_player_age(row) for row in team_players if _player_age(row) is not None]
 
     feature_values = {
         "elo": float(ratings.get(team, 1500.0)),
@@ -124,6 +124,13 @@ def _age(value: Any) -> float | None:
         return None
     today = datetime.now(timezone.utc).date()
     return (today - born).days / 365.25
+
+
+def _player_age(row: dict[str, Any]) -> float | None:
+    explicit_age = _number(row.get("age"))
+    if explicit_age is not None:
+        return explicit_age
+    return _age(row.get("birth_date"))
 
 
 def _injured_core_count(injuries: list[dict[str, Any]], core_keys: set[str]) -> int:

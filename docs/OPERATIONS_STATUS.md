@@ -46,12 +46,14 @@ Current production posture:
 
 ### P3-D
 
-- status: small-batch data ready / dry-run only
+- status: WAIT
 - teams: Mexico, South Africa, Germany, Curaçao
 - rows: squad=40, player_stats=16, injuries=12
 - production DB writes: no
 - GBM: `w_gbm=0`
-- note: this is not full P3-D completion and does not affect production predictions.
+- full tournament complete teams: 0 / 48
+- teams with numeric recent stats: 0 / 48
+- note: this is not full P3-D completion and does not affect production predictions. Continue with `python -m model.p3_data_audit --write-backlog`.
 
 ### Betting
 

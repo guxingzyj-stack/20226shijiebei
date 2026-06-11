@@ -79,11 +79,17 @@ Current dry-run status:
 
 ```text
 status: ok
-result: PASS
+result: WAIT
 rows_validated: 68
 source_coverage: squad=40, player_stats=16, injuries=12
 would_write_db: false
 w_gbm: 0
 ```
 
-This is a small-batch data-readiness PASS only. It is not full P3-D completion, does not write production DB, and does not enable GBM. Many numeric performance fields remain intentionally blank because no reliable public source was collected for recent minutes, goals, assists, xG, or xA in this dry-run.
+This is a small-batch pipeline-readiness check only. It is not full P3-D completion, does not write production DB, and does not enable GBM. Many numeric performance fields remain intentionally blank because no reliable public source was collected for recent minutes, goals, assists, xG, or xA in this dry-run.
+
+Use the player data audit before claiming P3 completion:
+
+```bash
+python -m model.p3_data_audit --write-backlog
+```

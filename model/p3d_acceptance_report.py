@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-from model import p3_ingest, p3_train
+from model import p3_data_audit, p3_ingest, p3_train
 
 
 def generate_report() -> dict[str, Any]:
@@ -11,6 +11,7 @@ def generate_report() -> dict[str, Any]:
     features = p3_ingest.build_team_features_real(dry_run=True)
     gbm = p3_train.train(dry_run=True, sample=False)
     source_coverage = _source_coverage(validation)
+    data_audit = p3_data_audit.generate_report()
     report = {
         "source_plan": {
             "mode": "manual_real_csv_first",
@@ -32,6 +33,12 @@ def generate_report() -> dict[str, Any]:
             "teams": features["teams"],
             "feature_preview": features["feature_preview"],
             "missing_indicators": features["missing_indicators"],
+        },
+        "data_audit": {
+            "result": data_audit["result"],
+            "blocker": data_audit["blocker"],
+            "summary": data_audit["summary"],
+            "next_backlog": data_audit["next_backlog"][:20],
         },
         "gbm_status": {
             "status": "disabled_for_p3d_dry_run",
@@ -75,6 +82,12 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print(f"- w_gbm: {report['gbm_status']['w_gbm']}")
     print(f"- affects_p1_predictions: {str(report['gbm_status']['affects_p1_predictions']).lower()}")
     print("")
+    print("5. Data audit")
+    print(f"- result: {report['data_audit']['result']}")
+    print(f"- blocker: {report['data_audit']['blocker']}")
+    print(f"- summary: {_safe(report['data_audit']['summary'])}")
+    print(f"- next_backlog_count_shown: {len(report['data_audit']['next_backlog'])}")
+    print("")
     print(f"- blocker: {report['blocker']}")
     print(f"result: {report['result']}")
 
@@ -100,6 +113,8 @@ def _blocker(report: dict[str, Any]) -> str | None:
         return "real CSV validation failed"
     if report["real_csv_validation"]["rows_validated"] == 0:
         return "no_real_data_csv"
+    if report["data_audit"]["result"] != "PASS":
+        return str(report["data_audit"]["blocker"] or "player_data_audit_wait")
     return None
 
 
@@ -109,6 +124,8 @@ def _result(report: dict[str, Any]) -> str:
     if report["gbm_status"]["w_gbm"] != 0 or report["gbm_status"]["affects_p1_predictions"]:
         return "FAIL"
     if report["real_csv_validation"]["rows_validated"] == 0:
+        return "WAIT"
+    if report["data_audit"]["result"] != "PASS":
         return "WAIT"
     return "PASS"
 

@@ -495,6 +495,7 @@ def _real_rows_to_manual_data(rows: dict[str, list[dict[str, str]]]) -> ManualDa
                         "team": row.get("team", ""),
                         "position": row.get("position", ""),
                         "birth_date": "",
+                        "age": row.get("age", ""),
                         "market_value": "",
                         "source": row.get("source", ""),
                     }

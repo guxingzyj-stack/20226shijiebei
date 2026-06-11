@@ -1,0 +1,49 @@
+priority,team,first_match_num,first_kickoff_at,first_opponent,status,squad_rows,player_stats_rows,numeric_stats_rows,injuries_rows,missing_items,suggested_action
+P0,Algeria,M019,2026-06-17T01:00:00Z,Argentina,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Argentina,M019,2026-06-17T01:00:00Z,Algeria,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Australia,M008,2026-06-14T04:00:00Z,Turkey,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Austria,M020,2026-06-17T04:00:00Z,Jordan,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Belgium,M014,2026-06-15T19:00:00Z,Egypt,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Bosnia & Herzegovina,M003,2026-06-12T19:00:00Z,Canada,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Brazil,M006,2026-06-13T22:00:00Z,Morocco,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Canada,M003,2026-06-12T19:00:00Z,Bosnia & Herzegovina,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Cape Verde,M013,2026-06-15T16:00:00Z,Spain,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Colombia,M024,2026-06-18T02:00:00Z,Uzbekistan,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Croatia,M022,2026-06-17T20:00:00Z,England,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Curacao,M009,2026-06-14T17:00:00Z,Germany,partial,10,4,0,3,numeric_recent_stats,collect recent minutes/goals/assists/xg/xa for core players
+P0,Czech Republic,M002,2026-06-12T02:00:00Z,South Korea,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,DR Congo,M021,2026-06-17T17:00:00Z,Portugal,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Ecuador,M011,2026-06-14T23:00:00Z,Ivory Coast,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Egypt,M014,2026-06-15T19:00:00Z,Belgium,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,England,M022,2026-06-17T20:00:00Z,Croatia,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,France,M017,2026-06-16T19:00:00Z,Senegal,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Germany,M009,2026-06-14T17:00:00Z,Curacao,partial,10,4,0,3,numeric_recent_stats,collect recent minutes/goals/assists/xg/xa for core players
+P0,Ghana,M023,2026-06-17T23:00:00Z,Panama,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Haiti,M007,2026-06-14T01:00:00Z,Scotland,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Iran,M016,2026-06-16T01:00:00Z,New Zealand,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Iraq,M018,2026-06-16T22:00:00Z,Norway,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Ivory Coast,M011,2026-06-14T23:00:00Z,Ecuador,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Japan,M010,2026-06-14T20:00:00Z,Netherlands,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Jordan,M020,2026-06-17T04:00:00Z,Austria,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Mexico,M001,2026-06-11T19:00:00Z,South Africa,partial,10,4,0,3,numeric_recent_stats,collect recent minutes/goals/assists/xg/xa for core players
+P0,Morocco,M006,2026-06-13T22:00:00Z,Brazil,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Netherlands,M010,2026-06-14T20:00:00Z,Japan,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,New Zealand,M016,2026-06-16T01:00:00Z,Iran,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Norway,M018,2026-06-16T22:00:00Z,Iraq,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Panama,M023,2026-06-17T23:00:00Z,Ghana,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Paraguay,M004,2026-06-13T01:00:00Z,USA,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Portugal,M021,2026-06-17T17:00:00Z,DR Congo,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Qatar,M005,2026-06-13T19:00:00Z,Switzerland,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Saudi Arabia,M015,2026-06-15T22:00:00Z,Uruguay,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Scotland,M007,2026-06-14T01:00:00Z,Haiti,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Senegal,M017,2026-06-16T19:00:00Z,France,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,South Africa,M001,2026-06-11T19:00:00Z,Mexico,partial,10,4,0,3,numeric_recent_stats,collect recent minutes/goals/assists/xg/xa for core players
+P0,South Korea,M002,2026-06-12T02:00:00Z,Czech Republic,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Spain,M013,2026-06-15T16:00:00Z,Cape Verde,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Sweden,M012,2026-06-15T02:00:00Z,Tunisia,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Switzerland,M005,2026-06-13T19:00:00Z,Qatar,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Tunisia,M012,2026-06-15T02:00:00Z,Sweden,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Turkey,M008,2026-06-14T04:00:00Z,Australia,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,USA,M004,2026-06-13T01:00:00Z,Paraguay,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Uruguay,M015,2026-06-15T22:00:00Z,Saudi Arabia,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first
+P0,Uzbekistan,M024,2026-06-18T02:00:00Z,Colombia,missing,0,0,0,0,squad|player_stats|numeric_recent_stats|injury_status,collect reviewed squad rows first

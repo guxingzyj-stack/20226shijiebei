@@ -27,3 +27,16 @@ def test_match_features_use_diffs_and_missing_flags():
     assert features["injured_core_count_diff"] == 1
     assert features["is_home"] == 1
     assert features["away_missing_squad_value_total"] is True
+
+
+def test_team_feature_snapshot_uses_explicit_age_when_birth_date_missing():
+    snapshot = build_team_feature_snapshot(
+        "A",
+        {},
+        [{"player_key": "a1", "team": "A", "age": "26", "market_value": ""}],
+        [],
+        [],
+    )
+
+    assert snapshot["avg_age"] == 26
+    assert snapshot["missing_avg_age"] is False
