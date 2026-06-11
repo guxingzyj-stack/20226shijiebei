@@ -55,18 +55,28 @@ class Database:
             return dict(row) if row else None
 
     def list_matches(self, status: str = "upcoming") -> list[dict[str, Any]]:
-        status_filter = "scheduled" if status == "upcoming" else status
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
-                       result_home, result_away, ht_home, ht_away
-                FROM matches
-                WHERE status = %s
-                ORDER BY kickoff_at
-                """,
-                (status_filter,),
-            )
+            if status == "upcoming":
+                cur.execute(
+                    """
+                    SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
+                           result_home, result_away, ht_home, ht_away
+                    FROM matches
+                    WHERE status IN ('scheduled', 'closed')
+                    ORDER BY kickoff_at
+                    """
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
+                           result_home, result_away, ht_home, ht_away
+                    FROM matches
+                    WHERE status = %s
+                    ORDER BY kickoff_at
+                    """,
+                    (status,),
+                )
             return [dict(row) for row in cur.fetchall()]
 
     def get_match(self, match_id: str) -> dict[str, Any] | None:
