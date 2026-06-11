@@ -109,7 +109,13 @@ class FakeDb:
     def best_ev_signal(self, match_id):
         if match_id != "m1":
             return None
-        return self.ev_signal if self.ev_signal["play_type"] in {"had", "hhad"} and self.ev_signal["ev"] <= 0.15 else None
+        return (
+            self.ev_signal
+            if self.ev_signal["play_type"] in {"had", "hhad"}
+            and self.ev_signal["ev"] <= 0.15
+            and not self.ev_signal.get("research_only", False)
+            else None
+        )
 
 
 def test_register_and_login_return_token(monkeypatch):
@@ -293,6 +299,35 @@ def test_model_suggestion_filters_research_only_and_non_had_hhad(monkeypatch):
         body = response.json()
         assert body["suggested_stake"] == "0"
         assert body["reason"] == "no_calibrated_value_signal"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_model_suggestion_ignores_ttg_hafu_and_research_only_had(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    client = TestClient(app)
+    try:
+        for play_type in ("ttg", "hafu"):
+            fake.ev_signal = {"match_id": "m1", "play_type": play_type, "selection": "7", "model_prob": 0.20, "odds": 1.5, "ev": 0.10}
+            response = client.get("/api/model/suggestion?match_id=m1")
+            assert response.status_code == 200
+            assert response.json()["reason"] == "no_calibrated_value_signal"
+
+        fake.ev_signal = {
+            "match_id": "m1",
+            "play_type": "had",
+            "selection": "3",
+            "model_prob": 0.70,
+            "odds": 1.4,
+            "ev": 0.10,
+            "research_only": True,
+        }
+        response = client.get("/api/model/suggestion?match_id=m1")
+        assert response.status_code == 200
+        assert response.json()["reason"] == "no_calibrated_value_signal"
     finally:
         app.dependency_overrides.clear()
 

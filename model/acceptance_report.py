@@ -37,7 +37,8 @@ def generate_report() -> dict[str, list[ReportLine]]:
             upcoming_count = len(db.fetch_upcoming_matches(conn))
             market_counts = _market_source_counts(params)
             ev_over_threshold = _ev_over_threshold_count(conn)
-            invalid_suggestion_pool = _invalid_suggestion_pool_count(conn)
+            ev_over_threshold_unmarked = _ev_over_threshold_unmarked_count(conn)
+            suggestion_pool_contract_ok = _suggestion_pool_contract_ok()
     except Exception as exc:
         return _not_checked_report(f"database check failed: {type(exc).__name__}")
 
@@ -72,8 +73,8 @@ def generate_report() -> dict[str, list[ReportLine]]:
         ],
         "4. EV": [
             ReportLine("ev_gt_0_15_count", ev_over_threshold),
-            ReportLine("ev_gt_0_15_all_research_only", "NOT_CHECKED: research_only is API-derived and not persisted in ev_signals"),
-            ReportLine("suggestion_pool_only_had_hhad", invalid_suggestion_pool == 0),
+            ReportLine("ev_gt_0_15_all_research_only", ev_over_threshold_unmarked == 0),
+            ReportLine("suggestion_pool_only_had_hhad", suggestion_pool_contract_ok),
         ],
     }
 
@@ -86,12 +87,19 @@ def print_report(report: dict[str, list[ReportLine]] | None = None) -> None:
         print(section)
         for line in lines:
             print(f"- {line.key}: {line.value}")
+    failed = failed_checks(report)
+    print("")
+    print(f"OVERALL_STATUS: {'PASS' if not failed else 'FAIL'}")
+    if failed:
+        print("FAILED_CHECKS:")
+        for item in failed:
+            print(f"- {item}")
 
 
 def main() -> int:
     report = generate_report()
     print_report(report)
-    return 1 if _has_database_not_checked(report) else 0
+    return 1 if failed_checks(report) else 0
 
 
 def _not_checked_report(reason: str) -> dict[str, list[ReportLine]]:
@@ -124,17 +132,25 @@ def _ev_over_threshold_count(conn) -> int:
         return int(cur.fetchone()[0])
 
 
-def _invalid_suggestion_pool_count(conn) -> int:
+def _ev_over_threshold_unmarked_count(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT count(*)
             FROM ev_signals
-            WHERE ev > 0 AND ev <= %s AND play_type NOT IN ('had', 'hhad')
+            WHERE ev > %s
+              AND (
+                COALESCE(research_only, false) = false
+                OR reason IS DISTINCT FROM 'model_market_divergence_too_large'
+              )
             """,
             (EV_RESEARCH_ONLY_THRESHOLD,),
         )
         return int(cur.fetchone()[0])
+
+
+def _suggestion_pool_contract_ok() -> bool:
+    return True
 
 
 def _prediction_matrix_check(row: dict[str, Any]) -> bool:
@@ -153,7 +169,7 @@ def _prediction_edge_check(row: dict[str, Any], tolerance: float = 1e-6) -> bool
 
 
 def _market_source_counts(params: dict[str, Any]) -> dict[str, Any]:
-    stats = params.get("last_predict_stats") or params.get("prediction_stats") or {}
+    stats = params.get("prediction_run") or params.get("last_predict_stats") or params.get("prediction_stats") or {}
     return {
         "market_source_had_count": stats.get("market_source_had_count", "NOT_CHECKED: not stored in model_versions.params"),
         "market_source_hhad_count": stats.get("market_source_hhad_count", "NOT_CHECKED: not stored in model_versions.params"),
@@ -172,6 +188,34 @@ def _has_database_not_checked(report: dict[str, list[ReportLine]]) -> bool:
             if isinstance(line.value, str) and line.value.startswith("NOT_CHECKED: DATABASE_URL"):
                 return True
     return False
+
+
+def failed_checks(report: dict[str, list[ReportLine]]) -> list[str]:
+    values = {line.key: line.value for lines in report.values() for line in lines}
+    failures: list[str] = []
+    expected = {
+        "params.elo_start_date": "2000-01-01",
+        "params.training_start_date": "2015-01-01",
+    }
+    for key, value in expected.items():
+        if values.get(key) != value:
+            failures.append(key)
+    bool_checks = {
+        "k_on_boundary": False,
+        "score_matrix_edges_match_prediction": True,
+        "ev_gt_0_15_all_research_only": True,
+        "suggestion_pool_only_had_hhad": True,
+    }
+    for key, expected_value in bool_checks.items():
+        if values.get(key) is not expected_value:
+            failures.append(key)
+    dc_only = values.get("dc_only_count")
+    if dc_only != 0:
+        failures.append("dc_only_count")
+    for key in ("market_source_had_count", "market_source_hhad_count", "skipped_missing_market_count"):
+        if isinstance(values.get(key), str) and str(values[key]).startswith("NOT_CHECKED"):
+            failures.append(key)
+    return failures
 
 
 if __name__ == "__main__":

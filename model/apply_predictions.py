@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from model import db
@@ -12,12 +13,15 @@ from model.matrix_calibration import (
     recalibrate_score_matrix_to_three_way,
     region_sums_from_matrix,
 )
+from model.history import ELO_START_DATE, TRAINING_START_DATE
 from model.team_names import to_english_team_name
 
 
-DEFAULT_DC_PARAMS = {"c": 0.22314355131420976, "k": 0.25, "H": 80.0, "rho": -0.05, "max_goals": 10}
+DEFAULT_DC_PARAMS = {"c": 0.22314355131420976, "k": 0.25, "H": 80.0, "rho": -0.05, "xi": 0.0015, "max_goals": 10}
 DEFAULT_MODEL_PARAMS = {
     "dc": DEFAULT_DC_PARAMS,
+    "elo_start_date": ELO_START_DATE,
+    "training_start_date": TRAINING_START_DATE,
     "production_weights": {
         "w_dc": 0.3,
         "w_market": 0.7,
@@ -25,6 +29,15 @@ DEFAULT_MODEL_PARAMS = {
         "todo": "replace with backtest-optimized weights after verified historical market odds",
     },
 }
+
+
+def params_with_p1_5_metadata(params: dict[str, Any]) -> dict[str, Any]:
+    normalized = deepcopy(params)
+    normalized["dc"] = {**DEFAULT_DC_PARAMS, **(normalized.get("dc") or {})}
+    normalized.setdefault("production_weights", DEFAULT_MODEL_PARAMS["production_weights"])
+    normalized["elo_start_date"] = ELO_START_DATE
+    normalized["training_start_date"] = TRAINING_START_DATE
+    return normalized
 
 
 def market_three_way_from_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, float] | None:
@@ -65,11 +78,12 @@ def predict_once() -> dict[str, int]:
         ratings = db.fetch_team_ratings(conn)
         version = db.fetch_latest_model_version(conn)
         if version is None:
-            model_version_id = db.insert_model_version(conn, "p1b-default", DEFAULT_MODEL_PARAMS)
-            params = DEFAULT_MODEL_PARAMS
+            params = params_with_p1_5_metadata(DEFAULT_MODEL_PARAMS)
+            model_name = "p1b-default"
         else:
-            model_version_id = int(version["id"])
-            params = version["params"] or {}
+            params = params_with_p1_5_metadata(version["params"] or {})
+            model_name = str(version["name"])
+        model_version_id = db.insert_model_version(conn, f"{model_name}-predict-run", params)
         dc_params = {**DEFAULT_DC_PARAMS, **(params.get("dc") or {})}
         prediction_count = 0
         ev_count = 0
@@ -145,17 +159,27 @@ def predict_once() -> dict[str, int]:
                     odds=candidate["odds"],
                     ev=candidate["ev"],
                     snapshot_id=candidate["snapshot_id"],
+                    research_only=bool(candidate.get("research_only", False)),
+                    reason=candidate.get("reason"),
                 )
                 ev_count += 1
-        return {
+        run_stats = {
             "predictions": prediction_count,
+            "predictions_written": prediction_count,
             "ev_signals": ev_count,
+            "ev_signals_written": ev_count,
             "market_fused_matches": market_fused_count,
             "market_source_had_count": market_source_had_count,
             "market_source_hhad_count": market_source_hhad_count,
             "skipped_missing_market_matches": skipped_missing_market_count,
+            "skipped_missing_market_count": skipped_missing_market_count,
             "dc_only_matches": dc_only_count,
+            "dc_only_count": dc_only_count,
         }
+        params["prediction_run"] = run_stats
+        params["last_predict_stats"] = run_stats
+        db.update_model_version_params(conn, model_version_id, params)
+        return run_stats
 
 
 def _crs_market_three_way(odds: dict[str, float]) -> dict[str, float]:

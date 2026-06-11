@@ -1,4 +1,4 @@
-from model.apply_predictions import market_three_way_from_snapshots, production_weights_for_match
+from model.apply_predictions import market_three_way_from_snapshots, params_with_p1_5_metadata, production_weights_for_match
 
 
 def test_production_weights_use_market_when_had_exists():
@@ -30,3 +30,13 @@ def test_market_three_way_prefers_had_snapshot():
     probs = market_three_way_from_snapshots(snapshots)
     assert probs is not None
     assert abs(sum(probs.values()) - 1.0) < 1e-9
+
+
+def test_params_with_p1_5_metadata_adds_required_dates_and_defaults():
+    params = params_with_p1_5_metadata({"dc": {"k": 0.3}})
+
+    assert params["elo_start_date"] == "2000-01-01"
+    assert params["training_start_date"] == "2015-01-01"
+    assert params["dc"]["k"] == 0.3
+    assert {"c", "H", "rho", "xi", "max_goals"} <= set(params["dc"])
+    assert params["production_weights"]["w_dc"] == 0.3

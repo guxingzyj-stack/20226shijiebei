@@ -50,6 +50,15 @@ def insert_model_version(conn: psycopg.Connection, name: str, params: dict[str, 
     return int(model_version_id)
 
 
+def update_model_version_params(conn: psycopg.Connection, model_version_id: int, params: dict[str, Any]) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE model_versions SET params = %s WHERE id = %s",
+            (Jsonb(params), model_version_id),
+        )
+    conn.commit()
+
+
 def upsert_team_ratings(conn: psycopg.Connection, ratings: dict[str, float]) -> int:
     with conn.cursor() as cur:
         for team, elo in ratings.items():
@@ -135,15 +144,19 @@ def insert_ev_signal(
     odds: float,
     ev: float,
     snapshot_id: int | None,
+    research_only: bool = False,
+    reason: str | None = None,
 ) -> int:
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO ev_signals (match_id, play_type, selection, model_prob, odds, ev, snapshot_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO ev_signals (
+              match_id, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (match_id, play_type, selection, model_prob, odds, ev, snapshot_id),
+            (match_id, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason),
         )
         signal_id = cur.fetchone()[0]
     conn.commit()

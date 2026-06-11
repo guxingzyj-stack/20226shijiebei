@@ -117,10 +117,10 @@ class Database:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
-                SELECT match_id, play_type, selection, model_prob, odds, ev, snapshot_id, created_at
+                SELECT match_id, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason, created_at
                 FROM (
                   SELECT DISTINCT ON (play_type, selection)
-                         match_id, play_type, selection, model_prob, odds, ev, snapshot_id, created_at
+                         match_id, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason, created_at
                   FROM ev_signals
                   WHERE match_id = %s
                   ORDER BY play_type, selection, created_at DESC
@@ -244,6 +244,7 @@ class Database:
                     AND ev > 0
                     AND ev <= %s
                     AND play_type IN ('had', 'hhad')
+                    AND COALESCE(research_only, false) = false
                   ORDER BY play_type, selection, created_at DESC
                 ) deduped
                 ORDER BY ev DESC, created_at DESC
@@ -271,9 +272,9 @@ def _dedupe_and_sort_ev_signals(rows: list[dict[str, Any]], limit: int = 20) -> 
 
 def _mark_research_only(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for row in rows:
-        research_only = float(row.get("ev") or 0) > EV_RESEARCH_ONLY_THRESHOLD
+        research_only = bool(row.get("research_only")) or float(row.get("ev") or 0) > EV_RESEARCH_ONLY_THRESHOLD
         row["research_only"] = research_only
-        row["reason"] = "model_market_divergence_too_large" if research_only else None
+        row["reason"] = row.get("reason") or ("model_market_divergence_too_large" if research_only else None)
     return rows
 
 
