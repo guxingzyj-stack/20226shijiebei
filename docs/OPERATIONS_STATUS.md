@@ -2,15 +2,49 @@
 
 Current production posture:
 
+- Production read-only version is stable.
 - Read-only prediction, odds, EV, leaderboard, and recap skeleton features are open.
 - Betting remains closed: `BETTING_ENABLED=false`.
-- API scheduler has been enabled and is waiting for real `ops_log` observation.
-- P1-C historical market backtest numbers are still pending.
-- P3-C only completes a small engineering sample CSV validation chain; real player data import is still pending.
-- P1-C CLI/reporting now returns `WAIT` until a real historical market odds source is supplied.
-- P3-D real CSV templates and dry-run validation are prepared; no real CSV rows have been imported.
 - GBM remains zero-weight and does not affect P1 production predictions.
-- P4 real recap output is waiting for more finished matches.
+
+## Production Status Summary
+
+### Scheduler
+
+- `settlement_runner`: `PASS`
+- `results_sync`: `PASS`
+
+### 019 Emergency Repair
+
+- backup: `PASS`
+- migrations 001-007: `PASS`
+- cleanup: `PASS`
+- public probes: `PASS`
+
+### 023 Security Closeout
+
+- PostgreSQL public port closed: `PASS`
+- password rotated: user confirmed
+- `wc-p0-odds-crawler`, `wc-p1-model-worker`, `wc-p2-api` `DATABASE_URL` updated: user confirmed
+- three services redeployed: user confirmed
+- public probe after rotation: `PASS`
+
+### P1-C
+
+- status: `WAIT`
+- blocker: missing real historical market odds
+- note: do not mark as `PASS` until real historical national-team market odds produce real RPS metrics.
+
+### P3-D
+
+- status: `WAIT`
+- blocker: missing reviewed real team/player/injury CSV
+- note: dry-run templates and validation are ready; no real CSV rows are imported.
+
+### Betting
+
+- status: disabled
+- required environment: `BETTING_ENABLED=false`
 
 ## Safe Commands
 
@@ -18,7 +52,6 @@ Current production posture:
 python -m api.health_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
-python -m model.p3_acceptance_report --sample
 python -m model.p1c_acceptance_report
 python -m model.p3_acceptance_report --real-dry-run
 python -m ops.next_phase_acceptance
@@ -43,8 +76,9 @@ bash deploy/backup_postgres.sh
 ## Do Not Do
 
 - Do not set `BETTING_ENABLED=true`.
-- Do not run real `settlement_runner once` for this task.
+- Do not run real `settlement_runner once` for a docs-only task.
 - Do not write fake scores to real `500-` matches.
 - Do not scrape external football data sites.
-- Do not mark P1-C as PASS without real historical national-team market odds.
+- Do not mark P1-C as `PASS` without real historical national-team market odds.
+- Do not mark P3-D as `PASS` without reviewed real CSV data.
 - Do not enable GBM weight from sample or header-only P3 data.

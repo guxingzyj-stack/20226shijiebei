@@ -5,43 +5,43 @@ This document records the non-secret closeout state for the 019 production repai
 ## Current Status
 
 ```text
-019-A backup: PASS
+019 emergency production repair: PASS
+023 production security closeout: PASS
+betting: disabled
+P1-C historical market backtest: WAIT
+P3-D real data readiness: WAIT
+```
+
+## Evidence Summary
+
+### Backup
+
+```text
 backup_file: worldcup_20260611_201447.sql
 backup_size: 8,078,281 bytes
 contains_odds_snapshots: yes
-
-019-B migration: PASS
-001_model_core.sql applied
-002_betting_core.sql applied
-003_ev_research_only.sql applied
-004_ops_log.sql applied
-005_p3_features.sql applied
-006_ev_model_version.sql applied
-007_ev_suggestion_eligible.sql applied
-
-scheduler settlement_runner: PASS
-scheduler results_sync: PASS
-health probe: PASS
-leaderboard probe: PASS, has roi, no internal id exposed
-cleanup: PASS, before bets=6 matches=2 users=8, after bets=0 matches=0 users=0
-probe_summary: PASS, leaderboard test_user_count=0, Mexico/Germany EV aligned
-betting: disabled
 ```
 
-## Cleanup Status
-
-Original `cleanup_test_data run` failed because `bets.user_id` still referenced test users. The cleanup tool has been fixed to delete in foreign-key-safe order:
+### Migration
 
 ```text
-1. bet child rows: none in current schema; bet legs are stored in bets.legs JSONB
-2. bets owned by test users or containing test-* match legs
-3. test-* matches
-4. test_user_* / codex_blocker_* users
+001_model_core.sql: applied
+002_betting_core.sql: applied
+003_ev_research_only.sql: applied
+004_ops_log.sql: applied
+005_p3_features.sql: applied
+006_ev_model_version.sql: applied
+007_ev_suggestion_eligible.sql: applied
 ```
 
-The fixed cleanup was later run by the user/operator after a safe dry-run.
+### Scheduler
 
-Recorded cleanup evidence:
+```text
+settlement_runner: PASS
+results_sync: PASS
+```
+
+### Cleanup
 
 ```text
 before: bets=6, matches=2, users=8
@@ -49,21 +49,7 @@ run: PASS
 after: bets=0, matches=0, users=0
 ```
 
-Dry-run must be first:
-
-```bash
-python -m api.cleanup_test_data dry-run
-```
-
-If dry-run shows any non-test-prefix data, do not run cleanup.
-
-Only after dry-run confirms test-only rows:
-
-```bash
-python -m api.cleanup_test_data run --confirm CLEAN_TEST_DATA
-```
-
-Cleanup protections:
+Cleanup protections remain mandatory:
 
 ```text
 Never delete match_id LIKE '500-%'
@@ -72,7 +58,16 @@ Run requires --confirm CLEAN_TEST_DATA
 Run is transaction wrapped; failure rolls back
 ```
 
-## Probe Summary
+### Probe Summary
+
+```text
+result: PASS
+leaderboard test_user_count: 0
+exposes_internal_id: False
+Mexico ev_model_version_aligned: True
+Mexico unprotected_high_ev_count: 0
+Germany ev_model_version_aligned: True
+```
 
 Saved JSON probes can be summarized locally without network or database access:
 
@@ -80,46 +75,28 @@ Saved JSON probes can be summarized locally without network or database access:
 $env:PYTHONPATH="."; python -m ops.probe_summary --mexico .\probe_mexico.json --germany .\probe_germany.json --leaderboard .\probe_leaderboard.json
 ```
 
-The summary checks:
+Do not commit `probe_*.json`.
+
+## Security Rotation Completed / User Confirmed
+
+The database public endpoint was exposed during emergency operations, and connection material may have appeared in screenshots. The security rotation is now recorded as complete based on user confirmation and public probe evidence.
+
+Non-sensitive evidence:
 
 ```text
-leaderboard has roi
-leaderboard does not expose internal id
-Mexico/Germany latest_prediction model_version aligns with ev_signals model_version
-EV > 0.15 is protected by research_only=true or suggestion_eligible=false
-test_user_* / codex_blocker_* accounts are WARN, not PASS
+public endpoint checked: 43.130.69.126:32644
+Test-NetConnection expected result: TcpTestSucceeded: False
+PostgreSQL password reset: user confirmed
+wc-p0-odds-crawler DATABASE_URL updated to internal connection: user confirmed
+wc-p1-model-worker DATABASE_URL updated to internal connection: user confirmed
+wc-p2-api DATABASE_URL updated to internal connection: user confirmed
+three services redeployed: user confirmed
+public probes after rotation: PASS
 ```
 
-## Security Rotation Still Required
-
-The database public endpoint was exposed during emergency operations, and connection material may have appeared in screenshots.
-
-Required user actions in Zeabur:
-
-```text
-1. Close PostgreSQL public endpoint 43.130.69.126:32644.
-2. Reset PostgreSQL password.
-3. Update wc-p0-odds-crawler, wc-p1-model-worker, and wc-p2-api DATABASE_URL.
-4. Ensure DATABASE_URL uses internal host postgresql.zeabur.internal.
-5. Redeploy the three services.
-6. Re-run public probes.
-```
-
-Do not claim this security rotation is complete until the user provides non-sensitive evidence:
-
-```text
-Test-NetConnection 43.130.69.126:32644 -> TcpTestSucceeded: False
-PostgreSQL password reset confirmed
-three service DATABASE_URL values updated to internal host
-three services redeployed
-public probes pass
-```
-
-Do not open betting as part of 019 closeout.
+Do not write the new connection string into this repository or chat. Zeabur services should use the internal host connection, not the temporary public endpoint.
 
 ## Post-019 Next Phase Status
-
-Task 024 adds non-destructive readiness tooling for the next two blockers:
 
 ```text
 P1-C historical market backtest: WAIT until real national-team historical market odds are available.
@@ -128,4 +105,4 @@ GBM: w_gbm remains 0.
 Betting: remains disabled.
 ```
 
-These WAIT states do not change the 019 safety evidence. They should not be rewritten as PASS until the corresponding real data is available and acceptance reports produce non-fabricated results.
+These WAIT states do not change the 019 safety evidence. They should not be rewritten as `PASS` until the corresponding real data is available and acceptance reports produce non-fabricated results.
