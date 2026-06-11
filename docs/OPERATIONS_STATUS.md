@@ -62,6 +62,7 @@ Current production posture:
 
 - `closed` means sale closed / stop selling, not match finished.
 - P0 odds crawler must not set `status=finished` from `data-isend`.
+- `closed` matches remain visible in upcoming lists and remain eligible for model-worker prediction while waiting for real results.
 - `finished` / `completed` is settlement- and recap-ready only when `result_home` and `result_away` are both present.
 - Diagnostic command: `python -m api.result_consistency_report`
 

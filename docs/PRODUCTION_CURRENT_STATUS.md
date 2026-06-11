@@ -96,6 +96,7 @@ No real connection strings, passwords, tokens, or backup contents are stored in 
 ## 10b. Result Safety
 
 - sale closed / stop selling maps to `closed`, not `finished`.
+- `closed` remains visible in upcoming lists and remains eligible for model-worker prediction.
 - real `finished` status must come from `results_sync` with real full-time score.
 - `finished` without `result_home/result_away` is not settlement-, recap-, or P1-C Prime-evaluable.
 - diagnostic tooling: `python -m api.result_consistency_report`

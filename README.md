@@ -15,6 +15,7 @@ This repository powers a 2026 World Cup Jingcai prediction system and virtual-ba
 - P1-C historical market backtest: frozen / `WAIT`, 500.com trade date probe did not yield valid 2022 historical rows.
 - P1-C Prime prospective calibration: framework ready / `WAIT`, accumulating real finished matches.
 - Result safety: crawler sale-closed state is `closed`, not `finished`; `finished` is only evaluable when full-time scores exist.
+- Closed matches stay visible and continue to receive model-worker predictions while waiting for real results.
 - Scheduler health: `/api/health` exposes `scheduler_last_seen` and `scheduler_stale`; ops_log age over 90 minutes is a health failure.
 - P3-D real team/player data: `WAIT`, missing reviewed real CSV.
 - GBM remains disabled for production impact: `w_gbm=0`.
