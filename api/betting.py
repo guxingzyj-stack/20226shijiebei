@@ -20,6 +20,9 @@ def is_betting_enabled() -> bool:
 
 
 def place_bet(db: Any, user: dict[str, Any], request: BetCreate, now: datetime | None = None) -> dict[str, Any]:
+    if not is_betting_enabled():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=BETTING_DISABLED_MESSAGE)
+
     now = now or datetime.now(timezone.utc)
     if request.stake <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="stake must be positive")

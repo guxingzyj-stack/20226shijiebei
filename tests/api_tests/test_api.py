@@ -6,8 +6,9 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from api.auth import hash_password
-from api.main import app, get_current_user
+from api.betting import BETTING_DISABLED_MESSAGE
 from api.db import get_db
+from api.main import app, get_current_user
 
 
 class FakeDb:
@@ -158,7 +159,29 @@ def test_bet_placement_rejects_when_betting_disabled(monkeypatch):
             json={"parlay": "single", "stake": "10", "legs": [{"match_id": "m1", "play_type": "had", "selection": "3"}]},
         )
         assert response.status_code == 403
-        assert "模拟投注功能即将开放" in response.json()["detail"]
+        assert response.json()["detail"] == BETTING_DISABLED_MESSAGE
+        assert fake.bets == []
+        assert fake.users[1]["balance"] == Decimal("100")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_betting_disabled_preempts_fake_match_id_without_writing_bet(monkeypatch):
+    monkeypatch.setenv("BETTING_ENABLED", "false")
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": hash_password("dummy-test-passphrase"), "balance": Decimal("100")}
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/bets",
+            json={"parlay": "single", "stake": "10", "legs": [{"match_id": "__missing_match__", "play_type": "had", "selection": "3"}]},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == BETTING_DISABLED_MESSAGE
+        assert fake.bets == []
+        assert fake.users[1]["balance"] == Decimal("100")
     finally:
         app.dependency_overrides.clear()
 
