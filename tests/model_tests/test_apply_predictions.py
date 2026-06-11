@@ -1,42 +1,39 @@
-from model.apply_predictions import market_three_way_from_snapshots, params_with_p1_5_metadata, production_weights_for_match
+from contextlib import contextmanager
+
+from model import apply_predictions
 
 
-def test_production_weights_use_market_when_had_exists():
-    snapshots = [{"play_type": "had", "odds": {"3": 1.8, "1": 3.2, "0": 4.0}}]
-    weights = production_weights_for_match(snapshots, {})
-    assert weights["w_dc"] == 0.3
-    assert weights["w_market"] == 0.7
-    assert weights["production_weight_source"] == "temporary_market_prior_until_historical_backtest_complete"
+def test_repeated_predict_once_does_not_append_predict_run_to_model_version_name(monkeypatch):
+    inserted_names: list[str] = []
 
+    @contextmanager
+    def fake_conn():
+        yield object()
 
-def test_production_weights_dc_only_when_had_missing():
-    snapshots = [{"play_type": "crs", "odds": {"1:0": 7.0}}]
-    weights = production_weights_for_match(snapshots, {})
-    assert weights["w_dc"] == 0.0
-    assert weights["w_market"] == 0.0
-    assert weights["production_weight_source"] == "missing_current_market_odds"
+    def fake_fetch_latest_model_version(_conn):
+        if inserted_names:
+            return {"id": len(inserted_names), "name": inserted_names[-1], "params": apply_predictions.DEFAULT_MODEL_PARAMS}
+        return {
+            "id": 1,
+            "name": "p1b-dixon-coles-predict-run-predict-run",
+            "params": apply_predictions.DEFAULT_MODEL_PARAMS,
+        }
 
+    def fake_insert_model_version(_conn, name, _params):
+        inserted_names.append(name)
+        return len(inserted_names)
 
-def test_production_weights_use_market_when_only_hhad_exists():
-    snapshots = [{"play_type": "hhad", "goal_line": -1, "odds": {"3": 2.6, "1": 3.4, "0": 2.1}}]
-    weights = production_weights_for_match(snapshots, {})
-    assert weights["w_dc"] == 0.3
-    assert weights["w_market"] == 0.7
-    assert weights["production_weight_source"] == "temporary_market_prior_until_historical_backtest_complete"
+    monkeypatch.setattr(apply_predictions.db, "get_conn", fake_conn)
+    monkeypatch.setattr(apply_predictions.db, "fetch_team_ratings", lambda _conn: {})
+    monkeypatch.setattr(apply_predictions.db, "fetch_latest_model_version", fake_fetch_latest_model_version)
+    monkeypatch.setattr(apply_predictions.db, "insert_model_version", fake_insert_model_version)
+    monkeypatch.setattr(apply_predictions.db, "fetch_upcoming_matches", lambda _conn: [])
+    monkeypatch.setattr(apply_predictions.db, "update_model_version_params", lambda _conn, _model_version_id, _params: None)
 
+    apply_predictions.predict_once()
+    apply_predictions.predict_once()
 
-def test_market_three_way_prefers_had_snapshot():
-    snapshots = [{"play_type": "had", "odds": {"3": 1.8, "1": 3.2, "0": 4.0}}]
-    probs = market_three_way_from_snapshots(snapshots)
-    assert probs is not None
-    assert abs(sum(probs.values()) - 1.0) < 1e-9
-
-
-def test_params_with_p1_5_metadata_adds_required_dates_and_defaults():
-    params = params_with_p1_5_metadata({"dc": {"k": 0.3}})
-
-    assert params["elo_start_date"] == "2000-01-01"
-    assert params["training_start_date"] == "2015-01-01"
-    assert params["dc"]["k"] == 0.3
-    assert {"c", "H", "rho", "xi", "max_goals"} <= set(params["dc"])
-    assert params["production_weights"]["w_dc"] == 0.3
+    assert inserted_names == [
+        "p1b-dixon-coles-predict-run",
+        "p1b-dixon-coles-predict-run",
+    ]

@@ -38,6 +38,7 @@ def generate_report() -> dict[str, list[ReportLine]]:
             market_counts = _market_source_counts(params)
             ev_over_threshold = _ev_over_threshold_count(conn, latest_version_id)
             ev_over_threshold_unmarked = _ev_over_threshold_unmarked_count(conn, latest_version_id)
+            suggestion_eligible_count = _suggestion_eligible_count(conn, latest_version_id)
             suggestion_pool_contract_ok = _suggestion_pool_contract_ok(conn, latest_version_id)
             ev_same_version = _ev_matches_latest_prediction_version(conn, latest_version_id)
     except Exception as exc:
@@ -76,6 +77,8 @@ def generate_report() -> dict[str, list[ReportLine]]:
         "4. EV": [
             ReportLine("ev_gt_0_15_count", ev_over_threshold),
             ReportLine("ev_gt_0_15_all_research_only", ev_over_threshold_unmarked == 0),
+            ReportLine("suggestion_eligible_count", suggestion_eligible_count),
+            ReportLine("suggestion_eligible_reason", "no_calibrated_value_signal" if suggestion_eligible_count == 0 else "calibrated_value_signal_available"),
             ReportLine("suggestion_pool_only_had_hhad", suggestion_pool_contract_ok),
         ],
     }
@@ -159,16 +162,26 @@ def _suggestion_pool_contract_ok(conn, model_version_id: int) -> bool:
             SELECT count(*)
             FROM ev_signals
             WHERE model_version = %s
-              AND ev > 0
-              AND COALESCE(research_only, false) = false
+              AND suggestion_eligible = true
               AND (
                 play_type NOT IN ('had', 'hhad')
+                OR ev <= 0
                 OR ev > %s
+                OR COALESCE(research_only, false) = true
               )
             """,
             (model_version_id, EV_RESEARCH_ONLY_THRESHOLD),
         )
         return int(cur.fetchone()[0]) == 0
+
+
+def _suggestion_eligible_count(conn, model_version_id: int) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) FROM ev_signals WHERE model_version = %s AND suggestion_eligible = true",
+            (model_version_id,),
+        )
+        return int(cur.fetchone()[0])
 
 
 def _ev_matches_latest_prediction_version(conn, model_version_id: int) -> bool:

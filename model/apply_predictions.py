@@ -17,6 +17,7 @@ from model.history import ELO_START_DATE, TRAINING_START_DATE
 from model.team_names import to_english_team_name
 
 
+PREDICTION_RUN_MODEL_NAME = "p1b-dixon-coles-predict-run"
 DEFAULT_DC_PARAMS = {"c": 0.22314355131420976, "k": 0.25, "H": 80.0, "rho": -0.05, "xi": 0.0015, "max_goals": 10}
 DEFAULT_MODEL_PARAMS = {
     "dc": DEFAULT_DC_PARAMS,
@@ -29,6 +30,10 @@ DEFAULT_MODEL_PARAMS = {
         "todo": "replace with backtest-optimized weights after verified historical market odds",
     },
 }
+
+
+def prediction_run_model_name() -> str:
+    return PREDICTION_RUN_MODEL_NAME
 
 
 def params_with_p1_5_metadata(params: dict[str, Any]) -> dict[str, Any]:
@@ -79,11 +84,9 @@ def predict_once() -> dict[str, int]:
         version = db.fetch_latest_model_version(conn)
         if version is None:
             params = params_with_p1_5_metadata(DEFAULT_MODEL_PARAMS)
-            model_name = "p1b-default"
         else:
             params = params_with_p1_5_metadata(version["params"] or {})
-            model_name = str(version["name"])
-        model_version_id = db.insert_model_version(conn, f"{model_name}-predict-run", params)
+        model_version_id = db.insert_model_version(conn, prediction_run_model_name(), params)
         dc_params = {**DEFAULT_DC_PARAMS, **(params.get("dc") or {})}
         prediction_count = 0
         ev_count = 0
@@ -162,6 +165,7 @@ def predict_once() -> dict[str, int]:
                     snapshot_id=candidate["snapshot_id"],
                     research_only=bool(candidate.get("research_only", False)),
                     reason=candidate.get("reason"),
+                    suggestion_eligible=bool(candidate.get("suggestion_eligible", False)),
                 )
                 ev_count += 1
         run_stats = {

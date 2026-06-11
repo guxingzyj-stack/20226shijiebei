@@ -29,7 +29,7 @@ class FakeDb:
         self.snapshots = {
             ("m1", "had"): {"id": 10, "match_id": "m1", "play_type": "had", "goal_line": None, "odds": {"3": 2.0, "1": 3.0, "0": 4.0}}
         }
-        self.ev_signal = {"match_id": "m1", "play_type": "had", "selection": "3", "model_prob": 0.60, "odds": 2.20, "ev": 0.32}
+        self.ev_signal = {"match_id": "m1", "play_type": "had", "selection": "3", "model_prob": 0.60, "odds": 2.20, "ev": 0.32, "suggestion_eligible": False}
         self.prediction = {
             "id": 1,
             "match_id": "m1",
@@ -107,6 +107,19 @@ class FakeDb:
         ]
 
     def best_ev_signal(self, match_id):
+        if match_id != "m1":
+            return None
+        return (
+            self.ev_signal
+            if self.ev_signal.get("suggestion_eligible", False)
+            and self.ev_signal["play_type"] in {"had", "hhad"}
+            and self.ev_signal["ev"] > 0
+            and self.ev_signal["ev"] <= 0.15
+            and not self.ev_signal.get("research_only", False)
+            else None
+        )
+
+    def legacy_best_ev_signal_without_suggestion_flag(self, match_id):
         if match_id != "m1":
             return None
         return (
@@ -274,7 +287,7 @@ def test_bet_placement_rejects_insufficient_balance(monkeypatch):
 def test_model_suggestion_caps_kelly_at_five_percent(monkeypatch):
     fake = FakeDb()
     fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
-    fake.ev_signal = {"match_id": "m1", "play_type": "had", "selection": "3", "model_prob": 0.76, "odds": 1.50, "ev": 0.14}
+    fake.ev_signal = {"match_id": "m1", "play_type": "had", "selection": "3", "model_prob": 0.76, "odds": 1.50, "ev": 0.14, "suggestion_eligible": True}
     app.dependency_overrides[get_db] = lambda: fake
     app.dependency_overrides[get_current_user] = lambda: fake.users[1]
     try:
@@ -289,7 +302,7 @@ def test_model_suggestion_caps_kelly_at_five_percent(monkeypatch):
 def test_model_suggestion_filters_research_only_and_non_had_hhad(monkeypatch):
     fake = FakeDb()
     fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
-    fake.ev_signal = {"match_id": "m1", "play_type": "crs", "selection": "1:0", "model_prob": 0.20, "odds": 9.0, "ev": 0.80}
+    fake.ev_signal = {"match_id": "m1", "play_type": "crs", "selection": "1:0", "model_prob": 0.20, "odds": 9.0, "ev": 0.80, "suggestion_eligible": False}
     app.dependency_overrides[get_db] = lambda: fake
     app.dependency_overrides[get_current_user] = lambda: fake.users[1]
     try:
@@ -311,7 +324,7 @@ def test_model_suggestion_ignores_ttg_hafu_and_research_only_had(monkeypatch):
     client = TestClient(app)
     try:
         for play_type in ("ttg", "hafu"):
-            fake.ev_signal = {"match_id": "m1", "play_type": play_type, "selection": "7", "model_prob": 0.20, "odds": 1.5, "ev": 0.10}
+            fake.ev_signal = {"match_id": "m1", "play_type": play_type, "selection": "7", "model_prob": 0.20, "odds": 1.5, "ev": 0.10, "suggestion_eligible": False}
             response = client.get("/api/model/suggestion?match_id=m1")
             assert response.status_code == 200
             assert response.json()["reason"] == "no_calibrated_value_signal"
@@ -324,6 +337,7 @@ def test_model_suggestion_ignores_ttg_hafu_and_research_only_had(monkeypatch):
             "odds": 1.4,
             "ev": 0.10,
             "research_only": True,
+            "suggestion_eligible": False,
         }
         response = client.get("/api/model/suggestion?match_id=m1")
         assert response.status_code == 200

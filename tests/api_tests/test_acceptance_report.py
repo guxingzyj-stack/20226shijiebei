@@ -43,3 +43,13 @@ def test_ev_queries_filter_latest_model_version():
     assert "SELECT id FROM model_versions" in latest_source
     assert "model_version = (" in best_source
     assert "SELECT id FROM model_versions" in best_source
+
+
+def test_best_ev_signal_filters_suggestion_eligible():
+    import inspect
+
+    from api.db import Database
+
+    best_source = inspect.getsource(Database.best_ev_signal)
+
+    assert "suggestion_eligible = true" in best_source

@@ -117,10 +117,10 @@ class Database:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
-                SELECT match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason, created_at
+                SELECT match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason, suggestion_eligible, created_at
                 FROM (
                   SELECT DISTINCT ON (play_type, selection)
-                         match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason, created_at
+                         match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason, suggestion_eligible, created_at
                   FROM ev_signals
                   WHERE match_id = %s
                     AND model_version = (
@@ -238,15 +238,16 @@ class Database:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
-                SELECT match_id, model_version, play_type, selection, model_prob, odds, ev
+                SELECT match_id, model_version, play_type, selection, model_prob, odds, ev, suggestion_eligible
                 FROM (
                   SELECT DISTINCT ON (play_type, selection)
-                         match_id, model_version, play_type, selection, model_prob, odds, ev, created_at
+                         match_id, model_version, play_type, selection, model_prob, odds, ev, suggestion_eligible, created_at
                   FROM ev_signals
                   WHERE match_id = %s
                     AND model_version = (
                       SELECT id FROM model_versions ORDER BY trained_at DESC, id DESC LIMIT 1
                     )
+                    AND suggestion_eligible = true
                     AND ev > 0
                     AND ev <= %s
                     AND play_type IN ('had', 'hhad')

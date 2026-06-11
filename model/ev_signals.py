@@ -10,6 +10,10 @@ from model.market import normalize_probs
 EV_RESEARCH_ONLY_THRESHOLD = 0.15
 
 
+def suggestion_eligible_for_signal(play_type: str, ev: float, research_only: bool = False) -> bool:
+    return play_type in {"had", "hhad"} and ev > 0 and ev <= EV_RESEARCH_ONLY_THRESHOLD and not research_only
+
+
 def handicap_three_way_probs(matrix: list[list[float]], goal_line: float) -> dict[str, float]:
     probs = {"3": 0.0, "1": 0.0, "0": 0.0}
     for home_goals, row in enumerate(matrix):
@@ -174,6 +178,7 @@ def ev_candidates(
             probability = float(model_probs[lookup_key])
             ev = probability * float(odd) - 1
             if ev > threshold:
+                research_only = ev > EV_RESEARCH_ONLY_THRESHOLD
                 candidates.append(
                     {
                         "match_id": snapshot["match_id"],
@@ -183,8 +188,9 @@ def ev_candidates(
                         "odds": float(odd),
                         "ev": ev,
                         "snapshot_id": snapshot["id"],
-                        "research_only": ev > EV_RESEARCH_ONLY_THRESHOLD,
-                        "reason": "model_market_divergence_too_large" if ev > EV_RESEARCH_ONLY_THRESHOLD else None,
+                        "research_only": research_only,
+                        "reason": "model_market_divergence_too_large" if research_only else None,
+                        "suggestion_eligible": suggestion_eligible_for_signal(snapshot["play_type"], ev, research_only),
                     }
                 )
     return candidates

@@ -147,17 +147,18 @@ def insert_ev_signal(
     snapshot_id: int | None,
     research_only: bool = False,
     reason: str | None = None,
+    suggestion_eligible: bool = False,
 ) -> int:
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO ev_signals (
-              match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason
+              match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason, suggestion_eligible
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason),
+            (match_id, model_version, play_type, selection, model_prob, odds, ev, snapshot_id, research_only, reason, suggestion_eligible),
         )
         signal_id = cur.fetchone()[0]
     conn.commit()

@@ -1,4 +1,5 @@
 from model import acceptance_report
+import inspect
 
 
 def test_model_acceptance_report_without_database_url_is_not_checked(monkeypatch, capsys):
@@ -78,3 +79,11 @@ def test_model_acceptance_failed_checks_include_ev_version():
     }
 
     assert "ev_matches_latest_prediction_version" in acceptance_report.failed_checks(report)
+
+
+def test_suggestion_pool_contract_checks_suggestion_eligible_pool():
+    source = inspect.getsource(acceptance_report._suggestion_pool_contract_ok)
+
+    assert "suggestion_eligible = true" in source
+    assert "play_type NOT IN ('had', 'hhad')" in source
+    assert "COALESCE(research_only, false) = true" in source
