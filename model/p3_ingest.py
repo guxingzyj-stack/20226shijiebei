@@ -496,7 +496,11 @@ def _real_csv_exists(data_dir: Path) -> bool:
 
 
 def _performance_paths(data_dir: Path) -> list[Path]:
-    return sorted(path for path in data_dir.glob("real_performance_*.csv") if not path.name.endswith("_template.csv"))
+    return sorted(
+        path
+        for path in data_dir.glob("real_performance_*.csv")
+        if not path.name.endswith("_template.csv") and "unmatched" not in path.stem
+    )
 
 
 def _read_rows(path: Path) -> list[dict[str, str]]:
@@ -633,6 +637,12 @@ def _coverage(details: dict[str, Any], column: str, data_dir: Path) -> dict[str,
     for name, detail in details.items():
         if detail.get("missing_columns"):
             coverage[name] = 0
+            continue
+        if name == "performance":
+            rows: list[dict[str, str]] = []
+            for path in _performance_paths(data_dir):
+                rows.extend(_read_rows(path))
+            coverage[name] = sum(1 for row in rows if str(row.get(column) or "").strip())
             continue
         path = _real_paths(data_dir).get(name)
         if not path or not path.exists():

@@ -39,6 +39,21 @@ def test_real_performance_template_is_ignored(tmp_path: Path) -> None:
     assert validation["performance_rows_validated"] == 0
 
 
+def test_real_performance_unmatched_outputs_are_ignored(tmp_path: Path) -> None:
+    _write_real_rows(tmp_path, teams=("Mexico",), players_per_team=1)
+    (tmp_path / "real_performance_unmatched_statsbomb.csv").write_text(
+        "statsbomb_player_name,statsbomb_team,candidate_project_players,reason\n"
+        "Unknown,Mexico,,no_exact_project_roster_match\n",
+        encoding="utf-8",
+    )
+
+    validation = p3_ingest.validate_real(data_dir=tmp_path, dry_run=True)
+
+    assert validation["ok"] is True
+    assert validation["performance_files"] == []
+    assert validation["performance_rows_validated"] == 0
+
+
 def test_performance_requires_source_retrieved_at_and_confidence(tmp_path: Path) -> None:
     _write_real_rows(tmp_path, teams=("Mexico",), players_per_team=1)
     (tmp_path / "real_performance_squad.csv").write_text(
@@ -81,6 +96,7 @@ def test_performance_optional_xg_xa_can_be_unavailable(tmp_path: Path) -> None:
 
     assert validation["ok"] is True
     assert validation["performance_rows_validated"] == 1
+    assert validation["retrieved_at_coverage"]["performance"] == 1
 
 
 def test_p3_light_requires_notes_even_when_xg_xa_present(tmp_path: Path) -> None:

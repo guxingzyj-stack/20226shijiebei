@@ -1,0 +1,5 @@
+team,player_name,club,minutes_recent,goals_recent,assists_recent,xg_recent,xa_recent,source,retrieved_at,confidence,notes
+Portugal,NUNO MENDES,Paris Saint-Germain (FRA),41,0,0,,,https://github.com/statsbomb/open-data,2026-06-12,high,statsbomb_open_data_partial; unavailable_xg_xa; match_count=1; minutes_estimation=conservative
+Qatar,BOUALEM KHOUKHI,Al Sadd SC (QAT),270,0,0,,,https://github.com/statsbomb/open-data,2026-06-12,high,statsbomb_open_data_partial; unavailable_xg_xa; match_count=3; minutes_estimation=conservative
+Qatar,KARIM BOUDIAF,Al Duhail SC (QAT),185,0,0,,,https://github.com/statsbomb/open-data,2026-06-12,high,statsbomb_open_data_partial; unavailable_xg_xa; match_count=3; minutes_estimation=conservative
+Qatar,MOHAMMED MUNTARI,Al Gharafa SC (QAT),61,1,0,,,https://github.com/statsbomb/open-data,2026-06-12,high,statsbomb_open_data_partial; unavailable_xg_xa; match_count=3; minutes_estimation=conservative

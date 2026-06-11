@@ -3,7 +3,7 @@ from __future__ import annotations
 from model import p3d_acceptance_report
 
 
-def test_p3d_acceptance_waits_for_full_real_csv_and_keeps_gbm_zero() -> None:
+def test_p3d_acceptance_waits_for_full_performance_coverage_and_keeps_gbm_zero() -> None:
     report = p3d_acceptance_report.generate_report()
 
     assert report["result"] == "WAIT"
@@ -14,9 +14,9 @@ def test_p3d_acceptance_waits_for_full_real_csv_and_keeps_gbm_zero() -> None:
     assert report["real_csv_validation"]["p3_mode"] == "light"
     assert report["feature_readiness"]["p3_mode"] == "light"
     assert report["real_csv_validation"]["real_csv_exists"] is True
-    assert report["real_csv_validation"]["real_performance_csv_exists"] is False
-    assert report["real_csv_validation"]["performance_rows_validated"] == 0
-    assert report["real_csv_validation"]["performance_files"] == []
+    assert report["real_csv_validation"]["real_performance_csv_exists"] is True
+    assert report["real_csv_validation"]["performance_rows_validated"] > 0
+    assert "real_performance_statsbomb_sample.csv" in report["real_csv_validation"]["performance_files"]
     assert report["real_csv_validation"]["would_write_db"] is False
     assert report["data_audit"]["summary"]["teams_total"] == 48
     assert len(report["feature_readiness"]["teams_below_70_percent"]) == 48
