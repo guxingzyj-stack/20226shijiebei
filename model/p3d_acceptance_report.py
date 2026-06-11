@@ -19,9 +19,12 @@ def generate_report() -> dict[str, Any]:
         },
         "real_csv_validation": {
             "status": validation["status"],
+            "real_csv_exists": validation["real_csv_exists"],
             "rows_validated": validation["rows_validated"],
             "validation_errors": _validation_errors(validation),
             "source_coverage": source_coverage,
+            "retrieved_at_coverage": validation["retrieved_at_coverage"],
+            "confidence_valid": validation["confidence_valid"],
             "would_write_db": False,
         },
         "feature_readiness": {
@@ -53,9 +56,12 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print("")
     print("2. Real CSV validation")
     print(f"- status: {report['real_csv_validation']['status']}")
+    print(f"- real_csv_exists: {str(report['real_csv_validation']['real_csv_exists']).lower()}")
     print(f"- rows_validated: {report['real_csv_validation']['rows_validated']}")
     print(f"- validation_errors: {report['real_csv_validation']['validation_errors']}")
     print(f"- source_coverage: {report['real_csv_validation']['source_coverage']}")
+    print(f"- retrieved_at_coverage: {report['real_csv_validation']['retrieved_at_coverage']}")
+    print(f"- confidence_valid: {str(report['real_csv_validation']['confidence_valid']).lower()}")
     print(f"- would_write_db: {str(report['real_csv_validation']['would_write_db']).lower()}")
     print("")
     print("3. Feature readiness")

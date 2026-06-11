@@ -44,3 +44,18 @@ def test_real_feature_dry_run_generates_preview(tmp_path: Path) -> None:
     assert result["would_write_db"] is False
     assert result["w_gbm"] == 0
 
+
+def test_real_data_files_are_preferred_over_templates(tmp_path: Path) -> None:
+    header = "team,player_name,position,age,club,minutes_recent,goals_recent,assists_recent,xg_recent,xa_recent,injury_status,source,retrieved_at,confidence,notes\n"
+    good = header + "Mexico,Player A,FW,25,Club,100,1,0,0.5,0.2,,manual,2026-06-11,high,test\n"
+    for name in ("manual_real_squad.csv", "manual_real_player_stats.csv", "manual_real_injuries.csv"):
+        (tmp_path / name).write_text(good, encoding="utf-8")
+    for name in ("manual_real_squad_template.csv", "manual_real_player_stats_template.csv", "manual_real_injuries_template.csv"):
+        (tmp_path / name).write_text(header, encoding="utf-8")
+
+    report = p3_ingest.validate_real(data_dir=tmp_path, dry_run=True)
+
+    assert report["real_csv_exists"] is True
+    assert report["rows_validated"] == 3
+    assert report["retrieved_at_coverage"] == {"squad": 1, "player_stats": 1, "injuries": 1}
+    assert report["confidence_valid"] is True

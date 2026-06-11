@@ -27,6 +27,16 @@ data/p3/manual_real_player_stats_template.csv
 data/p3/manual_real_injuries_template.csv
 ```
 
+When real reviewed data is ready, place it in:
+
+```text
+data/p3/manual_real_squad.csv
+data/p3/manual_real_player_stats.csv
+data/p3/manual_real_injuries.csv
+```
+
+The dry-run loader prefers these real CSV files when present. If they are absent, it validates the header-only templates and returns `WAIT`.
+
 Required fields:
 
 ```text
@@ -65,4 +75,3 @@ w_gbm: 0
 ```
 
 This is safe and expected. It is not a production feature-model PASS.
-

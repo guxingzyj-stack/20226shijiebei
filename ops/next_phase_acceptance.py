@@ -33,6 +33,7 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print("")
     print("2. P3-D")
     print(f"- result: {report['p3d']['result']}")
+    print(f"- real_csv_exists: {str(report['p3d']['real_csv_validation']['real_csv_exists']).lower()}")
     print(f"- rows_validated: {report['p3d']['real_csv_validation']['rows_validated']}")
     print(f"- source_coverage: {report['p3d']['real_csv_validation']['source_coverage']}")
     print(f"- w_gbm: {report['p3d']['gbm_status']['w_gbm']}")

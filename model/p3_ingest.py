@@ -28,6 +28,9 @@ SAMPLE_INJURIES_FILE = SAMPLE_DIR / "sample_injuries.csv"
 REAL_SQUAD_FILE = DATA_DIR / "manual_real_squad_template.csv"
 REAL_PLAYER_STATS_FILE = DATA_DIR / "manual_real_player_stats_template.csv"
 REAL_INJURIES_FILE = DATA_DIR / "manual_real_injuries_template.csv"
+REAL_SQUAD_DATA_FILE = DATA_DIR / "manual_real_squad.csv"
+REAL_PLAYER_STATS_DATA_FILE = DATA_DIR / "manual_real_player_stats.csv"
+REAL_INJURIES_DATA_FILE = DATA_DIR / "manual_real_injuries.csv"
 
 REQUIRED_COLUMNS = {
     "squad": {"player_key", "name", "team", "position", "birth_date", "market_value", "source"},
@@ -158,6 +161,7 @@ def build_feature_snapshots_from_manual_data(manual: ManualData, ratings: dict[s
 
 def validate_real(data_dir: Path = DATA_DIR, dry_run: bool = True) -> dict[str, Any]:
     paths = _real_paths(data_dir)
+    real_csv_exists = _real_csv_exists(data_dir)
     details: dict[str, Any] = {}
     ok = True
     total_rows = 0
@@ -181,8 +185,11 @@ def validate_real(data_dir: Path = DATA_DIR, dry_run: bool = True) -> dict[str, 
         "status": status,
         "result": "WAIT" if status == "no_real_data_csv" else ("PASS" if ok else "FAIL"),
         "dry_run": dry_run,
+        "real_csv_exists": real_csv_exists,
         "rows_validated": total_rows,
         "would_write_db": False,
+        "retrieved_at_coverage": _coverage(details, "retrieved_at", data_dir),
+        "confidence_valid": ok and not _confidence_errors(details),
         "details": details,
     }
 
@@ -374,11 +381,29 @@ def _paths(data_dir: Path, sample: bool = False) -> dict[str, Path]:
 
 
 def _real_paths(data_dir: Path) -> dict[str, Path]:
+    data_paths = {
+        "squad": data_dir / REAL_SQUAD_DATA_FILE.name,
+        "player_stats": data_dir / REAL_PLAYER_STATS_DATA_FILE.name,
+        "injuries": data_dir / REAL_INJURIES_DATA_FILE.name,
+    }
+    if any(path.exists() for path in data_paths.values()):
+        return data_paths
     return {
         "squad": data_dir / REAL_SQUAD_FILE.name,
         "player_stats": data_dir / REAL_PLAYER_STATS_FILE.name,
         "injuries": data_dir / REAL_INJURIES_FILE.name,
     }
+
+
+def _real_csv_exists(data_dir: Path) -> bool:
+    return any(
+        (data_dir / name).exists()
+        for name in (
+            REAL_SQUAD_DATA_FILE.name,
+            REAL_PLAYER_STATS_DATA_FILE.name,
+            REAL_INJURIES_DATA_FILE.name,
+        )
+    )
 
 
 def _read_rows(path: Path) -> list[dict[str, str]]:
@@ -424,6 +449,25 @@ def _validate_real_rows(name: str, rows: list[dict[str, str]]) -> list[str]:
                 except ValueError:
                     errors.append(f"{name}:{index}: invalid numeric {column}")
     return errors
+
+
+def _coverage(details: dict[str, Any], column: str, data_dir: Path) -> dict[str, int]:
+    coverage: dict[str, int] = {}
+    for name, detail in details.items():
+        if detail.get("missing_columns"):
+            coverage[name] = 0
+            continue
+        path = _real_paths(data_dir).get(name)
+        if not path or not path.exists():
+            coverage[name] = 0
+            continue
+        rows = _read_rows(path)
+        coverage[name] = sum(1 for row in rows if str(row.get(column) or "").strip())
+    return coverage
+
+
+def _confidence_errors(details: dict[str, Any]) -> bool:
+    return any("confidence must be high, medium, or low" in error for detail in details.values() for error in detail.get("errors", []))
 
 
 def _read_real_rows(data_dir: Path) -> dict[str, list[dict[str, str]]]:
