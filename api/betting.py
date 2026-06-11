@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+import os
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -11,6 +12,11 @@ from api.schemas import BetCreate
 
 
 BET_CUTOFF_SECONDS = 5 * 60
+BETTING_DISABLED_MESSAGE = "模拟投注功能即将开放，结算系统验收通过后开启。当前可查看预测、赔率走势和EV信号。"
+
+
+def is_betting_enabled() -> bool:
+    return os.getenv("BETTING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def place_bet(db: Any, user: dict[str, Any], request: BetCreate, now: datetime | None = None) -> dict[str, Any]:

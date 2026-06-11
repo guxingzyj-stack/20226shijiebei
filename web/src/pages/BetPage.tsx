@@ -7,6 +7,7 @@ import { useBetSlip } from "../bet/BetSlipContext";
 import { formatDecimal, formatMoney, playTypeLabel, selectionLabel } from "../utils/format";
 
 const PARLAYS = ["single", "2x1", "3x1", "4x1", "5x1", "6x1", "7x1", "8x1"];
+const BETTING_ENABLED = import.meta.env.VITE_BETTING_ENABLED === "true";
 
 export function BetPage() {
   const { token, isAuthenticated } = useAuth();
@@ -24,6 +25,10 @@ export function BetPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!BETTING_ENABLED) {
+      setMessage("模拟投注即将开放，结算系统验收通过后开启。当前可查看预测、赔率走势和EV信号。");
+      return;
+    }
     if (!token) {
       setMessage("请先登录后进行虚拟下注。");
       return;
@@ -91,6 +96,11 @@ export function BetPage() {
 
       <form onSubmit={submit} className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-soft">
         <h2 className="text-lg font-semibold">提交模拟注单</h2>
+        {!BETTING_ENABLED ? (
+          <div className="mt-4 rounded-lg border border-gold/35 bg-gold/10 p-3 text-sm text-gold">
+            模拟投注即将开放，结算系统验收通过后开启。当前可查看预测、赔率走势和EV信号。
+          </div>
+        ) : null}
         <label className="mt-4 block text-sm text-paper/60">
           串关方式
           <select value={parlay} onChange={(event) => setParlay(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-pitch px-3 py-3 text-paper">
@@ -107,7 +117,7 @@ export function BetPage() {
           <div className="text-sm text-paper/55">潜在返还估算</div>
           <div className="mt-1 text-2xl font-semibold text-gold">{formatMoney(estimated)}</div>
         </div>
-        <button disabled={!legs.length || submitting} className="mt-5 w-full rounded-lg bg-gold px-4 py-3 font-semibold text-pitch disabled:cursor-not-allowed disabled:opacity-50">
+        <button disabled={!BETTING_ENABLED || !legs.length || submitting} className="mt-5 w-full rounded-lg bg-gold px-4 py-3 font-semibold text-pitch disabled:cursor-not-allowed disabled:opacity-50">
           {submitting ? "提交中" : "提交虚拟下注"}
         </button>
         {message ? <div className="mt-4 rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm">{message}</div> : null}

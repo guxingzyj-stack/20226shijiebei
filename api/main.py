@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from psycopg.errors import UniqueViolation
 
 from api.auth import create_access_token, current_user_claims, hash_password, verify_password
-from api.betting import place_bet, suggested_stake
+from api.betting import BETTING_DISABLED_MESSAGE, is_betting_enabled, place_bet, suggested_stake
 from api.db import Database, get_db
 from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenResponse, UserCreate, UserLogin
 
@@ -92,6 +92,8 @@ def create_bet(
     user: dict = Depends(get_current_user),
     db: Database = Depends(get_db),
 ) -> dict:
+    if not is_betting_enabled():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=BETTING_DISABLED_MESSAGE)
     return place_bet(db, user, payload)
 
 

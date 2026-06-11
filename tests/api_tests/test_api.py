@@ -125,6 +125,7 @@ def test_register_and_login_return_token(monkeypatch):
 
 def test_bet_placement_uses_server_odds_not_client_odds(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "test-secret")
+    monkeypatch.setenv("BETTING_ENABLED", "true")
     fake = FakeDb()
     fake.users[1] = {"id": 1, "username": "bob", "password_hash": hash_password("dummy-test-passphrase"), "balance": Decimal("100")}
     app.dependency_overrides[get_db] = lambda: fake
@@ -140,6 +141,24 @@ def test_bet_placement_uses_server_odds_not_client_odds(monkeypatch):
         assert body["legs"][0]["odds"] == "2.0"
         assert body["potential_payout"] == "20.0"
         assert body["balance"] == "90"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_placement_rejects_when_betting_disabled(monkeypatch):
+    monkeypatch.delenv("BETTING_ENABLED", raising=False)
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": hash_password("dummy-test-passphrase"), "balance": Decimal("100")}
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/bets",
+            json={"parlay": "single", "stake": "10", "legs": [{"match_id": "m1", "play_type": "had", "selection": "3"}]},
+        )
+        assert response.status_code == 403
+        assert "模拟投注功能即将开放" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
 
@@ -161,6 +180,7 @@ def test_match_detail_includes_smoke_fields(monkeypatch):
 
 
 def test_bet_placement_rejects_inside_five_minutes(monkeypatch):
+    monkeypatch.setenv("BETTING_ENABLED", "true")
     fake = FakeDb()
     fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("100")}
     fake.matches["m1"]["kickoff_at"] = datetime.now(timezone.utc) + timedelta(minutes=4)
@@ -179,6 +199,7 @@ def test_bet_placement_rejects_inside_five_minutes(monkeypatch):
 
 
 def test_bet_placement_rejects_insufficient_balance(monkeypatch):
+    monkeypatch.setenv("BETTING_ENABLED", "true")
     fake = FakeDb()
     fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("5")}
     app.dependency_overrides[get_db] = lambda: fake
