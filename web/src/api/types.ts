@@ -43,6 +43,8 @@ export type Match = {
   away_team: string;
   kickoff_at: string;
   status: string;
+  result_home?: number | null;
+  result_away?: number | null;
   ht_home?: number | null;
   ht_away?: number | null;
   latest_odds?: OddsSnapshot[];

@@ -179,7 +179,8 @@ def recap_plays() -> dict:
 
 def _prediction_status(prediction: dict | None, match: dict | None = None) -> dict:
     match = match or {}
-    if str(match.get("status") or "").lower() in {"finished", "completed"}:
+    match_status = str(match.get("status") or "").lower()
+    if match_status in {"finished", "completed"}:
         if match.get("result_home") is None or match.get("result_away") is None:
             return {
                 "available": prediction is not None,
@@ -189,6 +190,12 @@ def _prediction_status(prediction: dict | None, match: dict | None = None) -> di
         return {"available": prediction is not None, "reason": None, "message": "已完赛"}
     if prediction is not None:
         return {"available": True, "reason": None, "message": None}
+    if match_status == "no_market":
+        return {
+            "available": False,
+            "reason": "no_market",
+            "message": "暂未开售，等待竞彩赔率",
+        }
     return {
         "available": False,
         "reason": "missing_current_market_odds",

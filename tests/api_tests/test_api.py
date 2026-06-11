@@ -290,6 +290,24 @@ def test_match_detail_without_current_prediction_returns_status(monkeypatch):
         app.dependency_overrides.clear()
 
 
+def test_match_detail_no_market_returns_unopened_status(monkeypatch):
+    fake = FakeDb()
+    fake.prediction = None
+    fake.matches["m1"]["status"] = "no_market"
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/api/matches/m1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["latest_prediction"] is None
+        assert body["prediction_status"]["available"] is False
+        assert body["prediction_status"]["reason"] == "no_market"
+        assert body["prediction_status"]["message"] == "暂未开售，等待竞彩赔率"
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_bet_placement_rejects_inside_five_minutes(monkeypatch):
     monkeypatch.setenv("BETTING_ENABLED", "true")
     fake = FakeDb()

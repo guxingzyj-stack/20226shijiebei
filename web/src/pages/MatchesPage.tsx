@@ -20,10 +20,6 @@ export function MatchesPage() {
         const baseMatches = await apiGet<Match[]>("/matches?status=upcoming");
         if (cancelled) return;
         setMatches(baseMatches);
-        const detailed = await Promise.all(
-          baseMatches.map((match) => apiGet<Match>(`/matches/${encodeURIComponent(match.match_id)}`).catch(() => match)),
-        );
-        if (!cancelled) setMatches(detailed);
       } catch (err) {
         setError(err instanceof Error ? err.message : "赛程加载失败");
       } finally {
@@ -67,6 +63,7 @@ export function MatchesPage() {
           <div className="grid gap-3 lg:grid-cols-2">
             {rows.map((match) => {
               const topEv = match.ev_signals?.find((signal) => !signal.research_only);
+              const hasPrediction = Boolean(match.latest_prediction);
               return (
                 <Link
                   key={match.match_id}
@@ -85,8 +82,16 @@ export function MatchesPage() {
                     <ChevronRight className="shrink-0 text-paper/45" size={20} />
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
-                    <ProbabilityBar prediction={match.latest_prediction} />
-                    <EvBadge ev={topEv?.ev} />
+                    {hasPrediction ? (
+                      <ProbabilityBar prediction={match.latest_prediction} />
+                    ) : (
+                      <div className="text-sm text-paper/60">{match.prediction_status?.message || "暂未开售，等待竞彩赔率"}</div>
+                    )}
+                    {hasPrediction ? (
+                      <EvBadge ev={topEv?.ev} />
+                    ) : (
+                      <span className="rounded-full border border-white/12 px-3 py-1 text-xs font-medium text-paper/65">暂未开售</span>
+                    )}
                   </div>
                 </Link>
               );

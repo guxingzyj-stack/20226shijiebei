@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
@@ -68,6 +69,7 @@ def finish_run(
 def upsert_matches(conn: psycopg.Connection, matches: Iterable[MatchOdds]) -> None:
     with conn.cursor() as cur:
         for match in matches:
+            _merge_seed_match_id_if_needed(cur, match)
             cur.execute(
                 """
                 INSERT INTO matches (
@@ -106,6 +108,122 @@ def upsert_matches(conn: psycopg.Connection, matches: Iterable[MatchOdds]) -> No
                 ),
             )
     conn.commit()
+
+
+def _merge_seed_match_id_if_needed(cur: psycopg.Cursor, match: MatchOdds) -> None:
+    if not match.match_id.startswith("500-"):
+        return
+    cur.execute("SELECT 1 FROM matches WHERE match_id = %s", (match.match_id,))
+    if cur.fetchone():
+        return
+    cur.execute(
+        """
+        SELECT match_id, home_team, away_team
+        FROM matches
+        WHERE match_id LIKE 'wc26-%%'
+          AND status = 'no_market'
+          AND kickoff_at = %s
+          AND NOT EXISTS (SELECT 1 FROM odds_snapshots WHERE odds_snapshots.match_id = matches.match_id)
+        """,
+        (match.kickoff_at,),
+    )
+    for seed_match_id, home_team, away_team in cur.fetchall():
+        if _canonical_team(home_team) != _canonical_team(match.home_team) or _canonical_team(away_team) != _canonical_team(match.away_team):
+            continue
+        cur.execute(
+            """
+            UPDATE matches
+            SET match_id = %s,
+                match_num = %s,
+                league = %s,
+                home_team = %s,
+                away_team = %s,
+                kickoff_at = %s,
+                stage = COALESCE(%s, stage),
+                group_name = COALESCE(%s, group_name),
+                status = %s,
+                updated_at = now()
+            WHERE match_id = %s
+            """,
+            (
+                match.match_id,
+                match.match_num,
+                match.league,
+                match.home_team,
+                match.away_team,
+                match.kickoff_at,
+                match.stage,
+                match.group_name,
+                match.status,
+                seed_match_id,
+            ),
+        )
+        return
+
+
+TEAM_ALIASES = {
+    "墨西哥": "mexico",
+    "南非": "southafrica",
+    "韩国": "southkorea",
+    "捷克": "czechrepublic",
+    "加拿大": "canada",
+    "波黑": "bosniaherzegovina",
+    "美国": "usa",
+    "巴拉圭": "paraguay",
+    "卡塔尔": "qatar",
+    "瑞士": "switzerland",
+    "巴西": "brazil",
+    "摩洛哥": "morocco",
+    "海地": "haiti",
+    "苏格兰": "scotland",
+    "澳大利亚": "australia",
+    "土耳其": "turkey",
+    "德国": "germany",
+    "库拉索": "curacao",
+    "荷兰": "netherlands",
+    "日本": "japan",
+    "科特迪瓦": "ivorycoast",
+    "厄瓜多尔": "ecuador",
+    "瑞典": "sweden",
+    "突尼斯": "tunisia",
+    "西班牙": "spain",
+    "佛得角": "capeverde",
+    "比利时": "belgium",
+    "埃及": "egypt",
+    "沙特": "saudiarabia",
+    "沙特阿拉伯": "saudiarabia",
+    "乌拉圭": "uruguay",
+    "伊朗": "iran",
+    "新西兰": "newzealand",
+    "法国": "france",
+    "塞内加尔": "senegal",
+    "伊拉克": "iraq",
+    "挪威": "norway",
+    "阿根廷": "argentina",
+    "阿尔及利亚": "algeria",
+    "奥地利": "austria",
+    "约旦": "jordan",
+    "葡萄牙": "portugal",
+    "刚果(金)": "drcongo",
+    "刚果民主共和国": "drcongo",
+    "英格兰": "england",
+    "克罗地亚": "croatia",
+    "加纳": "ghana",
+    "巴拿马": "panama",
+    "乌兹别克": "uzbekistan",
+    "哥伦比亚": "colombia",
+    "czechia": "czechrepublic",
+    "unitedstates": "usa",
+    "bosniaandherzegovina": "bosniaherzegovina",
+    "cotedivoire": "ivorycoast",
+    "côtedivoire": "ivorycoast",
+    "congodr": "drcongo",
+}
+
+
+def _canonical_team(value: object) -> str:
+    normalized = re.sub(r"[\s\u3000'’.\-&/()]+", "", str(value or "")).lower()
+    return TEAM_ALIASES.get(normalized, normalized)
 
 
 def write_odds_snapshots(conn: psycopg.Connection, matches: Iterable[MatchOdds], source: str) -> int:

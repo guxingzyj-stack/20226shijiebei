@@ -62,7 +62,7 @@ class Database:
                     SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
                            result_home, result_away, ht_home, ht_away
                     FROM matches
-                    WHERE status IN ('scheduled', 'closed')
+                    WHERE status IN ('scheduled', 'closed', 'no_market')
                     ORDER BY kickoff_at
                     """
                 )

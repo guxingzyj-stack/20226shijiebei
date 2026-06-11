@@ -112,7 +112,7 @@ export function MatchDetailPage() {
 
         <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
           <h2 className="mb-4 text-lg font-semibold">11x11 比分矩阵</h2>
-          {matrix ? <ScoreMatrix matrix={matrix} /> : <p className="text-sm text-paper/60">该场暂未开售胜平负，预测生成中</p>}
+          {matrix ? <ScoreMatrix matrix={matrix} /> : <p className="text-sm text-paper/60">{match.prediction_status?.message || "暂未开售，等待竞彩赔率"}</p>}
         </section>
 
         <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
