@@ -4,8 +4,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 import os
 
-from psycopg.rows import dict_row
-
 from api.db import connect
 from api.ops_log import recent_ops_log
 
@@ -20,7 +18,6 @@ def generate_report(now: datetime | None = None) -> dict[str, Any]:
         "latest settlement_runner ops_log": _latest_log("settlement_runner"),
         "latest odds_snapshots fetched_at": _latest_odds_fetched_at(),
         "open_bets_count": _open_bets_count(),
-        "health": "ok",
     }
     report["result"] = _result(report, scheduler_enabled, now)
     return report
@@ -36,7 +33,6 @@ def print_report(report: dict[str, Any] | None = None) -> None:
         "latest settlement_runner ops_log",
         "latest odds_snapshots fetched_at",
         "open_bets_count",
-        "health",
         "result",
     ):
         print(f"- {key}: {report[key]}")
@@ -84,9 +80,9 @@ def _result(report: dict[str, Any], scheduler_enabled: bool, now: datetime) -> s
     settlement_log = report["latest settlement_runner ops_log"]
     if not results_log or not settlement_log:
         return "WAIT"
-    if _older_than(results_log.get("started_at"), now, 60) or _older_than(settlement_log.get("started_at"), now, 30):
-        return "WAIT"
     if results_log.get("status") == "error" or settlement_log.get("status") == "error":
+        return "FAIL"
+    if _older_than(results_log.get("started_at"), now, 75) or _older_than(settlement_log.get("started_at"), now, 45):
         return "FAIL"
     return "PASS"
 

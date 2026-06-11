@@ -10,20 +10,17 @@ if [[ -z "${BACKUP_FILE}" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "ERROR: .env not found. Copy .env.example to .env first." >&2
-  exit 1
+if [[ -f "${ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  set +a
 fi
 
 if [[ ! -f "${BACKUP_FILE}" ]]; then
   echo "ERROR: backup file not found: ${BACKUP_FILE}" >&2
   exit 1
 fi
-
-set -a
-# shellcheck disable=SC1090
-source "${ENV_FILE}"
-set +a
 
 DB_NAME="${POSTGRES_DB:-worldcup}"
 DB_USER="${POSTGRES_USER:-worldcup_app}"

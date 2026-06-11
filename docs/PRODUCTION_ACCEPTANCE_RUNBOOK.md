@@ -116,3 +116,55 @@ python -m api.acceptance_report
 ```
 
 Do not enable betting as part of scheduler rollout.
+
+## 6. 014-C Operations Closeout
+
+Current status:
+
+```text
+Read-only features are open.
+BETTING_ENABLED=false.
+Scheduler is enabled and waiting for real ops_log observation.
+P1-C historical market backtest numbers are still pending.
+P3 real data import is pending.
+P4 real recap waits for more finished matches.
+```
+
+Always back up PostgreSQL before cleanup, restore, migration, or host movement:
+
+```bash
+bash deploy/backup_postgres.sh
+```
+
+On Windows self-hosting:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/backup_postgres.ps1
+```
+
+`odds_snapshots` is not reproducible and must be treated as the highest-priority backup table.
+
+Read-only health checks:
+
+```bash
+python -m api.health_report
+python -m api.scheduler_observe
+python -m api.cleanup_test_data dry-run
+```
+
+Test data cleanup requires explicit confirmation:
+
+```bash
+python -m api.cleanup_test_data run --confirm CLEAN_TEST_DATA
+```
+
+Cleanup scope is limited to:
+
+```text
+users.username LIKE 'test_user_%'
+users.username LIKE 'codex_blocker_%'
+matches.match_id LIKE 'test-%'
+bets.legs::text LIKE '%test-%'
+```
+
+Do not run real `settlement_runner once` as part of this closeout. Do not write fake scores to real `500-` matches.

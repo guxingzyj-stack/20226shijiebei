@@ -93,6 +93,25 @@ Backups are written to:
 backups/worldcup_YYYYmmdd_HHMMSS.sql
 ```
 
+Critical tables:
+
+- `odds_snapshots`
+- `matches`
+- `crawl_runs`
+- `model_versions`
+- `predictions`
+- `ev_signals`
+- `users`
+- `bets`
+
+`odds_snapshots` is not reproducible after the fact. Treat it as the first table to protect.
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/backup_postgres.ps1
+```
+
 ## Restore
 
 Restore only after confirming you have selected the correct SQL file:
