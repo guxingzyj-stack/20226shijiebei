@@ -157,7 +157,7 @@ BETTING_ENABLED=false.
 Scheduler is enabled and waiting for real ops_log observation.
 P1-C historical market backtest numbers are still pending.
 P3 real data import is pending.
-P4 real recap waits for more finished matches.
+P4 recap API and frontend MVP are read-only and can display finished matches with results.
 ```
 
 Always back up PostgreSQL before cleanup, restore, migration, or host movement:
@@ -384,4 +384,21 @@ finished matches with full-time scores return available=true
 unfinished or missing-score matches return available=false
 settlement summaries do not expose user_id or bet_id
 research_only EV is shown as research_signal, not betting advice
+```
+
+After deploying `wc-p2-web`, verify the frontend:
+
+```text
+https://worldcup2026.zeabur.app/recaps
+https://worldcup2026.zeabur.app/recaps/500-1359172
+```
+
+Expected:
+
+```text
+/recaps shows recent finished recaps or a friendly empty state
+/recaps/{match_id} shows result, market odds, model review, EV recap, settlement status, data quality, and summary
+match detail shows "查看赛后复盘" only for finished/completed matches with scores
+research_only EV is labelled as research signal, not betting advice
+no user_id, bet_id, or internal id is rendered
 ```

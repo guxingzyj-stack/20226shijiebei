@@ -30,6 +30,7 @@ export type EvSignal = {
   odds: string | number;
   ev: string | number;
   snapshot_id?: number | null;
+  model_version?: number | null;
   created_at?: string;
   research_only?: boolean;
   reason?: string | null;
@@ -105,4 +106,100 @@ export type RecapStatus = {
   buckets?: unknown[];
   points?: unknown[];
   rows?: unknown[];
+};
+
+export type RecapRecentItem = {
+  match_id: string;
+  match_num?: string;
+  home_team: string;
+  away_team: string;
+  scoreline: string;
+  prediction_correct: boolean | null;
+  title: string;
+};
+
+export type RecapRecentResponse = {
+  items: RecapRecentItem[];
+  count: number;
+};
+
+export type MatchRecap = {
+  match_id: string;
+  match_num?: string;
+  home_team: string;
+  away_team: string;
+  kickoff_at: string;
+  status: string;
+  result: {
+    home: number;
+    away: number;
+    winner: string;
+    scoreline: string;
+    had_selection: string;
+  };
+  data_quality: {
+    has_result: boolean;
+    has_had_odds: boolean;
+    has_prediction: boolean;
+    has_ev_signal: boolean;
+    has_settlement: boolean;
+    warnings: string[];
+  };
+  market: {
+    had_open: OddsMap;
+    had_close: OddsMap;
+    close_implied_probabilities: Record<string, number>;
+    favorite: string | null;
+    market_result: string | null;
+  };
+  model: {
+    model_version: number | null;
+    created_at: string | null;
+    probs: Record<string, number>;
+    predicted_outcome: string | null;
+    confidence: number | null;
+    prediction_correct: boolean | null;
+    message?: string;
+  };
+  ev: {
+    signals: Array<EvSignal & {
+      hit?: boolean | null;
+      recommendation_label?: string;
+      suggestion_eligible?: boolean;
+    }>;
+    total_ev_signals: number;
+    high_ev_count: number;
+    research_only_count: number;
+    suggestion_eligible_count: number;
+    hit_count: number;
+    miss_count: number;
+  };
+  settlement: {
+    settled_bets: number;
+    won_bets: number;
+    lost_bets: number;
+    void_bets: number;
+    open_bets: number;
+    settlement_status: string;
+  };
+  summary: {
+    title: string;
+    bullets: string[];
+  };
+};
+
+export type MatchRecapResponse = {
+  available: boolean;
+  reason?: string;
+  recap?: MatchRecap;
+};
+
+export type RecapSummary = {
+  finished_matches: number;
+  recap_available_matches: number;
+  model_correct_count: number;
+  model_wrong_count: number;
+  model_missing_count: number;
+  ev_signal_count: number;
+  settled_bets: number;
 };

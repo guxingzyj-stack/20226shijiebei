@@ -8,7 +8,7 @@ const navItems = [
   { to: "/bet", label: "注单", icon: Ticket },
   { to: "/bets", label: "我的", icon: ReceiptText },
   { to: "/leaderboard", label: "排行", icon: Medal },
-  { to: "/recap", label: "复盘", icon: History },
+  { to: "/recaps", label: "复盘", icon: History },
   { to: "/auth", label: "登录", icon: LogIn },
 ];
 

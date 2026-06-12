@@ -1,6 +1,6 @@
 # P4 Recap Acceptance Report
 
-Status: code complete, production deployment pending.
+Status: API complete and frontend MVP complete, production web deployment pending.
 
 ## 1. MVP Features
 
@@ -16,6 +16,9 @@ Implemented:
 - EV signal hit/miss review
 - settlement aggregate counts without internal ids
 - CLI runner
+- recap home page `/recaps`
+- single-match recap page `/recaps/:matchId`
+- match detail entry to post-match recap when a finished result is available
 
 ## 2. Endpoints
 
@@ -72,4 +75,24 @@ Expected:
 available=true for finished matches with results
 market/model/ev/settlement/summary sections present
 no user_id or bet_id in settlement output
+```
+
+## 7. Frontend Verification
+
+Routes:
+
+```text
+GET /recaps
+GET /recaps/{match_id}
+```
+
+Expected:
+
+```text
+/recaps lists recent finished match recaps from the recap API
+/recaps/{match_id} shows result, market, model, EV, settlement, data quality, and summary sections
+unavailable recaps show a friendly empty state
+match detail only links to recap when status is finished/completed and scores are present
+research_only EV is labelled as research signal, not betting advice
+no user_id, bet_id, or internal id is rendered
 ```

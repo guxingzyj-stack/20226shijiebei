@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { EvSignal, Match, OddsSnapshot, Suggestion } from "../api/types";
@@ -24,6 +24,16 @@ function dedupeAndSortEvSignals(rows: EvSignal[]): EvSignal[] {
   return [...latest.values()]
     .sort((left, right) => Number(right.ev || 0) - Number(left.ev || 0))
     .slice(0, 20);
+}
+
+function hasFinishedResult(match: Match): boolean {
+  return (
+    ["finished", "completed"].includes(match.status) &&
+    match.result_home !== null &&
+    match.result_home !== undefined &&
+    match.result_away !== null &&
+    match.result_away !== undefined
+  );
 }
 
 export function MatchDetailPage() {
@@ -73,6 +83,18 @@ export function MatchDetailPage() {
               <ProbabilityBar prediction={match.latest_prediction} />
             ) : (
               <p className="text-sm text-paper/60">{match.prediction_status?.message || "该场暂未开售胜平负，预测生成中"}</p>
+            )}
+          </div>
+          <div className="mt-4">
+            {hasFinishedResult(match) ? (
+              <Link
+                to={`/recaps/${encodeURIComponent(match.match_id)}`}
+                className="inline-flex items-center rounded-lg border border-gold/45 px-3 py-2 text-sm font-medium text-gold transition hover:bg-gold/10"
+              >
+                查看赛后复盘
+              </Link>
+            ) : (
+              <span className="text-sm text-paper/45">赛后复盘将在比赛结束后生成</span>
             )}
           </div>
         </section>
