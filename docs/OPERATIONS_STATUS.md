@@ -97,6 +97,9 @@ The Python runner does not require shell HTTP/database clients and prints only
 
 - status: disabled
 - required environment: `BETTING_ENABLED=false`
+- open gate: `python -m api.betting_open_gate`
+- rule: the gate can recommend `READY`, but it never changes `BETTING_ENABLED`
+- current expected blocker: `need_two_matchdays_auto_result_sync` until two matchdays of automatic result sync are observed
 
 ### Result State Guard
 
@@ -114,6 +117,7 @@ python -m api.ops_health_check
 python scripts/run_daily_ops_check.py
 python -m api.result_consistency_report
 python -m api.scheduler_observe
+python -m api.betting_open_gate
 python -m api.cleanup_test_data dry-run
 python -m model.p1c_acceptance_report
 python -m model.p1c_prime_acceptance_report
@@ -140,6 +144,7 @@ bash deploy/backup_postgres.sh
 ## Do Not Do
 
 - Do not set `BETTING_ENABLED=true`.
+- Do not treat betting gate `READY` as automatic permission to open betting; explicit user approval is still required.
 - Do not run real `settlement_runner once` for a docs-only task.
 - Do not write fake scores to real `500-` matches.
 - Do not scrape external football data sites.

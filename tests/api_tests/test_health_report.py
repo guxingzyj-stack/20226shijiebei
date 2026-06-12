@@ -68,6 +68,9 @@ def test_health_report_output_has_required_keys(capsys):
             "open_bets_count": 0,
             "test_users_count": 0,
             "test_matches_count": 0,
+            "betting_open_gate_status": "WAIT",
+            "recommend_open_betting": False,
+            "betting_open_blockers": ["need_two_matchdays_auto_result_sync"],
             "result": "PASS",
         }
     )
@@ -77,4 +80,5 @@ def test_health_report_output_has_required_keys(capsys):
     assert "- latest ev_signals count: 4" in output
     assert "- ops_health_status: WARN" in output
     assert "- scheduler_stale: False" in output
+    assert "- betting_open_gate_status: WAIT" in output
     assert "- result: PASS" in output

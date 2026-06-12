@@ -111,6 +111,7 @@ def generate_report(
     latest_odds_age = _age_minutes(latest_odds)
     result_overdue_match_ids = [str(row["match_id"]) for row in overdue_closed_rows]
     p3_fifa = _safe_p3_fifa_summary()
+    betting_gate = _safe_betting_open_gate_summary()
     status, blockers = evaluate_status(
         scheduler_stale=scheduler.get("scheduler_stale"),
         latest_results_sync_age_minutes=latest_results_age,
@@ -127,6 +128,10 @@ def generate_report(
         stale_threshold_minutes=ops_threshold,
         odds_stale_threshold_minutes=odds_threshold,
     )
+    if betting_gate.get("betting_open_gate_status") == "BLOCKED":
+        if status != "FAIL":
+            status = "FAIL"
+        blockers = blockers + ["betting_open_gate_blocked"]
     summary = {
         "scheduler_stale": scheduler.get("scheduler_stale"),
         "latest_results_sync_age_minutes": latest_results_age,
@@ -140,6 +145,7 @@ def generate_report(
         "overall_status": status,
         "blockers": blockers,
         **p3_fifa,
+        **betting_gate,
     }
     return {
         "scheduler": {
@@ -175,6 +181,7 @@ def generate_report(
             "result_overdue_closed_count": len(result_overdue_match_ids),
         },
         "p3_fifa": p3_fifa,
+        "betting_open_gate": betting_gate,
         "overall": {
             "status": status,
             "blockers": blockers,
@@ -265,6 +272,10 @@ def print_report(report: dict[str, Any]) -> None:
     print("8. Overall")
     print(f"- status: {report['overall'].get('status')}")
     print(f"- blockers: {report['overall'].get('blockers')}")
+    print("")
+    print("9. Betting Open Gate")
+    for key in ("betting_open_gate_status", "recommend_open_betting", "betting_open_blockers"):
+        print(f"- {key}: {report.get('betting_open_gate', {}).get(key)}")
 
 
 def latest_ops_health_status() -> dict[str, Any]:
@@ -330,6 +341,11 @@ def _error_report(error: str) -> dict[str, Any]:
             "p3_fifa_candidate_w": 0,
             "p3_fifa_production_w": 0,
         },
+        "betting_open_gate": {
+            "betting_open_gate_status": "WAIT",
+            "recommend_open_betting": False,
+            "betting_open_blockers": ["ops_health_check_error"],
+        },
         "overall": {"status": "FAIL", "blockers": ["ops_health_check_error"]},
         "summary": {"overall_status": "FAIL", "blockers": ["ops_health_check_error"]},
     }
@@ -347,6 +363,20 @@ def _safe_p3_fifa_summary() -> dict[str, Any]:
             "p3_fifa_teams_with_data": 0,
             "p3_fifa_candidate_w": 0,
             "p3_fifa_production_w": 0,
+        }
+
+
+def _safe_betting_open_gate_summary() -> dict[str, Any]:
+    try:
+        from api.betting_open_gate import health_summary
+
+        return health_summary()
+    except Exception:
+        return {
+            "betting_open_gate_status": "WAIT",
+            "recommend_open_betting": False,
+            "betting_open_blockers": ["betting_open_gate_unavailable"],
+            "betting_open_warnings": [],
         }
 
 

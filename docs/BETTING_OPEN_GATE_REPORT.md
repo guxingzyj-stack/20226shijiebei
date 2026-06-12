@@ -2,146 +2,146 @@
 
 Date: 2026-06-12
 
-This report is an evidence checklist for the simulated betting gate. It does
-not enable betting and does not authorize changing `BETTING_ENABLED`.
-
-## 1. Production Watchdog
-
-Public `/api/health` read-only probe:
+This report documents the automated simulated-betting readiness gate. The gate
+only judges whether the system is ready for a controlled simulated-betting
+grey rollout. It never changes `BETTING_ENABLED`, never deploys services, and
+never opens betting by itself.
 
 ```text
-ok: true
-scheduler_stale: false
-ops_health_status: WARN
-ops_health_blockers:
-- no_open_bets_to_settle
-- insufficient_finished_matches
-- closed_prediction_pending
-latest_ops_health_check_at: 2026-06-12T04:31:34.324015+00:00
+automatic judgment
+manual opening only
 ```
 
-Gate interpretation:
+## 1. Status Values
 
 ```text
-watchdog_result: WARN_ACCEPTABLE
+READY:
+  All hard safety checks passed.
+  recommend_open_betting=true.
+  User approval is still required before setting BETTING_ENABLED=true.
+
+WAIT:
+  Core health is acceptable, but observation or evidence is incomplete.
+  This is expected while waiting for two matchdays of automatic result sync.
+
+BLOCKED:
+  A production safety risk exists.
+  Do not open betting.
 ```
 
-The blockers above are acceptable for the current tournament state. They do
-not prove settlement with real open bets.
+## 2. CLI
 
-## 2. Settlement E2E
+Run inside the API container or an equivalent environment with `DATABASE_URL`:
 
-Automated non-production coverage:
+```bash
+PYTHONPATH=. python -m api.betting_open_gate
+```
+
+Output includes:
 
 ```text
-test_file: tests/api_tests/test_settlement_e2e.py
-environment: in-memory isolated repository
-production_db_written: false
-real_500_match_touched: false
+Betting Open Gate Report
+- status: READY / WAIT / BLOCKED
+- recommend_open_betting: true / false
+- blockers:
+- warnings:
+- scheduler_stale:
+- odds_stale:
+- finished_null_count:
+- non_finished_with_result_count:
+- settlement_probe_pass:
+- settlement_idempotency_pass:
+- leaderboard_safe:
+- two_matchdays_auto_result_sync:
+- betting_enabled:
 ```
 
-Covered cases:
+## 3. Hard Blockers
+
+Any of these makes the gate `BLOCKED`:
 
 ```text
-winning single: PASS
-losing single: PASS
-parlay with postponed/void leg: PASS
-closed match without result remains open: PASS
-finished match with NULL result remains open: PASS
-second settlement run idempotency: PASS
-leaderboard-safe fields include roi and exclude internal id: PASS
+scheduler_stale=true
+odds_stale=true
+finished_null_count>0
+non_finished_with_result_count>0
+settlement_runner_error=true
+leaderboard exposes internal id
+leaderboard has test/probe user pollution
+BETTING_ENABLED=true before the gate is satisfied
 ```
 
-This satisfies the test-environment settlement loop requirement. It does not
-replace production internal test-bet evidence.
+## 4. WAIT Conditions
 
-## 3. Production Read-Only Checks
-
-Public `/api/leaderboard` read-only probe:
+These keep the gate at `WAIT` but do not necessarily mean the system is broken:
 
 ```text
-rows: 1
-has_roi: true
-exposes_internal_id: false
-test_user_count: 0
-sample_keys:
-- balance
-- roi
-- settled_bets
-- username
+settlement_e2e_probe_not_passed
+settlement_idempotency_not_passed
+need_two_matchdays_auto_result_sync
+p1c_prime_insufficient_samples
+p3_wait
 ```
 
-No production write was performed for this report.
+## 5. Two Matchdays Auto Result Sync
 
-## 4. Betting Gate
-
-Required before opening simulated betting:
+The gate is intentionally conservative:
 
 ```text
-scheduler_stale=false: PASS
-ops health OK or acceptable WARN: PASS
-finished+NULL result count=0: PASS by latest result_consistency_report evidence
-non-finished rows with result count=0: PASS by latest result_consistency_report evidence
-settlement E2E in test environment: PASS
-production/internal real open bet settlement: NOT_CHECKED
-settlement idempotency: PASS in test environment
-leaderboard safety: PASS
-explicit user confirmation to open betting: MISSING
+two_matchdays_auto_result_sync=true only when:
+- at least two matchdays have finished/completed matches with real scores
+- recent results_sync ops_log records are ok
+- official_result_fallback has not been used for those results
 ```
 
-Final gate decision:
+If scores were written by `official_result_fallback`, they are valid for
+result consistency and settlement, but they do not count as automatic result
+sync evidence for opening betting.
 
-```text
-recommend_open_betting: no
-BETTING_ENABLED: keep false
-reason:
-- production/internal real open bet settlement has not been observed
-- the watchdog still reports no_open_bets_to_settle
-- real match settlement has not yet completed through production data
-- when automatic result sync misses an official result, use the controlled
-  official_result_fallback flow before any settlement gate decision
+## 6. 045 Evidence
 
-045 production internal probe status:
+The gate reads production evidence from `ops_log`, not from this document.
 
-```text
-settlement_e2e_test_env: PASS
-production_internal_bet_settlement: NOT_RUN
-settlement_idempotency: NOT_RUN
-leaderboard_safety: NOT_RUN
-recommend_open_betting: no
-reason: still_need_045_probe_and_two_matchdays_auto_result_sync
+Expected settlement probe evidence:
+
+```json
+{
+  "job_name": "settlement_e2e_probe",
+  "status": "ok",
+  "summary": {
+    "ok": true,
+    "idempotency_pass": true,
+    "cleanup_success": true,
+    "leaderboard": {
+      "leaderboard_no_internal_id": true,
+      "leaderboard_no_probe_user_pollution": true
+    }
+  }
+}
 ```
+
+## 7. API Health
+
+`/api/health` exposes:
+
+```json
+{
+  "betting_open_gate_status": "WAIT",
+  "recommend_open_betting": false,
+  "betting_open_blockers": ["need_two_matchdays_auto_result_sync"],
+  "betting_open_warnings": ["p3_wait"]
+}
 ```
 
-## 5. Prohibited Actions
+DB errors must not expose credentials or crash the health endpoint.
+
+## 8. Prohibited Actions
 
 Do not:
 
-- set `BETTING_ENABLED=true`
-- write fake scores to real `500-` matches
-- manually insert production predictions or settlements
-- manually edit production balances
-- treat a no-op settlement run as a real bet settlement pass
+- set `BETTING_ENABLED=true` without explicit user approval
+- treat `READY` as automatic permission to open betting
+- treat `official_result_fallback` as automatic result sync evidence
+- write fake scores
+- edit bets, users, balances, or model weights for the gate
 - paste or commit database URLs, tokens, passwords, or API keys
-- apply scores with ad hoc SQL instead of the dry-run + confirm fallback
-- treat P4 post-match recap output as betting advice or as permission to open betting
-
-## 6. P4 Recap Product Layer
-
-P4 may be deployed for read-only production display:
-
-```text
-/recaps
-/recaps/{match_id}
-/recaps/model
-/recaps/ev
-/recaps/daily
-```
-
-This does not change the betting gate decision.
-
-```text
-recommend_open_betting: no
-BETTING_ENABLED: keep false
-reason: P4 is review/reporting only and does not replace production settlement evidence
-```

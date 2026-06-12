@@ -432,3 +432,30 @@ P3-FIFA WAIT/SHADOW does not make health FAIL
 P3-FIFA does not open betting
 P3-A club recent form remains WAIT until compliant high-coverage data exists
 ```
+
+## 12. Betting Open Gate
+
+The API exposes an automated readiness gate for simulated betting:
+
+```bash
+PYTHONPATH=. python -m api.betting_open_gate
+curl -sS https://fifa2026.zeabur.app/api/health
+```
+
+The gate may return `READY`, `WAIT`, or `BLOCKED`.
+
+```text
+READY means the system recommends considering a controlled simulated-betting grey rollout.
+READY does not change BETTING_ENABLED.
+WAIT means more evidence is needed, such as two matchdays of automatic result sync.
+BLOCKED means a production safety issue exists and betting must remain closed.
+```
+
+Opening simulated betting still requires explicit user approval and a manual
+environment change:
+
+```text
+BETTING_ENABLED=true
+```
+
+Do not treat official fallback result entry as automatic result sync evidence.

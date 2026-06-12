@@ -9,6 +9,7 @@ from api.db import connect
 from api.ops_health_check import latest_ops_health_status
 from api.ops_log import recent_ops_log
 from api.scheduler_health import scheduler_freshness
+from api.betting_open_gate import health_summary as betting_open_gate_health_summary
 
 
 def generate_report() -> dict[str, Any]:
@@ -35,6 +36,9 @@ def generate_report() -> dict[str, Any]:
         "open_bets_count": "NOT_CHECKED",
         "test_users_count": "NOT_CHECKED",
         "test_matches_count": "NOT_CHECKED",
+        "betting_open_gate_status": "NOT_CHECKED",
+        "recommend_open_betting": "NOT_CHECKED",
+        "betting_open_blockers": "NOT_CHECKED",
     }
     try:
         with connect() as conn:
@@ -57,6 +61,7 @@ def generate_report() -> dict[str, Any]:
             report["open_bets_count"] = _scalar(conn, "SELECT count(*) FROM bets WHERE status = 'open'")
             report["test_users_count"] = _scalar(conn, "SELECT count(*) FROM users WHERE username LIKE 'test_user_%%' OR username LIKE 'codex_blocker_%%'")
             report["test_matches_count"] = _scalar(conn, "SELECT count(*) FROM matches WHERE match_id LIKE 'test-%%'")
+            report.update(_safe_betting_gate_summary())
     except Exception as exc:
         report["database"] = f"fail: {type(exc).__name__}"
     report["result"] = _result(report)
@@ -89,6 +94,9 @@ def print_report(report: dict[str, Any] | None = None) -> None:
         "open_bets_count",
         "test_users_count",
         "test_matches_count",
+        "betting_open_gate_status",
+        "recommend_open_betting",
+        "betting_open_blockers",
         "result",
     ):
         print(f"- {key}: {report[key]}")
@@ -136,11 +144,25 @@ def _result(report: dict[str, Any]) -> str:
         return "FAIL"
     if report.get("scheduler_stale") is True:
         return "FAIL"
+    if report.get("betting_open_gate_status") == "BLOCKED":
+        return "FAIL"
     if _enabled(report.get("betting_enabled")):
         return "WARN"
     if int(report.get("test_users_count") or 0) > 0 or int(report.get("test_matches_count") or 0) > 0:
         return "WARN"
     return "PASS"
+
+
+def _safe_betting_gate_summary() -> dict[str, Any]:
+    try:
+        return betting_open_gate_health_summary()
+    except Exception:
+        return {
+            "betting_open_gate_status": "WAIT",
+            "recommend_open_betting": False,
+            "betting_open_blockers": ["betting_open_gate_unavailable"],
+            "betting_open_warnings": [],
+        }
 
 
 def _enabled(value: Any) -> bool:

@@ -65,6 +65,7 @@ def health() -> dict:
     }
     payload.update(latest_ops_health_status())
     payload.update(_p3_fifa_health_summary())
+    payload.update(_betting_open_gate_health_summary())
     return payload
 
 
@@ -80,6 +81,20 @@ def _p3_fifa_health_summary() -> dict:
             "p3_candidate_w": 0,
             "p3_production_w": 0,
             "p3_blockers": ["p3_fifa_readiness_unavailable"],
+        }
+
+
+def _betting_open_gate_health_summary() -> dict:
+    try:
+        from api.betting_open_gate import health_summary
+
+        return health_summary()
+    except Exception:
+        return {
+            "betting_open_gate_status": "WAIT",
+            "recommend_open_betting": False,
+            "betting_open_blockers": ["betting_open_gate_unavailable"],
+            "betting_open_warnings": [],
         }
 
 
