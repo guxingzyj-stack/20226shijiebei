@@ -168,6 +168,20 @@ team form and prediction history endpoints are read-only and return insufficient
 ScoreMatrix highlights final score cells and labels result backfill / out-of-range states
 ```
 
+## 7.5 Bracket Entry And Navigation
+
+Added a read-only bracket page and simplified navigation:
+
+```text
+/bracket opens the predicted bracket page
+the bracket page shows data_status=not_generated when knockout fixtures are unavailable
+no static bracket image, fake fixture, hard-coded champion path, or inferred advancement is shown
+desktop navigation order is 赛程 / 晋级图 / 复盘 / 排行 / 指标 / 我的 / 登录
+mobile navigation order is 赛程 / 晋级图 / 复盘 / 排行 / 我的
+the old top-level 注单 entry is moved into 我的 and match-detail bet slip entry points
+赛程页 includes a lightweight 晋级图 entry card
+```
+
 ## 8. Product Boundary
 
 P4 is complete enough for production display, but it remains a read-only review

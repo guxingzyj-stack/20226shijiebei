@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AuthPage } from "./pages/AuthPage";
 import { BetPage } from "./pages/BetPage";
+import { BracketPage } from "./pages/BracketPage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { HelpPage } from "./pages/HelpPage";
 import { MatchDetailPage } from "./pages/MatchDetailPage";
@@ -21,6 +22,7 @@ export function App() {
         <Route path="/" element={<MatchesPage />} />
         <Route path="/matches" element={<MatchesPage />} />
         <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+        <Route path="/bracket" element={<BracketPage />} />
         <Route path="/bet" element={<BetPage />} />
         <Route path="/bets" element={<MyBetsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />

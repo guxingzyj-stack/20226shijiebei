@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, GitBranch } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { Match } from "../api/types";
 import { EvBadge } from "../components/EvBadge";
@@ -66,6 +66,24 @@ export function MatchesPage() {
           </p>
         </div>
       </section>
+
+      <Link
+        to="/bracket"
+        className="flex flex-col gap-3 rounded-lg border border-gold/25 bg-gold/10 p-4 transition hover:border-gold/55 hover:bg-gold/15 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex min-w-0 gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gold/35 bg-pitch/70">
+            <GitBranch size={20} className="text-gold" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-paper">世界杯预测晋级图</div>
+            <p className="mt-1 text-sm leading-5 text-paper/62">查看模型预测的冠军路径和真实晋级进展。</p>
+          </div>
+        </div>
+        <span className="inline-flex w-fit items-center rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-pitch">
+          查看晋级图
+        </span>
+      </Link>
 
       <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
         {FILTERS.map((filter) => (

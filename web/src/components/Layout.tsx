@@ -1,16 +1,24 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, CalendarDays, HelpCircle, History, LogIn, Medal, ReceiptText, Ticket } from "lucide-react";
+import { BarChart3, CalendarDays, GitBranch, HelpCircle, History, LogIn, Medal, ReceiptText } from "lucide-react";
 import { Disclaimer } from "./Disclaimer";
 import { useAuth } from "../auth/AuthContext";
 
-const navItems = [
+const desktopNavItems = [
   { to: "/matches", label: "赛程", icon: CalendarDays },
-  { to: "/bet", label: "注单", icon: Ticket },
-  { to: "/bets", label: "我的", icon: ReceiptText },
-  { to: "/leaderboard", label: "排行", icon: Medal },
+  { to: "/bracket", label: "晋级图", icon: GitBranch },
   { to: "/recaps", label: "复盘", icon: History },
+  { to: "/leaderboard", label: "排行", icon: Medal },
   { to: "/help", label: "指标", icon: HelpCircle },
+  { to: "/bets", label: "我的", icon: ReceiptText },
   { to: "/auth", label: "登录", icon: LogIn },
+];
+
+const mobileNavItems = [
+  { to: "/matches", label: "赛程", icon: CalendarDays },
+  { to: "/bracket", label: "晋级图", icon: GitBranch },
+  { to: "/recaps", label: "复盘", icon: History },
+  { to: "/leaderboard", label: "排行", icon: Medal },
+  { to: "/bets", label: "我的", icon: ReceiptText },
 ];
 
 export function Layout() {
@@ -31,7 +39,7 @@ export function Layout() {
             </div>
           </NavLink>
           <nav className="hidden items-center gap-1 md:flex">
-            {navItems.map((item) => (
+            {desktopNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -58,8 +66,8 @@ export function Layout() {
         <Outlet />
       </main>
       <div className="fixed bottom-0 left-0 right-0 z-40 md:static">
-        <nav className="flex overflow-x-auto border-t border-white/10 bg-pitch/95 px-1 py-1 backdrop-blur md:hidden">
-          {navItems.map((item) => {
+        <nav className="grid grid-cols-5 border-t border-white/10 bg-pitch/95 px-1 py-1 backdrop-blur md:hidden">
+          {mobileNavItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -67,11 +75,11 @@ export function Layout() {
                 to={item.to}
                 end={item.to === "/matches"}
                 className={({ isActive }) =>
-                  `flex min-w-[58px] flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2 text-[11px] ${isActive ? "bg-gold text-pitch" : "text-paper/65"}`
+                  `flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] ${isActive ? "bg-gold text-pitch" : "text-paper/65"}`
                 }
               >
                 <Icon size={17} />
-                <span className="whitespace-nowrap">{item.label}</span>
+                <span className="max-w-full truncate whitespace-nowrap">{item.label}</span>
               </NavLink>
             );
           })}
