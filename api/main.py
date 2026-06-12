@@ -17,7 +17,6 @@ from api.recap_service import build_match_recap, recent_recaps, recap_summary as
 from api.scheduler import start_api_scheduler, stop_api_scheduler
 from api.scheduler_health import scheduler_freshness
 from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenResponse, UserCreate, UserLogin
-from model.p3_fifa_readiness import health_summary as p3_fifa_health_summary
 
 
 @asynccontextmanager
@@ -65,8 +64,23 @@ def health() -> dict:
         "scheduler_stale": freshness["scheduler_stale"],
     }
     payload.update(latest_ops_health_status())
-    payload.update(p3_fifa_health_summary())
+    payload.update(_p3_fifa_health_summary())
     return payload
+
+
+def _p3_fifa_health_summary() -> dict:
+    try:
+        from model.p3_fifa_readiness import health_summary
+
+        return health_summary()
+    except Exception:
+        return {
+            "p3_mode": "fifa_matchdata",
+            "p3_status": "WAIT",
+            "p3_candidate_w": 0,
+            "p3_production_w": 0,
+            "p3_blockers": ["p3_fifa_readiness_unavailable"],
+        }
 
 
 def _match_has_had_odds(match: dict) -> bool:

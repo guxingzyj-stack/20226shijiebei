@@ -12,7 +12,6 @@ from psycopg.rows import dict_row
 from api.db import connect
 from api.ops_log import record_ops_log, sanitize_error
 from api.scheduler_health import scheduler_freshness
-from model.p3_fifa_readiness import ops_summary as p3_fifa_ops_summary
 
 
 DEFAULT_OPS_STALE_THRESHOLD_MINUTES = 90
@@ -338,7 +337,9 @@ def _error_report(error: str) -> dict[str, Any]:
 
 def _safe_p3_fifa_summary() -> dict[str, Any]:
     try:
-        return p3_fifa_ops_summary()
+        from model.p3_fifa_readiness import ops_summary
+
+        return ops_summary()
     except Exception:
         return {
             "p3_fifa_status": "WAIT",

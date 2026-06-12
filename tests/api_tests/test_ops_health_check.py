@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import builtins
 
 from api import main, ops_health_check
 
@@ -171,7 +172,7 @@ def test_api_health_includes_ops_health_when_db_unavailable(monkeypatch):
         "ops_health_status": None,
         "ops_health_blockers": [],
     })
-    monkeypatch.setattr(main, "p3_fifa_health_summary", lambda: {
+    monkeypatch.setattr(main, "_p3_fifa_health_summary", lambda: {
         "p3_mode": "fifa_matchdata",
         "p3_status": "WAIT",
         "p3_candidate_w": 0,
@@ -187,6 +188,41 @@ def test_api_health_includes_ops_health_when_db_unavailable(monkeypatch):
     assert payload["p3_mode"] == "fifa_matchdata"
     assert payload["p3_status"] == "WAIT"
     assert payload["p3_production_w"] == 0
+
+
+def test_api_health_does_not_crash_when_model_package_missing(monkeypatch):
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "model.p3_fifa_readiness":
+            raise ModuleNotFoundError("No module named 'model'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    summary = main._p3_fifa_health_summary()
+
+    assert summary["p3_mode"] == "fifa_matchdata"
+    assert summary["p3_status"] == "WAIT"
+    assert summary["p3_production_w"] == 0
+    assert summary["p3_blockers"] == ["p3_fifa_readiness_unavailable"]
+
+
+def test_ops_health_p3_summary_does_not_crash_when_model_package_missing(monkeypatch):
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "model.p3_fifa_readiness":
+            raise ModuleNotFoundError("No module named 'model'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    summary = ops_health_check._safe_p3_fifa_summary()
+
+    assert summary["p3_fifa_status"] == "WAIT"
+    assert summary["p3_fifa_matches_with_data"] == 0
+    assert summary["p3_fifa_production_w"] == 0
 
 
 def test_latest_ops_health_status_reads_summary(monkeypatch):
