@@ -408,3 +408,27 @@ match detail shows "查看赛后复盘" only for finished/completed matches with
 research_only EV is labelled as research signal, not betting advice
 no user_id, bet_id, or internal id is rendered
 ```
+
+## 11. P3 FIFA MatchData Readiness Gate
+
+P3-FIFA is an automatic maturity gate for official FIFA MatchData. It can move
+from `WAIT` to `SHADOW`, `CANDIDATE`, and `ACTIVE_READY` as audited match data
+accumulates.
+
+Run:
+
+```bash
+PYTHONPATH=. python -m model.p3_fifa_readiness
+PYTHONPATH=. python -m model.p3_auto_enable_gate
+```
+
+Safety requirements:
+
+```text
+production_w_p3 remains 0
+production_w_gbm remains 0
+candidate_w_p3 is only a candidate value
+P3-FIFA WAIT/SHADOW does not make health FAIL
+P3-FIFA does not open betting
+P3-A club recent form remains WAIT until compliant high-coverage data exists
+```

@@ -129,6 +129,20 @@ call a model, or hard-code scores/prediction conclusions.
 - `/recaps/ev` shows EV research signal performance and safety text.
 - `/recaps/daily` groups finished matches by day and generates copyable report text.
 
+## P3-FIFA Relationship
+
+P4 may read P3-FIFA MatchData features when they become available. These
+features are useful for post-match review:
+
+- starting lineup stability
+- player minutes
+- goals and assists contribution
+- in-tournament team form changes
+
+P3-FIFA is World Cup in-match and post-match performance data. It is not
+pre-match club recent form, and it does not change prediction weights by
+itself.
+
 ## CLI
 
 ```bash

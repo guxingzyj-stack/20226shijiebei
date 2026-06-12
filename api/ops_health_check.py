@@ -12,6 +12,7 @@ from psycopg.rows import dict_row
 from api.db import connect
 from api.ops_log import record_ops_log, sanitize_error
 from api.scheduler_health import scheduler_freshness
+from model.p3_fifa_readiness import ops_summary as p3_fifa_ops_summary
 
 
 DEFAULT_OPS_STALE_THRESHOLD_MINUTES = 90
@@ -110,6 +111,7 @@ def generate_report(
     latest_settlement_age = _age_minutes(latest_settlement.get("started_at") if latest_settlement else None)
     latest_odds_age = _age_minutes(latest_odds)
     result_overdue_match_ids = [str(row["match_id"]) for row in overdue_closed_rows]
+    p3_fifa = _safe_p3_fifa_summary()
     status, blockers = evaluate_status(
         scheduler_stale=scheduler.get("scheduler_stale"),
         latest_results_sync_age_minutes=latest_results_age,
@@ -138,6 +140,7 @@ def generate_report(
         "result_overdue_closed_matches": result_overdue_match_ids,
         "overall_status": status,
         "blockers": blockers,
+        **p3_fifa,
     }
     return {
         "scheduler": {
@@ -172,6 +175,7 @@ def generate_report(
             "result_overdue_closed_matches": result_overdue_match_ids,
             "result_overdue_closed_count": len(result_overdue_match_ids),
         },
+        "p3_fifa": p3_fifa,
         "overall": {
             "status": status,
             "blockers": blockers,
@@ -255,7 +259,11 @@ def print_report(report: dict[str, Any]) -> None:
     for key in ("result_overdue_closed_count", "result_overdue_closed_matches"):
         print(f"- {key}: {report['closed_matches'].get(key)}")
     print("")
-    print("7. Overall")
+    print("7. P3 FIFA MatchData")
+    for key in ("p3_fifa_status", "p3_fifa_matches_with_data", "p3_fifa_teams_with_data", "p3_fifa_candidate_w", "p3_fifa_production_w"):
+        print(f"- {key}: {report['p3_fifa'].get(key)}")
+    print("")
+    print("8. Overall")
     print(f"- status: {report['overall'].get('status')}")
     print(f"- blockers: {report['overall'].get('blockers')}")
 
@@ -316,9 +324,29 @@ def _error_report(error: str) -> dict[str, Any]:
             "result_overdue_closed_count": None,
             "result_overdue_closed_matches": [],
         },
+        "p3_fifa": {
+            "p3_fifa_status": "WAIT",
+            "p3_fifa_matches_with_data": 0,
+            "p3_fifa_teams_with_data": 0,
+            "p3_fifa_candidate_w": 0,
+            "p3_fifa_production_w": 0,
+        },
         "overall": {"status": "FAIL", "blockers": ["ops_health_check_error"]},
         "summary": {"overall_status": "FAIL", "blockers": ["ops_health_check_error"]},
     }
+
+
+def _safe_p3_fifa_summary() -> dict[str, Any]:
+    try:
+        return p3_fifa_ops_summary()
+    except Exception:
+        return {
+            "p3_fifa_status": "WAIT",
+            "p3_fifa_matches_with_data": 0,
+            "p3_fifa_teams_with_data": 0,
+            "p3_fifa_candidate_w": 0,
+            "p3_fifa_production_w": 0,
+        }
 
 
 def _latest_ops_log(conn, job_name: str) -> dict[str, Any] | None:

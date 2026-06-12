@@ -171,12 +171,22 @@ def test_api_health_includes_ops_health_when_db_unavailable(monkeypatch):
         "ops_health_status": None,
         "ops_health_blockers": [],
     })
+    monkeypatch.setattr(main, "p3_fifa_health_summary", lambda: {
+        "p3_mode": "fifa_matchdata",
+        "p3_status": "WAIT",
+        "p3_candidate_w": 0,
+        "p3_production_w": 0,
+        "p3_blockers": ["missing_fifa_matchdata"],
+    })
 
     payload = main.health()
 
     assert payload["ok"] is True
     assert payload["latest_ops_health_check_at"] is None
     assert payload["ops_health_blockers"] == []
+    assert payload["p3_mode"] == "fifa_matchdata"
+    assert payload["p3_status"] == "WAIT"
+    assert payload["p3_production_w"] == 0
 
 
 def test_latest_ops_health_status_reads_summary(monkeypatch):
@@ -219,3 +229,46 @@ def test_latest_ops_health_status_reads_summary(monkeypatch):
 
     assert status["ops_health_status"] == "WARN"
     assert status["ops_health_blockers"] == ["no_open_bets_to_settle"]
+
+
+def test_ops_health_check_includes_p3_fifa_without_causing_fail(monkeypatch):
+    monkeypatch.setattr(ops_health_check, "scheduler_freshness", lambda threshold_minutes=90: {
+        "scheduler_stale": False,
+        "scheduler_last_seen": None,
+        "scheduler_last_seen_age_minutes": 5,
+    })
+    monkeypatch.setattr(ops_health_check, "_latest_ops_log", lambda conn, job_name: {"status": "ok", "started_at": datetime.now(timezone.utc), "error": None})
+    def fake_scalar(conn, sql):
+        lowered = sql.lower()
+        if "max(fetched_at)" in lowered:
+            return datetime.now(timezone.utc)
+        if "bets" in lowered:
+            return 1
+        if "status in ('finished'" in lowered and "result_home is not null" in lowered:
+            return 30
+        return 0
+
+    monkeypatch.setattr(ops_health_check, "_scalar", fake_scalar)
+    monkeypatch.setattr(ops_health_check, "_rows", lambda conn, sql: [])
+    monkeypatch.setattr(ops_health_check, "_safe_p3_fifa_summary", lambda: {
+        "p3_fifa_status": "WAIT",
+        "p3_fifa_matches_with_data": 0,
+        "p3_fifa_teams_with_data": 0,
+        "p3_fifa_candidate_w": 0,
+        "p3_fifa_production_w": 0,
+    })
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(ops_health_check, "connect", lambda: FakeConn())
+
+    report = ops_health_check.generate_report()
+
+    assert report["p3_fifa"]["p3_fifa_status"] == "WAIT"
+    assert report["summary"]["p3_fifa_status"] == "WAIT"
+    assert report["overall"]["status"] != "FAIL"

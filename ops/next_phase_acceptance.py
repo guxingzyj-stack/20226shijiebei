@@ -3,12 +3,13 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-from model import p1c_acceptance_report, p3d_acceptance_report
+from model import p1c_acceptance_report, p3_auto_enable_gate, p3d_acceptance_report
 
 
 def generate_report() -> dict[str, Any]:
     p1c = p1c_acceptance_report.generate_report()
     p3d = p3d_acceptance_report.generate_report()
+    p3_fifa_gate = p3_auto_enable_gate.generate_report()
     safety = {
         "betting_enabled": False,
         "gbm_weight": p3d["gbm_status"]["w_gbm"],
@@ -17,9 +18,10 @@ def generate_report() -> dict[str, Any]:
         "would_write_db": bool(p3d["feature_readiness"].get("would_write_db", False)),
         "fake_data_used": False,
         "production_weight_changed": False,
+        "production_w_p3": p3_fifa_gate["production_w_p3"],
     }
     result = _overall_result(p1c, p3d, safety)
-    return {"p1c": p1c, "p3d": p3d, "production_safety": safety, "overall_result": result}
+    return {"p1c": p1c, "p3d": p3d, "p3_fifa_gate": p3_fifa_gate, "production_safety": safety, "overall_result": result}
 
 
 def print_report(report: dict[str, Any] | None = None) -> None:
@@ -56,6 +58,10 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     for key, value in report["production_safety"].items():
         print(f"- {key}: {str(value).lower() if isinstance(value, bool) else value}")
     print("")
+    print("4. P3 FIFA MatchData gate")
+    for key in ("p3_status", "can_enter_shadow", "can_enter_candidate", "can_enter_active_ready", "candidate_w_p3", "production_w_p3", "production_weight_changed"):
+        print(f"- {key}: {_safe(report['p3_fifa_gate'][key])}")
+    print("")
     print(f"overall_result: {report['overall_result']}")
 
 
@@ -64,7 +70,7 @@ def _overall_result(p1c: dict[str, Any], p3d: dict[str, Any], safety: dict[str, 
         return "FAIL"
     if safety["betting_enabled"] or safety["gbm_weight"] > 0.2 or safety["would_write_db"] or safety["fake_data_used"]:
         return "FAIL"
-    if safety["production_weight_changed"]:
+    if safety["production_weight_changed"] or safety.get("production_w_p3", 0) != 0:
         return "FAIL"
     if p1c["result"] == "WAIT" or p3d["result"] == "WAIT":
         return "WAIT"

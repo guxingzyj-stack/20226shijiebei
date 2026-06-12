@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-from model import p3_data_audit, p3_ingest, p3_train
+from model import p3_data_audit, p3_fifa_readiness, p3_ingest, p3_train
 
 
 def generate_report(dry_run: bool = True) -> dict[str, Any]:
@@ -12,6 +12,7 @@ def generate_report(dry_run: bool = True) -> dict[str, Any]:
     gbm = p3_train.train(dry_run=True, sample=False)
     source_coverage = _source_coverage(validation)
     data_audit = p3_data_audit.generate_report()
+    p3_fifa = p3_fifa_readiness.generate_report()
     report = {
         "source_plan": {
             "mode": "manual_real_csv_first",
@@ -60,6 +61,17 @@ def generate_report(dry_run: bool = True) -> dict[str, Any]:
             "blocker": data_audit["blocker"],
             "summary": data_audit["summary"],
             "next_backlog": data_audit["next_backlog"][:20],
+        },
+        "p3_fifa_matchdata": {
+            "p3_mode": p3_fifa["p3_mode"],
+            "p3_status": p3_fifa["p3_status"],
+            "matches_with_fifa_data": p3_fifa["matches_with_fifa_data"],
+            "teams_with_fifa_data": p3_fifa["teams_with_fifa_data"],
+            "player_rows_validated": p3_fifa["player_rows_validated"],
+            "candidate_w_p3": p3_fifa["candidate_w_p3"],
+            "production_w_p3": p3_fifa["production_w_p3"],
+            "blockers": p3_fifa["blockers"],
+            "affects_p1_predictions": False,
         },
         "gbm_status": {
             "status": _gbm_status(features, gbm, dry_run=dry_run),
@@ -145,6 +157,10 @@ def print_report(report: dict[str, Any] | None = None) -> None:
     print(f"- blocker: {report['data_audit']['blocker']}")
     print(f"- summary: {_safe(report['data_audit']['summary'])}")
     print(f"- next_backlog_count_shown: {len(report['data_audit']['next_backlog'])}")
+    print("")
+    print("7. P3 FIFA MatchData")
+    for key in ("p3_mode", "p3_status", "matches_with_fifa_data", "teams_with_fifa_data", "player_rows_validated", "candidate_w_p3", "production_w_p3", "blockers"):
+        print(f"- {key}: {_safe(report['p3_fifa_matchdata'][key])}")
     print("")
     print(f"- blocker: {report['blocker']}")
     print(f"result: {report['result']}")
