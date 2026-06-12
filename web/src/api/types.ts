@@ -112,6 +112,49 @@ export type HealthStatus = {
   betting_open_warnings?: string[];
 };
 
+export type BracketTeam = {
+  name?: string;
+  team?: string;
+  flag?: string;
+  flag_url?: string;
+  flag_emoji?: string;
+  country_code?: string;
+  iso2?: string;
+  seed?: string | number | null;
+};
+
+export type BracketMatch = {
+  id?: string | number;
+  match_id?: string;
+  round?: string;
+  slot?: string | number;
+  home_team?: string | BracketTeam | null;
+  away_team?: string | BracketTeam | null;
+  home_flag?: string | null;
+  away_flag?: string | null;
+  winner_team?: string | BracketTeam | null;
+  winner_flag?: string | null;
+  model_pick?: string | BracketTeam | null;
+  home_prob?: string | number | null;
+  away_prob?: string | number | null;
+  score?: string | null;
+  status?: string | null;
+};
+
+export type BracketRound = {
+  key?: string;
+  round?: string;
+  title?: string;
+  matches?: BracketMatch[];
+};
+
+export type BracketResponse = {
+  data_status?: "ok" | "not_generated" | "insufficient_data" | string;
+  message?: string;
+  rounds?: BracketRound[];
+  champion?: string | BracketTeam | null;
+};
+
 export type BetLeg = {
   match_id: string;
   play_type: string;

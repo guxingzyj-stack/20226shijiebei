@@ -170,11 +170,14 @@ ScoreMatrix highlights final score cells and labels result backfill / out-of-ran
 
 ## 7.5 Bracket Entry And Navigation
 
-Added a read-only bracket page and simplified navigation:
+Added a data-driven bracket page and simplified navigation:
 
 ```text
 /bracket opens the predicted bracket page
 the bracket page shows data_status=not_generated when knockout fixtures are unavailable
+the bracket page attempts to read /api/bracket and renders rounds automatically once data exists
+winner teams are highlighted and country flags support emoji, ISO2 code, or image URL inputs
+when /api/bracket is missing, 404, or not_generated, the page stays in an honest empty state
 no static bracket image, fake fixture, hard-coded champion path, or inferred advancement is shown
 desktop navigation order is 赛程 / 晋级图 / 复盘 / 排行 / 指标 / 我的 / 登录
 mobile navigation order is 赛程 / 晋级图 / 复盘 / 排行 / 我的
