@@ -190,3 +190,28 @@ The final E2E report must include:
 - latest `ops_log` rows
 - idempotency proof from the second runner run
 - cleanup proof
+
+## 11. Automated Local Gate Test
+
+The repository includes a production-safe automated E2E gate test:
+
+```bash
+PYTHONPATH=. python -m pytest tests/api_tests/test_settlement_e2e.py -q
+```
+
+This test uses an in-memory repository, not production PostgreSQL. It covers:
+
+```text
+winning single
+losing single
+parlay with postponed/void leg
+closed match without result remains not ready
+finished match with NULL result remains not ready
+second settlement run idempotency
+leaderboard output contains roi and no internal id
+```
+
+Passing this test is required before the betting gate can be considered, but it
+is not sufficient by itself. Opening simulated betting still requires an
+internal production test bet to settle successfully without public betting
+being enabled.

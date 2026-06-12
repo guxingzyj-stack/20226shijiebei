@@ -233,3 +233,50 @@ bets.legs::text LIKE '%test-%'
 ```
 
 Do not run real `settlement_runner once` as part of this closeout. Do not write fake scores to real `500-` matches.
+
+## 7. Simulated Betting Open Gate
+
+`BETTING_ENABLED` must remain `false` unless all gate checks pass and the user
+explicitly confirms opening simulated betting.
+
+Required gate checks:
+
+```text
+scheduler_stale=false
+ops_health_status=OK, or WARN only for allowed blockers
+finished/completed rows with NULL full-time result = 0
+scheduled/closed rows with result populated = 0
+test-environment settlement E2E = PASS
+production/internal real open bet settlement = PASS
+settlement idempotency = PASS
+leaderboard exposes no internal id and includes roi
+no test users remain in the public leaderboard
+explicit user confirmation = yes
+```
+
+Allowed temporary watchdog blockers:
+
+```text
+no_open_bets_to_settle
+insufficient_finished_matches
+closed_prediction_pending
+```
+
+Disallowed blockers:
+
+```text
+scheduler_stale
+odds_stale
+finished_null_count
+non_finished_with_result
+settlement_runner_error
+```
+
+The current gate evidence is tracked in:
+
+```text
+docs/BETTING_OPEN_GATE_REPORT.md
+```
+
+Do not treat a no-op settlement runner execution as proof that real open-bet
+settlement works.
