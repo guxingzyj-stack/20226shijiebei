@@ -3,11 +3,10 @@ import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
 import { apiGet } from "../api/client";
-import type { EvSignal, HealthStatus, Match, OddsSnapshot, PredictionHistoryResponse, Suggestion, TeamFormResponse } from "../api/types";
+import type { EvSignal, Match, OddsSnapshot, PredictionHistoryResponse, Suggestion, TeamFormResponse } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { useBetSlip } from "../bet/BetSlipContext";
 import { BetSlipCompact } from "../components/BetSlip";
-import { BettingOpenStatusCard } from "../components/BettingOpenStatusCard";
 import { EvBadge } from "../components/EvBadge";
 import { InfoTip } from "../components/InfoTip";
 import { MarketModelCompare } from "../components/MarketModelCompare";
@@ -43,7 +42,6 @@ export function MatchDetailPage() {
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [teamForm, setTeamForm] = useState<TeamFormResponse | null>(null);
   const [predictionHistory, setPredictionHistory] = useState<PredictionHistoryResponse | null>(null);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -54,17 +52,15 @@ export function MatchDetailPage() {
         const detail = await apiGet<Match>(`/matches/${encodeURIComponent(matchId)}`);
         if (cancelled) return;
         setMatch(detail);
-        const [historyRows, formRows, predictionRows, healthRows] = await Promise.all([
+        const [historyRows, formRows, predictionRows] = await Promise.all([
           safeGet<OddsSnapshot[]>(`/matches/${encodeURIComponent(matchId)}/odds-history?play_type=had`, []),
           safeGet<TeamFormResponse | null>(`/matches/${encodeURIComponent(matchId)}/team-form`, null),
           safeGet<PredictionHistoryResponse | null>(`/matches/${encodeURIComponent(matchId)}/prediction-history`, null),
-          safeGet<HealthStatus | null>("/health", null),
         ]);
         if (cancelled) return;
         setHistory(historyRows);
         setTeamForm(formRows);
         setPredictionHistory(predictionRows);
-        setHealth(healthRows);
         if (token) {
           setSuggestion(await safeGet<Suggestion | null>(`/model/suggestion?match_id=${encodeURIComponent(matchId)}`, null, token));
         } else {
@@ -220,7 +216,6 @@ export function MatchDetailPage() {
         token={token}
         teamForm={teamForm}
         predictionHistory={predictionHistory}
-        health={health}
       />
     </div>
   );
@@ -234,10 +229,9 @@ type RightRailProps = {
   token: string | null;
   teamForm: TeamFormResponse | null;
   predictionHistory: PredictionHistoryResponse | null;
-  health: HealthStatus | null;
 };
 
-function RightRail({ match, had, history, suggestion, token, teamForm, predictionHistory, health }: RightRailProps) {
+function RightRail({ match, had, history, suggestion, token, teamForm, predictionHistory }: RightRailProps) {
   const finished = hasCompleteResult(match);
   return (
     <div className="space-y-5 lg:sticky lg:top-[88px] lg:self-start">
@@ -266,13 +260,6 @@ function RightRail({ match, had, history, suggestion, token, teamForm, predictio
       <Panel title="关键数字卡"><ScoreMatrixSummaryCard matrix={match.latest_prediction?.score_matrix} /></Panel>
       <Panel title="两队近 5 场状态"><TeamFormMini data={teamForm} /></Panel>
       <Panel title="模型概率漂移"><PredictionDriftMini data={predictionHistory} /></Panel>
-      <Panel title="EV 值怎么看">
-        <div className="space-y-2 text-sm text-paper/65">
-          <p>EV 是模型认为赔率是否被低估的研究分数。EV 越高，分歧越大；但 EV 不是中奖概率，也不是投注建议。</p>
-          <p className="text-xs text-paper/45">提示：比分类 EV 往往数值很高，但波动也最大，建议只作为复盘研究。</p>
-        </div>
-      </Panel>
-      <Panel title="投注开放状态"><BettingOpenStatusCard health={health} /></Panel>
     </div>
   );
 }
