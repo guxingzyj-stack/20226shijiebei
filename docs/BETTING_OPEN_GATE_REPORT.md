@@ -124,3 +124,4 @@ Do not:
 - treat a no-op settlement run as a real bet settlement pass
 - paste or commit database URLs, tokens, passwords, or API keys
 - apply scores with ad hoc SQL instead of the dry-run + confirm fallback
+- treat P4 post-match recap output as betting advice or as permission to open betting

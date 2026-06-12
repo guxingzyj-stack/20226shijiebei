@@ -13,6 +13,7 @@ from api.betting import BETTING_DISABLED_MESSAGE, is_betting_enabled, place_bet,
 from api.db import Database, get_db
 from api.ops_health_check import latest_ops_health_status
 from api import recap
+from api.recap_service import build_match_recap, recent_recaps, recap_summary as build_recap_summary
 from api.scheduler import start_api_scheduler, stop_api_scheduler
 from api.scheduler_health import scheduler_freshness
 from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenResponse, UserCreate, UserLogin
@@ -188,6 +189,21 @@ def recap_funds() -> dict:
 @app.get("/api/recap/plays")
 def recap_plays() -> dict:
     return recap.recap_plays()
+
+
+@app.get("/api/recaps/matches/{match_id}")
+def match_recap(match_id: str) -> dict:
+    return build_match_recap(match_id)
+
+
+@app.get("/api/recaps/recent")
+def recent_match_recaps(limit: int = Query(10, ge=1, le=50)) -> dict:
+    return recent_recaps(limit=limit)
+
+
+@app.get("/api/recaps/summary")
+def recaps_summary() -> dict:
+    return build_recap_summary()
 
 
 def _prediction_status(prediction: dict | None, match: dict | None = None) -> dict:

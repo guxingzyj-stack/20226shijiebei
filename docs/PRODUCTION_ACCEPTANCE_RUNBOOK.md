@@ -356,3 +356,32 @@ Do not proceed if non-probe open/pending bets exist.
 Even after a successful probe, keep betting closed until at least two
 consecutive match days have automatic result sync working and the user
 explicitly confirms opening simulated betting.
+
+## 10. P4 Recap Layer
+
+P4 is a read-only post-match review layer. It does not write scores, modify
+bets/users/balances, change P1/P3 weights, or open betting.
+
+After deploying `wc-p2-api`, verify:
+
+```bash
+curl -sS https://fifa2026.zeabur.app/api/recaps/matches/500-1359172
+curl -sS https://fifa2026.zeabur.app/api/recaps/recent
+curl -sS https://fifa2026.zeabur.app/api/recaps/summary
+```
+
+Container CLI:
+
+```bash
+PYTHONPATH=. python -m api.recap_runner --match-id 500-1359172
+PYTHONPATH=. python -m api.recap_runner --summary
+```
+
+Expected:
+
+```text
+finished matches with full-time scores return available=true
+unfinished or missing-score matches return available=false
+settlement summaries do not expose user_id or bet_id
+research_only EV is shown as research_signal, not betting advice
+```
