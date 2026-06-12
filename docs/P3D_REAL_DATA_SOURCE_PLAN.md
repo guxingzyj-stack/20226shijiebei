@@ -67,12 +67,14 @@ Allowed:
 - Human-reviewed CSV from permitted sources.
 - Public data explicitly licensed for reuse.
 - Manual notes with source and confidence metadata.
+- FIFA World Cup official Match Centre match-performance data, when public player-level data is exposed.
 
 Not allowed:
 
 - FBref / Transfermarkt scraping that bypasses terms, login, or anti-bot restrictions.
 - Fabricated player or injury data.
 - Treating engineering sample CSV as production data.
+- Treating FIFA World Cup match-performance data as pre-match club recent form.
 
 ## Current Acceptance State
 
@@ -105,6 +107,19 @@ w_gbm: 0
 This is full official squad/profile coverage, not full P3-D model readiness. It does not write production DB and does not enable GBM. Numeric performance fields remain intentionally blank because no permitted reviewed source has been collected for recent minutes, goals, assists, xG, or xA.
 
 When compliant `real_performance_*.csv` files are added and every team reaches the 70% coverage threshold, dry-run reports `gbm_ready=true` but keeps `w_gbm=0`. Non-dry-run local/test mode can report gray `w_gbm=0.2`; production P1 fusion weights are not changed automatically.
+
+## FIFA MatchData Layer
+
+`P3-FIFA-MatchData` is used for official World Cup match performance after matches start:
+
+```text
+data_scope = fifa_world_cup_match_performance
+not_club_recent_form = true
+```
+
+It can generate `data/p3/real_performance_fifa_match_sample.csv` only from public FIFA Match Centre pages or public JSON loaded by those pages. If URL mapping is missing, the probe writes `data/p3/fifa_match_targets_template.csv` and reports `WAIT`. If FIFA pages do not expose player-level lineups/events/stats yet, the adapter also reports `WAIT`.
+
+FIFA MatchData should not be used to claim pre-match club recent-form coverage. It should not open betting. Coverage below 70% keeps P3-Light in `WAIT`.
 
 Official source:
 

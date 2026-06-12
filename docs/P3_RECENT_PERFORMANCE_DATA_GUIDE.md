@@ -17,6 +17,14 @@ P3-Full:
 - requires a higher-grade authorized data source;
 - should be evaluated separately before raising any GBM production weight.
 
+P3-FIFA-MatchData:
+
+- uses FIFA World Cup official Match Centre match performance data;
+- is `data_scope=fifa_world_cup_match_performance`;
+- is not pre-match club recent form (`not_club_recent_form=true`);
+- may only appear after real World Cup matches expose official player-level data;
+- keeps P3-Light at `WAIT` when URL mapping or player-level data is unavailable.
+
 ## Target File
 
 Create one or more reviewed files matching:
@@ -105,6 +113,31 @@ blocker: no_legal_recent_performance_source
 ```
 
 If the source probe returns `WAIT` or `FAIL`, do not generate `data/p3/real_performance_squad.csv`.
+
+## FIFA MatchData Adapter
+
+FIFA MatchData is an official World Cup match-performance layer, not a club recent-form source. It should be used for in-tournament performance tracking after matches start.
+
+Prepare URL mapping:
+
+```bash
+PYTHONPATH=. python -m tools.p3_probe_fifa_match_centre --matches data/p3/fifa_match_targets.csv --report-out docs/P3_FIFA_MATCH_DATA_REPORT.md
+```
+
+If `data/p3/fifa_match_targets.csv` is missing, the probe writes `data/p3/fifa_match_targets_template.csv` and reports:
+
+```text
+result=WAIT
+needs_fifa_match_url_mapping=true
+```
+
+Build the FIFA match sample only after official FIFA match URLs are mapped:
+
+```bash
+PYTHONPATH=. python -m tools.p3_build_fifa_match_performance_csv --matches data/p3/fifa_match_targets.csv --squad data/p3/manual_real_squad.csv --out data/p3/real_performance_fifa_match_sample.csv --unmatched-out data/p3/real_performance_unmatched_fifa.csv --report-out docs/P3_FIFA_MATCH_DATA_REPORT.md
+```
+
+Do not guess FIFA match URLs, do not bypass login or anti-bot controls, and do not fill players without official player-level evidence.
 
 ## Building From User-Provided CSV
 

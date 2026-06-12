@@ -78,6 +78,25 @@ P3-Light gates GBM on `minutes_recent`, `goals_recent`, and `assists_recent` cov
 
 P3-Full is the later upgrade path for licensed xG/xA coverage. P3-Light may report `candidate_w_gbm=0.2` after coverage is sufficient, but `production_w_gbm` remains `0` until a separate reviewed deployment changes production weights.
 
+## FIFA Match Centre Data
+
+`P3-FIFA-MatchData` is a separate official World Cup match-performance layer. It is not pre-match club recent form.
+
+- `data_scope=fifa_world_cup_match_performance`
+- `not_club_recent_form=true`
+- source must be public FIFA Match Centre pages or public JSON loaded by those pages
+- if matches have not started or player-level data is unavailable, status remains `WAIT`
+- coverage below 70% keeps `gbm_ready=false` and `w_gbm=0`
+
+Commands:
+
+```bash
+python -m tools.p3_probe_fifa_match_centre --matches data/p3/fifa_match_targets.csv --report-out docs/P3_FIFA_MATCH_DATA_REPORT.md
+python -m tools.p3_build_fifa_match_performance_csv --matches data/p3/fifa_match_targets.csv --squad data/p3/manual_real_squad.csv --out data/p3/real_performance_fifa_match_sample.csv --unmatched-out data/p3/real_performance_unmatched_fifa.csv --report-out docs/P3_FIFA_MATCH_DATA_REPORT.md
+```
+
+Do not guess match URLs or fabricate missing player data.
+
 ## Safety
 
 - Missing player data should produce `missing_*` feature flags, not a crash.
