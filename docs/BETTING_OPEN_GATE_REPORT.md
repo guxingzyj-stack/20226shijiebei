@@ -125,3 +125,23 @@ Do not:
 - paste or commit database URLs, tokens, passwords, or API keys
 - apply scores with ad hoc SQL instead of the dry-run + confirm fallback
 - treat P4 post-match recap output as betting advice or as permission to open betting
+
+## 6. P4 Recap Product Layer
+
+P4 may be deployed for read-only production display:
+
+```text
+/recaps
+/recaps/{match_id}
+/recaps/model
+/recaps/ev
+/recaps/daily
+```
+
+This does not change the betting gate decision.
+
+```text
+recommend_open_betting: no
+BETTING_ENABLED: keep false
+reason: P4 is review/reporting only and does not replace production settlement evidence
+```

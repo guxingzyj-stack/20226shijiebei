@@ -15,6 +15,10 @@ The MVP provides:
 - data quality warnings
 - read-only API endpoints
 - CLI output for operations checks
+- frontend recap home page
+- frontend model performance page
+- frontend EV signal performance page
+- frontend daily/shareable recap report page
 
 ## Data Sources
 
@@ -100,11 +104,30 @@ It does not expose `user_id`, `bet_id`, or internal user data.
 
 ```text
 GET /api/recaps/matches/{match_id}
-GET /api/recaps/recent?limit=10
+GET /api/recaps/recent?limit=20
 GET /api/recaps/summary
 ```
 
 Existing placeholder endpoints under `/api/recap/*` remain unchanged.
+
+## Frontend Product Pages
+
+```text
+/recaps
+/recaps/{match_id}
+/recaps/model
+/recaps/ev
+/recaps/daily
+```
+
+The frontend aggregates existing recap API responses. It does not write data,
+call a model, or hard-code scores/prediction conclusions.
+
+- `/recaps` shows summary cards and recent finished match recaps.
+- `/recaps/{match_id}` shows result, market, model, EV, settlement, data quality, and summary sections.
+- `/recaps/model` shows model hit/miss, market agreement, and recent match table.
+- `/recaps/ev` shows EV research signal performance and safety text.
+- `/recaps/daily` groups finished matches by day and generates copyable report text.
 
 ## CLI
 
@@ -122,3 +145,5 @@ P4 does not:
 - edit bets, users, balances, odds, predictions, EV rows, or model weights
 - expose internal ids
 - turn research-only EV into betting advice
+- change P1/P3 weights
+- depend on P3 being complete

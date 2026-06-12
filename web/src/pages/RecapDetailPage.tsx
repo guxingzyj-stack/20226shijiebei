@@ -83,7 +83,10 @@ export function RecapDetailPage() {
               <Metric key={key} label={`${outcomeLabel[key]}隐含概率`} value={formatPercent(recap.market.close_implied_probabilities[key])} />
             ))}
           </div>
-          <p className="mt-4 text-sm text-paper/62">市场热门方向：{outcomeLabel[recap.market.favorite || ""] || "暂无"}</p>
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            <Metric label="市场热门方向" value={outcomeLabel[recap.market.favorite || ""] || "暂无"} />
+            <Metric label="市场判断结果" value={recap.market.favorite ? (recap.market.favorite === recap.result.winner ? "命中" : "未命中") : "不可判断"} />
+          </div>
         </Panel>
 
         <Panel title="模型预测" icon={ShieldCheck}>

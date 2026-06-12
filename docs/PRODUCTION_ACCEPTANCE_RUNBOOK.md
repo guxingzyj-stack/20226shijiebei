@@ -391,6 +391,9 @@ After deploying `wc-p2-web`, verify the frontend:
 ```text
 https://worldcup2026.zeabur.app/recaps
 https://worldcup2026.zeabur.app/recaps/500-1359172
+https://worldcup2026.zeabur.app/recaps/model
+https://worldcup2026.zeabur.app/recaps/ev
+https://worldcup2026.zeabur.app/recaps/daily
 ```
 
 Expected:
@@ -398,6 +401,9 @@ Expected:
 ```text
 /recaps shows recent finished recaps or a friendly empty state
 /recaps/{match_id} shows result, market odds, model review, EV recap, settlement status, data quality, and summary
+/recaps/model shows model performance and market/model agreement without changing weights
+/recaps/ev labels EV as research signal, not betting advice
+/recaps/daily generates copyable daily report text from recap API data
 match detail shows "查看赛后复盘" only for finished/completed matches with scores
 research_only EV is labelled as research signal, not betting advice
 no user_id, bet_id, or internal id is rendered

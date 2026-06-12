@@ -1,6 +1,6 @@
 # P4 Recap Acceptance Report
 
-Status: API complete and frontend MVP complete, production web deployment pending.
+Status: API complete and frontend product layer complete, production web deployment pending.
 
 ## 1. MVP Features
 
@@ -18,13 +18,16 @@ Implemented:
 - CLI runner
 - recap home page `/recaps`
 - single-match recap page `/recaps/:matchId`
+- model performance page `/recaps/model`
+- EV signal performance page `/recaps/ev`
+- daily shareable recap report page `/recaps/daily`
 - match detail entry to post-match recap when a finished result is available
 
 ## 2. Endpoints
 
 ```text
 GET /api/recaps/matches/{match_id}
-GET /api/recaps/recent?limit=10
+GET /api/recaps/recent?limit=20
 GET /api/recaps/summary
 ```
 
@@ -84,6 +87,9 @@ Routes:
 ```text
 GET /recaps
 GET /recaps/{match_id}
+GET /recaps/model
+GET /recaps/ev
+GET /recaps/daily
 ```
 
 Expected:
@@ -91,8 +97,25 @@ Expected:
 ```text
 /recaps lists recent finished match recaps from the recap API
 /recaps/{match_id} shows result, market, model, EV, settlement, data quality, and summary sections
+/recaps/model shows model hit rate, market agreement, and recent match performance
+/recaps/ev shows EV totals, research/suggestion flags, and hit/miss review
+/recaps/daily groups recaps by date and generates copyable daily report text
 unavailable recaps show a friendly empty state
 match detail only links to recap when status is finished/completed and scores are present
 research_only EV is labelled as research signal, not betting advice
 no user_id, bet_id, or internal id is rendered
+```
+
+## 8. Product Boundary
+
+P4 is complete enough for production display, but it remains a read-only review
+layer. It does not depend on P3 completion and it does not authorize opening
+betting.
+
+```text
+no prediction writes
+no score writes
+no bet/user/balance writes
+no P1/P3 weight changes
+BETTING_ENABLED remains false
 ```

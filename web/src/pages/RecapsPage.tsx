@@ -1,24 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, BarChart3, CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
+import { ArrowRight, BarChart3, CheckCircle2, Clock3, FileText, Radar, ShieldCheck } from "lucide-react";
 import { apiGet } from "../api/client";
-import type { RecapRecentResponse, RecapSummary } from "../api/types";
-
-function predictionText(value: boolean | null): string {
-  if (value === true) return "命中";
-  if (value === false) return "未命中";
-  return "无预测";
-}
-
-function predictionTone(value: boolean | null): string {
-  if (value === true) return "border-emerald-300/30 bg-emerald-300/12 text-emerald-100";
-  if (value === false) return "border-danger/35 bg-danger/12 text-paper";
-  return "border-white/12 bg-white/[0.04] text-paper/60";
-}
+import type { MatchRecap, MatchRecapResponse, RecapRecentResponse, RecapSummary } from "../api/types";
+import { formatDateTime } from "../utils/format";
+import { outcomeText, predictionText, predictionTone, settlementText } from "../recaps/recapUtils";
 
 export function RecapsPage() {
   const [recent, setRecent] = useState<RecapRecentResponse | null>(null);
   const [summary, setSummary] = useState<RecapSummary | null>(null);
+  const [recaps, setRecaps] = useState<MatchRecap[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -28,12 +19,16 @@ export function RecapsPage() {
       try {
         setLoading(true);
         const [recentResult, summaryResult] = await Promise.all([
-          apiGet<RecapRecentResponse>("/recaps/recent?limit=10"),
+          apiGet<RecapRecentResponse>("/recaps/recent?limit=20"),
           apiGet<RecapSummary>("/recaps/summary"),
         ]);
+        const detailResults = await Promise.all(
+          recentResult.items.map((item) => apiGet<MatchRecapResponse>(`/recaps/matches/${encodeURIComponent(item.match_id)}`)),
+        );
         if (!cancelled) {
           setRecent(recentResult);
           setSummary(summaryResult);
+          setRecaps(detailResults.flatMap((result) => (result.available && result.recap ? [result.recap] : [])));
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "复盘数据加载失败");
@@ -48,6 +43,7 @@ export function RecapsPage() {
   }, []);
 
   const items = recent?.items || [];
+  const recapById = new Map(recaps.map((recap) => [recap.match_id, recap]));
 
   return (
     <div className="space-y-5">
@@ -69,6 +65,12 @@ export function RecapsPage() {
         </div>
       </section>
 
+      <section className="grid gap-3 md:grid-cols-3">
+        <QuickLink to="/recaps/model" icon={Radar} title="模型表现" text="查看模型命中、市场分歧和样本状态" />
+        <QuickLink to="/recaps/ev" icon={BarChart3} title="EV 信号" text="复盘研究信号命中与风险标记" />
+        <QuickLink to="/recaps/daily" icon={FileText} title="复盘日报" text="按比赛日生成可复制日报文案" />
+      </section>
+
       {loading ? <div className="rounded-lg border border-white/10 p-5 text-paper/65">复盘列表加载中</div> : null}
       {error ? <div className="rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm">{error}</div> : null}
 
@@ -80,7 +82,9 @@ export function RecapsPage() {
 
       {items.length ? (
         <section className="grid gap-3 lg:grid-cols-2">
-          {items.map((item) => (
+          {items.map((item) => {
+            const recap = recapById.get(item.match_id);
+            return (
             <Link
               key={item.match_id}
               to={`/recaps/${encodeURIComponent(item.match_id)}`}
@@ -92,6 +96,7 @@ export function RecapsPage() {
                   <div className="mt-2 text-lg font-semibold">
                     {item.home_team} <span className="text-paper/35">vs</span> {item.away_team}
                   </div>
+                  <div className="mt-1 text-xs text-paper/45">{recap ? formatDateTime(recap.kickoff_at) : "时间读取中"}</div>
                 </div>
                 <ArrowRight className="shrink-0 text-paper/45" size={20} />
               </div>
@@ -102,12 +107,31 @@ export function RecapsPage() {
                 </span>
                 <span className="rounded-full border border-white/12 px-3 py-1 text-xs text-paper/60">查看复盘</span>
               </div>
+              <div className="mt-3 grid gap-2 text-sm text-paper/62 md:grid-cols-2">
+                <span>市场方向：{recap ? outcomeText(recap.market.favorite) : "读取中"}</span>
+                <span>模型方向：{recap ? outcomeText(recap.model.predicted_outcome) : "读取中"}</span>
+                <span>EV 信号：{recap ? recap.ev.total_ev_signals : 0}</span>
+                <span>结算：{recap ? settlementText(recap.settlement.settlement_status) : "读取中"}</span>
+              </div>
               <p className="mt-3 text-sm leading-6 text-paper/62">{item.title}</p>
             </Link>
-          ))}
+          );
+          })}
         </section>
       ) : null}
     </div>
+  );
+}
+
+function QuickLink({ to, icon: Icon, title, text }: { to: string; icon: typeof BarChart3; title: string; text: string }) {
+  return (
+    <Link to={to} className="rounded-lg border border-white/10 bg-white/[0.05] p-4 transition hover:border-gold/50 hover:bg-white/[0.075]">
+      <div className="flex items-center gap-2 font-semibold">
+        <Icon size={18} className="text-gold" />
+        {title}
+      </div>
+      <p className="mt-2 text-sm leading-5 text-paper/58">{text}</p>
+    </Link>
   );
 }
 
