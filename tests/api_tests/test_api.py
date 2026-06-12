@@ -264,12 +264,14 @@ def test_health_returns_scheduler_fields(monkeypatch):
     response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "ok": True,
-        "scheduler_last_seen": "2026-06-12T00:00:00+00:00",
-        "scheduler_last_seen_age_minutes": 12,
-        "scheduler_stale": False,
-    }
+    body = response.json()
+    assert body["ok"] is True
+    assert body["scheduler_last_seen"] == "2026-06-12T00:00:00+00:00"
+    assert body["scheduler_last_seen_age_minutes"] == 12
+    assert body["scheduler_stale"] is False
+    assert "latest_ops_health_check_at" in body
+    assert "ops_health_status" in body
+    assert "ops_health_blockers" in body
 
 
 def test_match_detail_without_current_prediction_returns_status(monkeypatch):

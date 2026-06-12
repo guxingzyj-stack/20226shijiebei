@@ -105,6 +105,11 @@ After acceptance passes and settlement smoke has already returned `PASS`, enable
 ENABLE_API_SCHEDULER=true
 RESULTS_SYNC_INTERVAL_MINUTES=60
 SETTLEMENT_RUNNER_INTERVAL_MINUTES=30
+OPS_HEALTH_CHECK_INTERVAL_MINUTES=30
+OPS_HEALTH_STALE_THRESHOLD_MINUTES=90
+ODDS_STALE_THRESHOLD_MINUTES=30
+OPS_ALERT_ENABLED=false
+OPS_ALERT_WEBHOOK_URL=
 RUN_SCHEDULER_ON_STARTUP=false
 BETTING_ENABLED=false
 ```
@@ -116,6 +121,25 @@ python -m api.acceptance_report
 ```
 
 Do not enable betting as part of scheduler rollout.
+
+If `RUN_SCHEDULER_ON_STARTUP=true`, the API scheduler runs these jobs once at
+startup and then on their intervals:
+
+```text
+results_sync
+settlement_runner
+ops_health_check
+```
+
+The watchdog can also be run manually:
+
+```bash
+python -m api.ops_health_check
+```
+
+It writes `ops_log.job_name='ops_health_check'` with status `ok`, `warn`, or
+`fail`. A no-op settlement state because there are no open bets is `WARN`; it is
+not proof that real bet settlement has passed.
 
 ## 6. 014-C Operations Closeout
 
@@ -149,13 +173,15 @@ Read-only health checks:
 ```bash
 curl -sS https://fifa2026.zeabur.app/api/health
 python -m api.health_report
+python -m api.ops_health_check
 python -m api.result_consistency_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
 ```
 
 `/api/health` should include `scheduler_last_seen`, `scheduler_last_seen_age_minutes`,
-and `scheduler_stale`. If latest `ops_log` is older than 90 minutes,
+`scheduler_stale`, `latest_ops_health_check_at`, `ops_health_status`, and
+`ops_health_blockers`. If latest `ops_log` is older than 90 minutes,
 `api.health_report` must return `FAIL`.
 
 Sale closed / stop selling is not a match result. The crawler may write `closed`,

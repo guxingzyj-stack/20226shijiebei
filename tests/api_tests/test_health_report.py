@@ -56,6 +56,9 @@ def test_health_report_output_has_required_keys(capsys):
             "betting_enabled": "false",
             "api_scheduler_enabled": "true",
             "recent ops_log": {},
+            "latest_ops_health_check_at": "2026-06-12T00:00:00+00:00",
+            "ops_health_status": "WARN",
+            "ops_health_blockers": ["no_open_bets_to_settle"],
             "latest_ops_log_at": "2026-06-12T00:00:00+00:00",
             "latest_results_sync_at": "2026-06-12T00:00:00+00:00",
             "latest_settlement_runner_at": "2026-06-12T00:00:00+00:00",
@@ -72,5 +75,6 @@ def test_health_report_output_has_required_keys(capsys):
     output = capsys.readouterr().out
     assert "Health Report" in output
     assert "- latest ev_signals count: 4" in output
+    assert "- ops_health_status: WARN" in output
     assert "- scheduler_stale: False" in output
     assert "- result: PASS" in output

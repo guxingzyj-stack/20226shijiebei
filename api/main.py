@@ -11,6 +11,7 @@ from psycopg.errors import UniqueViolation
 from api.auth import create_access_token, current_user_claims, hash_password, verify_password
 from api.betting import BETTING_DISABLED_MESSAGE, is_betting_enabled, place_bet, suggested_stake
 from api.db import Database, get_db
+from api.ops_health_check import latest_ops_health_status
 from api import recap
 from api.scheduler import start_api_scheduler, stop_api_scheduler
 from api.scheduler_health import scheduler_freshness
@@ -55,12 +56,14 @@ def get_current_user(
 @app.get("/api/health")
 def health() -> dict:
     freshness = scheduler_freshness()
-    return {
+    payload = {
         "ok": True,
         "scheduler_last_seen": freshness["scheduler_last_seen"],
         "scheduler_last_seen_age_minutes": freshness["scheduler_last_seen_age_minutes"],
         "scheduler_stale": freshness["scheduler_stale"],
     }
+    payload.update(latest_ops_health_status())
+    return payload
 
 
 def _match_has_had_odds(match: dict) -> bool:

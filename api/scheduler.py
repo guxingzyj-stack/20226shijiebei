@@ -7,6 +7,7 @@ from typing import Any
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from api.ops_log import sanitize_error
+from api.ops_health_check import run_ops_health_check
 from api.results_sync import run_results_sync_job
 from api.settlement_runner import run_settlement_job
 
@@ -26,9 +27,11 @@ def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone="UTC")
     results_interval = _env_int("RESULTS_SYNC_INTERVAL_MINUTES", 60)
     settlement_interval = _env_int("SETTLEMENT_RUNNER_INTERVAL_MINUTES", 30)
+    ops_health_interval = _env_int("OPS_HEALTH_CHECK_INTERVAL_MINUTES", 30)
     now = datetime.now(timezone.utc)
     results_next_run_time: Any = now if run_on_startup_enabled() else now + timedelta(minutes=results_interval)
     settlement_next_run_time: Any = now if run_on_startup_enabled() else now + timedelta(minutes=settlement_interval)
+    ops_health_next_run_time: Any = now if run_on_startup_enabled() else now + timedelta(minutes=ops_health_interval)
     scheduler.add_job(
         results_sync_job,
         "interval",
@@ -46,6 +49,15 @@ def create_scheduler() -> BackgroundScheduler:
         max_instances=1,
         coalesce=True,
         next_run_time=settlement_next_run_time,
+    )
+    scheduler.add_job(
+        ops_health_check_job,
+        "interval",
+        minutes=ops_health_interval,
+        id="ops_health_check_job",
+        max_instances=1,
+        coalesce=True,
+        next_run_time=ops_health_next_run_time,
     )
     return scheduler
 
@@ -88,6 +100,14 @@ def settlement_runner_job() -> None:
         print({"event": "scheduler_job_finished", "job_name": "settlement_runner", "status": "ok", "summary": stats.__dict__})
     except Exception as exc:
         print({"event": "scheduler_job_finished", "job_name": "settlement_runner", "status": "error", "error": sanitize_error(exc)})
+
+
+def ops_health_check_job() -> None:
+    try:
+        report = run_ops_health_check(record_log=True)
+        print({"event": "scheduler_job_finished", "job_name": "ops_health_check", "status": report["overall"]["status"].lower(), "summary": report["summary"]})
+    except Exception as exc:
+        print({"event": "scheduler_job_finished", "job_name": "ops_health_check", "status": "error", "error": sanitize_error(exc)})
 
 
 def _env_int(name: str, default: int) -> int:

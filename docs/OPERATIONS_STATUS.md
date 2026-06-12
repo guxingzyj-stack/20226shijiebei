@@ -13,8 +13,21 @@ Current production posture:
 
 - `settlement_runner`: `PASS`
 - `results_sync`: `PASS`
+- `ops_health_check`: code ready; enable through API scheduler after deployment
 - stale threshold: latest `ops_log` older than 90 minutes is `FAIL` in `api.health_report`
-- `/api/health` exposes `scheduler_last_seen`, `scheduler_last_seen_age_minutes`, and `scheduler_stale`
+- `/api/health` exposes `scheduler_last_seen`, `scheduler_last_seen_age_minutes`, `scheduler_stale`, `latest_ops_health_check_at`, `ops_health_status`, and `ops_health_blockers`
+
+### 042 Watchdog
+
+- CLI: `python -m api.ops_health_check`
+- scheduler job: `ops_health_check_job`
+- default interval: `OPS_HEALTH_CHECK_INTERVAL_MINUTES=30`
+- stale threshold: `OPS_HEALTH_STALE_THRESHOLD_MINUTES=90`
+- odds threshold: `ODDS_STALE_THRESHOLD_MINUTES=30`
+- alert env: `OPS_ALERT_ENABLED=false`, `OPS_ALERT_WEBHOOK_URL=`
+- alerts are optional; missing webhook must not fail health checks
+- every run writes `ops_log.job_name='ops_health_check'`
+- no-open-bets is `WARN`, not real settlement PASS
 
 ### 019 Emergency Repair
 
@@ -75,6 +88,7 @@ Current production posture:
 
 ```bash
 python -m api.health_report
+python -m api.ops_health_check
 python -m api.result_consistency_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run

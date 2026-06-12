@@ -6,6 +6,7 @@ import os
 from psycopg.rows import dict_row
 
 from api.db import connect
+from api.ops_health_check import latest_ops_health_status
 from api.ops_log import recent_ops_log
 from api.scheduler_health import scheduler_freshness
 
@@ -22,6 +23,9 @@ def generate_report() -> dict[str, Any]:
         "betting_enabled": os.getenv("BETTING_ENABLED", "false"),
         "api_scheduler_enabled": os.getenv("ENABLE_API_SCHEDULER", "false"),
         "recent ops_log": "NOT_CHECKED",
+        "latest_ops_health_check_at": "NOT_CHECKED",
+        "ops_health_status": "NOT_CHECKED",
+        "ops_health_blockers": "NOT_CHECKED",
         "latest_ops_log_at": "NOT_CHECKED",
         "latest_results_sync_at": "NOT_CHECKED",
         "latest_settlement_runner_at": "NOT_CHECKED",
@@ -46,7 +50,9 @@ def generate_report() -> dict[str, Any]:
             report["recent ops_log"] = {
                 "results_sync": _safe_recent_ops_log("results_sync"),
                 "settlement_runner": _safe_recent_ops_log("settlement_runner"),
+                "ops_health_check": _safe_recent_ops_log("ops_health_check"),
             }
+            report.update(latest_ops_health_status())
             report.update(scheduler_freshness())
             report["open_bets_count"] = _scalar(conn, "SELECT count(*) FROM bets WHERE status = 'open'")
             report["test_users_count"] = _scalar(conn, "SELECT count(*) FROM users WHERE username LIKE 'test_user_%%' OR username LIKE 'codex_blocker_%%'")
@@ -71,6 +77,9 @@ def print_report(report: dict[str, Any] | None = None) -> None:
         "betting_enabled",
         "api_scheduler_enabled",
         "recent ops_log",
+        "latest_ops_health_check_at",
+        "ops_health_status",
+        "ops_health_blockers",
         "latest_ops_log_at",
         "latest_results_sync_at",
         "latest_settlement_runner_at",
