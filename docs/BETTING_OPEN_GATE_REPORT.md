@@ -98,6 +98,8 @@ reason:
 - production/internal real open bet settlement has not been observed
 - the watchdog still reports no_open_bets_to_settle
 - real match settlement has not yet completed through production data
+- when automatic result sync misses an official result, use the controlled
+  official_result_fallback flow before any settlement gate decision
 ```
 
 ## 5. Prohibited Actions
@@ -110,3 +112,4 @@ Do not:
 - manually edit production balances
 - treat a no-op settlement run as a real bet settlement pass
 - paste or commit database URLs, tokens, passwords, or API keys
+- apply scores with ad hoc SQL instead of the dry-run + confirm fallback

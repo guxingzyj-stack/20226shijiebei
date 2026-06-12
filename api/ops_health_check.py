@@ -92,10 +92,24 @@ def generate_report(
               AND m.result_away IS NULL
             """,
         )
+        overdue_closed_rows = _rows(
+            conn,
+            """
+            SELECT match_id
+            FROM matches
+            WHERE status IN ('closed', 'scheduled')
+              AND kickoff_at <= now() - interval '3 hours'
+              AND result_home IS NULL
+              AND result_away IS NULL
+            ORDER BY kickoff_at
+            LIMIT 20
+            """,
+        )
 
     latest_results_age = _age_minutes(latest_results.get("started_at") if latest_results else None)
     latest_settlement_age = _age_minutes(latest_settlement.get("started_at") if latest_settlement else None)
     latest_odds_age = _age_minutes(latest_odds)
+    result_overdue_match_ids = [str(row["match_id"]) for row in overdue_closed_rows]
     status, blockers = evaluate_status(
         scheduler_stale=scheduler.get("scheduler_stale"),
         latest_results_sync_age_minutes=latest_results_age,
@@ -108,6 +122,7 @@ def generate_report(
         open_pending_bets=open_pending_bets,
         evaluable_finished_matches=evaluable_finished_matches,
         closed_prediction_pending_count=closed_pending_count,
+        result_overdue_closed_count=len(result_overdue_match_ids),
         stale_threshold_minutes=ops_threshold,
         odds_stale_threshold_minutes=odds_threshold,
     )
@@ -120,6 +135,7 @@ def generate_report(
         "non_finished_with_result_count": non_finished_with_result_count,
         "open_pending_bets": open_pending_bets,
         "evaluable_finished_matches": evaluable_finished_matches,
+        "result_overdue_closed_matches": result_overdue_match_ids,
         "overall_status": status,
         "blockers": blockers,
     }
@@ -153,6 +169,8 @@ def generate_report(
         },
         "closed_matches": {
             "closed_prediction_pending_count": closed_pending_count,
+            "result_overdue_closed_matches": result_overdue_match_ids,
+            "result_overdue_closed_count": len(result_overdue_match_ids),
         },
         "overall": {
             "status": status,
@@ -175,6 +193,7 @@ def evaluate_status(
     open_pending_bets: int,
     evaluable_finished_matches: int,
     closed_prediction_pending_count: int = 0,
+    result_overdue_closed_count: int = 0,
     stale_threshold_minutes: int = DEFAULT_OPS_STALE_THRESHOLD_MINUTES,
     odds_stale_threshold_minutes: int = DEFAULT_ODDS_STALE_THRESHOLD_MINUTES,
 ) -> tuple[str, list[str]]:
@@ -200,6 +219,8 @@ def evaluate_status(
         warn.append("insufficient_finished_matches")
     if closed_prediction_pending_count > 0:
         warn.append("closed_prediction_pending")
+    if result_overdue_closed_count > 0:
+        warn.append("result_overdue_closed_matches")
     if fail:
         return "FAIL", fail + warn
     if warn:
@@ -230,7 +251,11 @@ def print_report(report: dict[str, Any]) -> None:
     for key in ("evaluable_finished_matches", "p1c_ready"):
         print(f"- {key}: {report['p1c_prime'].get(key)}")
     print("")
-    print("6. Overall")
+    print("6. Closed / scheduled result overdue")
+    for key in ("result_overdue_closed_count", "result_overdue_closed_matches"):
+        print(f"- {key}: {report['closed_matches'].get(key)}")
+    print("")
+    print("7. Overall")
     print(f"- status: {report['overall'].get('status')}")
     print(f"- blockers: {report['overall'].get('blockers')}")
 
@@ -286,7 +311,11 @@ def _error_report(error: str) -> dict[str, Any]:
         "result_consistency": {"finished_null_count": None, "non_finished_with_result_count": None, "result_consistency_pass": False},
         "settlement": {"open_pending_bets": None, "latest_settlement_runner_status": None, "latest_settlement_runner_error": error},
         "p1c_prime": {"evaluable_finished_matches": None, "p1c_ready": False},
-        "closed_matches": {"closed_prediction_pending_count": None},
+        "closed_matches": {
+            "closed_prediction_pending_count": None,
+            "result_overdue_closed_count": None,
+            "result_overdue_closed_matches": [],
+        },
         "overall": {"status": "FAIL", "blockers": ["ops_health_check_error"]},
         "summary": {"overall_status": "FAIL", "blockers": ["ops_health_check_error"]},
     }
@@ -311,6 +340,12 @@ def _latest_ops_log(conn, job_name: str) -> dict[str, Any] | None:
 def _scalar(conn, sql: str) -> Any:
     row = conn.execute(sql).fetchone()
     return row[0] if row else None
+
+
+def _rows(conn, sql: str) -> list[dict[str, Any]]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(sql)
+        return [dict(row) for row in cur.fetchall()]
 
 
 def _age_minutes(value: datetime | None) -> int | None:

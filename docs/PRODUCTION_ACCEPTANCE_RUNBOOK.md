@@ -280,3 +280,43 @@ docs/BETTING_OPEN_GATE_REPORT.md
 
 Do not treat a no-op settlement runner execution as proof that real open-bet
 settlement works.
+
+## 8. Official Result Fallback
+
+`results_sync` remains the primary result path. If it cannot populate a verified
+finished result, use the controlled fallback instead of manual SQL.
+
+Prepare a reviewed CSV:
+
+```text
+data/results/official_results_verified.csv
+```
+
+Run dry-run first:
+
+```bash
+PYTHONPATH=. python -m api.official_result_fallback --csv data/results/official_results_verified.csv --dry-run
+```
+
+Only after the target list is reviewed:
+
+```bash
+PYTHONPATH=. python -m api.official_result_fallback --csv data/results/official_results_verified.csv --confirm APPLY_OFFICIAL_RESULTS
+```
+
+Requirements:
+
+```text
+source_url required
+verified_by required
+dry-run required before confirm
+ops_log job_name=official_result_fallback
+existing results are not overwritten
+no manual SQL score update
+```
+
+See:
+
+```text
+docs/OFFICIAL_RESULT_FALLBACK_RUNBOOK.md
+```

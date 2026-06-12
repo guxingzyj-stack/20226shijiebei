@@ -97,6 +97,25 @@ def test_ops_health_check_warns_without_open_bets_or_enough_samples():
     assert "insufficient_finished_matches" in blockers
 
 
+def test_ops_health_check_warns_when_closed_result_is_overdue():
+    status, blockers = ops_health_check.evaluate_status(
+        scheduler_stale=False,
+        latest_results_sync_age_minutes=10,
+        latest_settlement_runner_age_minutes=10,
+        latest_odds_snapshot_age_minutes=8,
+        finished_null_count=0,
+        non_finished_with_result_count=0,
+        latest_settlement_runner_status="ok",
+        latest_settlement_runner_error=None,
+        open_pending_bets=1,
+        evaluable_finished_matches=30,
+        result_overdue_closed_count=2,
+    )
+
+    assert status == "WARN"
+    assert "result_overdue_closed_matches" in blockers
+
+
 def test_ops_health_check_records_ops_log(monkeypatch):
     recorded = []
     report = {
