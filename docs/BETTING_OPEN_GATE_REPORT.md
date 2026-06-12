@@ -100,6 +100,17 @@ reason:
 - real match settlement has not yet completed through production data
 - when automatic result sync misses an official result, use the controlled
   official_result_fallback flow before any settlement gate decision
+
+045 production internal probe status:
+
+```text
+settlement_e2e_test_env: PASS
+production_internal_bet_settlement: NOT_RUN
+settlement_idempotency: NOT_RUN
+leaderboard_safety: NOT_RUN
+recommend_open_betting: no
+reason: still_need_045_probe_and_two_matchdays_auto_result_sync
+```
 ```
 
 ## 5. Prohibited Actions

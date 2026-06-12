@@ -320,3 +320,39 @@ See:
 ```text
 docs/OFFICIAL_RESULT_FALLBACK_RUNBOOK.md
 ```
+
+## 9. Production Internal Settlement Probe
+
+After official results are present and result consistency is clean, use the
+dedicated settlement E2E probe. Do not create ad hoc production bets by hand.
+
+Dry-run:
+
+```bash
+PYTHONPATH=. python -m api.settlement_e2e_probe --dry-run
+```
+
+Confirm only after dry-run has no blockers:
+
+```bash
+PYTHONPATH=. python -m api.settlement_e2e_probe --confirm RUN_SETTLEMENT_E2E_PROBE
+```
+
+The probe:
+
+```text
+requires BETTING_ENABLED=false
+creates username __internal_settlement_probe__
+creates one stake=1 HAD home-win probe bet by default
+uses latest server-side HAD odds
+runs settlement_runner twice
+checks balance delta and idempotency
+cleans up probe bet and probe user
+writes ops_log job_name=settlement_e2e_probe
+```
+
+Do not proceed if non-probe open/pending bets exist.
+
+Even after a successful probe, keep betting closed until at least two
+consecutive match days have automatic result sync working and the user
+explicitly confirms opening simulated betting.
