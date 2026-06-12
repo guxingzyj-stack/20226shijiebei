@@ -1,5 +1,5 @@
 import { ShieldCheck } from "lucide-react";
-import { glossaryItems } from "../recaps/glossary";
+import { evValueGuide, glossaryItems } from "../recaps/glossary";
 
 const categories = ["模型", "赔率", "EV", "结算", "健康", "安全"] as const;
 
@@ -27,6 +27,26 @@ export function HelpPage() {
         {categories.map((category) => (
           <section key={category} className="rounded-lg border border-white/10 bg-white/[0.055] p-4">
             <h2 className="text-lg font-semibold text-gold">{category}</h2>
+            {category === "EV" ? (
+              <div className="mt-3 rounded-lg border border-gold/25 bg-gold/10 p-3">
+                <div className="font-semibold text-paper">{evValueGuide.title}</div>
+                <p className="mt-2 text-sm leading-6 text-paper/72">{evValueGuide.intro}</p>
+                <div className="mt-3 grid gap-2 text-sm text-paper/68">
+                  <p>EV &gt; 0：模型觉得赔率可能被低估，有研究价值。</p>
+                  <p>EV = 0：模型和市场判断差不多，没明显优势。</p>
+                  <p>EV &lt; 0：模型觉得不划算，通常不用重点看。</p>
+                </div>
+                <div className="mt-3 rounded-md bg-pitch/55 p-3">
+                  <div className="text-xs font-semibold text-gold">简单参考</div>
+                  <ul className="mt-2 space-y-1 text-sm text-paper/68">
+                    {evValueGuide.bands.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-paper/72">{evValueGuide.oneLine}</p>
+              </div>
+            ) : null}
             <div className="mt-3 space-y-3">
               {glossaryItems
                 .filter((item) => item.category === category)

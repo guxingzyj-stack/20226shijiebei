@@ -58,17 +58,29 @@ export const glossary = {
   },
   ev: {
     term: "EV",
-    short: "模型概率与市场赔率之间的差异形成的理论期望值，只用于研究。",
+    short: "模型认为赔率是否被低估的研究分数。EV 越高，分歧越大；但 EV 不是中奖概率，也不是投注建议。",
+    category: "EV",
+  },
+  evValue: {
+    term: "EV 值",
+    short: "可以理解为“这个选项值不值得研究”的分数。",
+    detail:
+      "EV > 0：模型觉得赔率可能被低估，有研究价值。EV = 0：模型和市场判断差不多。EV < 0：模型觉得不划算，通常不用重点看。",
     category: "EV",
   },
   evSignal: {
     term: "EV 信号",
-    short: "系统发现的研究信号，不等于投注建议。",
+    short: "系统发现的研究信号，不是中奖概率，也不是投注建议。",
     category: "EV",
   },
   highEv: {
     term: "高 EV",
-    short: "差异较大的研究信号，风险也可能更高。",
+    short: "模型和市场分歧较大的研究信号。特别高的 EV 通常是冷门比分，只适合复盘研究。",
+    category: "EV",
+  },
+  researchSignal: {
+    term: "研究信号",
+    short: "只用于观察模型和市场的分歧，不代表应该下注。",
     category: "EV",
   },
   researchOnly: {
@@ -156,3 +168,19 @@ export const glossary = {
 export type GlossaryKey = keyof typeof glossary;
 
 export const glossaryItems = Object.values(glossary);
+
+export const evValueGuide = {
+  title: "EV 值怎么看？",
+  intro: "EV 值可以理解为“这个选项值不值得研究”的分数。",
+  short:
+    "EV 是模型和市场赔率之间的差异分数。EV 大于 0 代表有研究价值，但不代表一定会中，也不是投注建议。",
+  bands: [
+    "0 以下：不看",
+    "0～0.05：意义不大",
+    "0.05～0.20：可以关注",
+    "0.20 以上：模型和市场分歧很大，要谨慎",
+    "特别高的 EV：通常是冷门比分，只适合复盘研究",
+  ],
+  oneLine: "EV 越大，说明模型越觉得“赔率可能被低估”；但 EV 不是中奖概率，也不是投注建议。",
+  scoreRisk: "提示：比分类 EV 往往数值很高，但波动也最大，建议只作为复盘研究。",
+};

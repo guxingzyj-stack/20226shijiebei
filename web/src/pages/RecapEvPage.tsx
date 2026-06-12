@@ -5,7 +5,7 @@ import { apiGet } from "../api/client";
 import type { MatchRecap, MatchRecapResponse, RecapRecentResponse } from "../api/types";
 import { InfoTip } from "../components/InfoTip";
 import { MetricHelp } from "../components/MetricHelp";
-import type { GlossaryKey } from "../recaps/glossary";
+import { evValueGuide, type GlossaryKey } from "../recaps/glossary";
 import { formatDecimal, formatPercent, playTypeLabel, selectionLabel } from "../utils/format";
 import { type AggregatedEvSignal, aggregateEvSignals, aggregateRecaps, evResultText } from "../recaps/recapUtils";
 
@@ -99,6 +99,19 @@ export function RecapEvPage() {
               </p>
               <MetricHelp glossaryKey="sampleSmall" />
             </Panel>
+          </section>
+
+          <section className="rounded-lg border border-gold/25 bg-gold/10 p-4">
+            <h2 className="text-lg font-semibold text-gold">{evValueGuide.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-paper/72">{evValueGuide.short}</p>
+            <div className="mt-3 grid gap-2 text-sm text-paper/68 md:grid-cols-2 xl:grid-cols-5">
+              {evValueGuide.bands.map((line) => (
+                <div key={line} className="rounded-md border border-white/10 bg-pitch/55 px-3 py-2">
+                  {line}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs leading-5 text-paper/60">{evValueGuide.oneLine}</p>
           </section>
 
           <section className="rounded-lg border border-white/10 bg-white/[0.055] p-5">

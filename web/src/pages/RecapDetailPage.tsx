@@ -5,7 +5,7 @@ import { apiGet } from "../api/client";
 import type { MatchRecap, MatchRecapResponse } from "../api/types";
 import { InfoTip } from "../components/InfoTip";
 import { MetricHelp } from "../components/MetricHelp";
-import type { GlossaryKey } from "../recaps/glossary";
+import { evValueGuide, type GlossaryKey } from "../recaps/glossary";
 import { formatDateTime, formatDecimal, formatPercent, playTypeLabel, selectionLabel } from "../utils/format";
 import { aggregateEvSignals, evResultText } from "../recaps/recapUtils";
 
@@ -136,6 +136,9 @@ export function RecapDetailPage() {
           <p className="mt-4 rounded-lg border border-gold/25 bg-gold/10 p-3 text-xs leading-5 text-paper/68">
             EV 区域仅用于赛后研究复盘，不是投注建议。
           </p>
+          <div className="mt-3">
+            <MetricHelp title={evValueGuide.title}>{evValueGuide.scoreRisk}</MetricHelp>
+          </div>
         </Panel>
       </section>
 
@@ -187,6 +190,11 @@ export function RecapDetailPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="mt-3">
+                <MetricHelp title={evValueGuide.title}>
+                  EV 越高，说明模型和市场分歧越大；但 EV 不是中奖概率，也不是投注建议。{evValueGuide.scoreRisk}
+                </MetricHelp>
               </div>
             </div>
           ) : (

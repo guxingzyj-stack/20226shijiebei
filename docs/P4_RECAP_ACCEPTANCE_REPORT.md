@@ -141,6 +141,17 @@ leaderboard explains ROI as virtual-fund performance only
 EV text continues to state research signal, not betting advice
 ```
 
+## 7.3 EV Value Explanation
+
+EV copy was simplified for regular users:
+
+```text
+/help includes "EV 值怎么看？" with EV > 0 / = 0 / < 0 examples
+/recaps/ev shows an EV band guide above the signal list
+/recaps/{match_id} EV sections explain that EV is not win probability and not betting advice
+scoreline EV is labelled as high-volatility review-only signal
+```
+
 ## 8. Product Boundary
 
 P4 is complete enough for production display, but it remains a read-only review
