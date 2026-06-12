@@ -3,6 +3,8 @@ import { Trophy } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { LeaderboardEntry } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { InfoTip } from "../components/InfoTip";
+import { MetricHelp } from "../components/MetricHelp";
 import { formatMoney } from "../utils/format";
 
 export function LeaderboardPage() {
@@ -18,8 +20,12 @@ export function LeaderboardPage() {
     <section className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">虚拟资金排行榜</h1>
-        <p className="mt-2 text-sm text-paper/60">仅展示模拟游戏余额，不代表真实收益。</p>
+        <p className="mt-2 text-sm text-paper/60">
+          仅展示模拟游戏余额和 ROI，不代表真实收益。
+          <InfoTip glossaryKey="roi" />
+        </p>
       </div>
+      <MetricHelp glossaryKey="roi" />
       {error ? <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm">{error}</div> : null}
       <div className="rounded-lg border border-white/10 bg-white/[0.06] p-3">
         {rows.map((row, index) => (
@@ -29,7 +35,10 @@ export function LeaderboardPage() {
             </div>
             <div>
               <div className="font-semibold">{row.username}</div>
-              <div className="text-xs text-paper/50">{row.settled_bets ?? 0} settled bets</div>
+              <div className="text-xs text-paper/50">
+                {row.settled_bets ?? 0} settled bets
+                {row.roi !== undefined && row.roi !== null ? ` · ROI ${Number(row.roi).toFixed(2)}%` : ""}
+              </div>
             </div>
             <div className="text-right font-semibold text-gold">{formatMoney(row.balance)}</div>
           </div>

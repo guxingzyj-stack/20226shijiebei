@@ -3,6 +3,9 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, BarChart3, ShieldCheck } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { MatchRecap, MatchRecapResponse, RecapRecentResponse } from "../api/types";
+import { InfoTip } from "../components/InfoTip";
+import { MetricHelp } from "../components/MetricHelp";
+import type { GlossaryKey } from "../recaps/glossary";
 import { formatDecimal, formatPercent, playTypeLabel, selectionLabel } from "../utils/format";
 import { type AggregatedEvSignal, aggregateEvSignals, aggregateRecaps, evResultText } from "../recaps/recapUtils";
 
@@ -75,12 +78,12 @@ export function RecapEvPage() {
       {!loading && !error ? (
         <>
           <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Metric label="EV 信号总数" value={aggregate.totalEvSignals} />
-            <Metric label="高 EV 信号" value={aggregate.highEvCount} />
-            <Metric label="研究信号" value={aggregate.researchOnlyCount} />
-            <Metric label="候选信号" value={aggregate.suggestionEligibleCount} />
+            <Metric label="EV 信号总数" value={aggregate.totalEvSignals} helpKey="evSignal" />
+            <Metric label="高 EV 信号" value={aggregate.highEvCount} helpKey="highEv" />
+            <Metric label="研究信号" value={aggregate.researchOnlyCount} helpKey="researchOnly" />
+            <Metric label="候选信号" value={aggregate.suggestionEligibleCount} helpKey="suggestionEligible" />
             <Metric label="命中" value={aggregate.evHitCount} />
-            <Metric label="未中" value={aggregate.evMissCount} />
+            <Metric label="复盘未命中" value={aggregate.evMissCount} helpKey="evMiss" />
           </section>
 
           <section className="grid gap-4 lg:grid-cols-2">
@@ -88,11 +91,13 @@ export function RecapEvPage() {
               <p className="text-sm leading-6 text-paper/65">
                 research_only 只显示为“研究信号”。页面不提供真实购彩入口，也不根据 EV 生成投注建议。
               </p>
+              <MetricHelp glossaryKey="evSignal" />
             </Panel>
             <Panel title="样本状态" icon={AlertTriangle}>
               <p className="text-sm leading-6 text-paper/65">
                 当前聚合 {recaps.length} 场已完赛复盘。样本较少时，EV 命中/未中只用于观察。
               </p>
+              <MetricHelp glossaryKey="sampleSmall" />
             </Panel>
           </section>
 
@@ -123,7 +128,10 @@ export function RecapEvPage() {
                       <th>选项</th>
                       <th>模型概率</th>
                       <th>赔率</th>
-                      <th>EV</th>
+                      <th>
+                        EV
+                        <InfoTip glossaryKey="ev" />
+                      </th>
                       <th>出现次数</th>
                       <th>标记</th>
                       <th>结果</th>
@@ -173,10 +181,13 @@ function Panel({ title, icon: Icon, children }: { title: string; icon: typeof Ba
   );
 }
 
-function Metric({ label, value }: { label: string; value: ReactNode }) {
+function Metric({ label, value, helpKey }: { label: string; value: ReactNode; helpKey?: GlossaryKey }) {
   return (
     <div className="rounded-lg border border-white/10 bg-pitch/62 px-3 py-2">
-      <div className="text-xs text-paper/45">{label}</div>
+      <div className="text-xs text-paper/45">
+        {label}
+        <InfoTip glossaryKey={helpKey} label={label} />
+      </div>
       <div className="mt-1 text-sm font-semibold text-paper">{value}</div>
     </div>
   );

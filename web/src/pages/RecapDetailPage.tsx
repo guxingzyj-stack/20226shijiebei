@@ -3,6 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, CircleSlash, ShieldCheck } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { MatchRecap, MatchRecapResponse } from "../api/types";
+import { InfoTip } from "../components/InfoTip";
+import { MetricHelp } from "../components/MetricHelp";
+import type { GlossaryKey } from "../recaps/glossary";
 import { formatDateTime, formatDecimal, formatPercent, playTypeLabel, selectionLabel } from "../utils/format";
 import { aggregateEvSignals, evResultText } from "../recaps/recapUtils";
 
@@ -95,26 +98,26 @@ export function RecapDetailPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
-        <Panel title="市场赔率倾向" icon={BarChart3}>
-          <OddsRow title="HAD 开盘赔率" odds={recap.market.had_open} />
-          <OddsRow title="HAD 收盘赔率" odds={recap.market.had_close} />
+        <Panel title="市场赔率倾向" icon={BarChart3} helpKey="had">
+          <OddsRow title="HAD 开盘赔率" odds={recap.market.had_open} helpKey="openingOdds" />
+          <OddsRow title="HAD 收盘赔率" odds={recap.market.had_close} helpKey="closingOdds" />
           <div className="mt-4 grid grid-cols-3 gap-2">
             {["home", "draw", "away"].map((key) => (
-              <Metric key={key} label={`${outcomeLabel[key]}隐含概率`} value={formatPercent(recap.market.close_implied_probabilities[key])} />
+              <Metric key={key} label={`${outcomeLabel[key]}隐含概率`} value={formatPercent(recap.market.close_implied_probabilities[key])} helpKey="impliedProbability" />
             ))}
           </div>
           <div className="mt-4 grid gap-2 md:grid-cols-2">
-            <Metric label="市场热门方向" value={outcomeLabel[recap.market.favorite || ""] || "暂无"} />
+            <Metric label="市场热门方向" value={outcomeLabel[recap.market.favorite || ""] || "暂无"} helpKey="marketFavorite" />
             <Metric label="市场判断结果" value={recap.market.favorite ? (recap.market.favorite === recap.result.winner ? "命中" : "未命中") : "不可判断"} />
           </div>
         </Panel>
 
-        <Panel title="模型预测" icon={ShieldCheck}>
+        <Panel title="模型预测" icon={ShieldCheck} helpKey="modelPrediction">
           <div className="grid gap-2">
-            <Metric label="model_version" value={recap.model.model_version ?? "无"} />
+            <Metric label="model_version" value={recap.model.model_version ?? "无"} helpKey="modelVersion" />
             <Metric label="预测方向" value={outcomeLabel[recap.model.predicted_outcome || ""] || "无预测"} />
             <Metric label="置信度" value={formatPercent(recap.model.confidence)} />
-            <Metric label="是否命中" value={predictionText(recap.model.prediction_correct)} />
+            <Metric label="是否命中" value={predictionText(recap.model.prediction_correct)} helpKey="modelHit" />
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2">
             {["home", "draw", "away"].map((key) => (
@@ -123,12 +126,12 @@ export function RecapDetailPage() {
           </div>
         </Panel>
 
-        <Panel title="EV 信号复盘" icon={AlertTriangle}>
+        <Panel title="EV 信号复盘" icon={AlertTriangle} helpKey="evSignal">
           <div className="grid grid-cols-2 gap-2">
-            <Metric label="信号总数" value={recap.ev.total_ev_signals} />
-            <Metric label="研究信号" value={recap.ev.research_only_count} />
-            <Metric label="候选信号" value={recap.ev.suggestion_eligible_count} />
-            <Metric label="命中 / 未中" value={`${recap.ev.hit_count} / ${recap.ev.miss_count}`} />
+            <Metric label="信号总数" value={recap.ev.total_ev_signals} helpKey="evSignal" />
+            <Metric label="研究信号" value={recap.ev.research_only_count} helpKey="researchOnly" />
+            <Metric label="候选信号" value={recap.ev.suggestion_eligible_count} helpKey="suggestionEligible" />
+            <Metric label="命中 / 复盘未命中" value={`${recap.ev.hit_count} / ${recap.ev.miss_count}`} helpKey="evMiss" />
           </div>
           <p className="mt-4 rounded-lg border border-gold/25 bg-gold/10 p-3 text-xs leading-5 text-paper/68">
             EV 区域仅用于赛后研究复盘，不是投注建议。
@@ -137,7 +140,7 @@ export function RecapDetailPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)]">
-        <Panel title="EV 明细" icon={BarChart3}>
+        <Panel title="EV 明细" icon={BarChart3} helpKey="ev">
           {evRows.length ? (
             <div>
               <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -160,7 +163,10 @@ export function RecapDetailPage() {
                       <th>选项</th>
                       <th>模型概率</th>
                       <th>赔率</th>
-                      <th>EV</th>
+                      <th>
+                        EV
+                        <InfoTip glossaryKey="ev" />
+                      </th>
                       <th>出现次数</th>
                       <th>结果</th>
                       <th>标记</th>
@@ -189,14 +195,14 @@ export function RecapDetailPage() {
         </Panel>
 
         <div className="space-y-4">
-          <Panel title="结算状态" icon={ShieldCheck}>
+          <Panel title="结算状态" icon={ShieldCheck} helpKey="noPublicBets">
             <div className="grid grid-cols-2 gap-2">
-              <Metric label="settled_bets" value={recap.settlement.settled_bets} />
-              <Metric label="won_bets" value={recap.settlement.won_bets} />
-              <Metric label="lost_bets" value={recap.settlement.lost_bets} />
-              <Metric label="void_bets" value={recap.settlement.void_bets} />
-              <Metric label="open_bets" value={recap.settlement.open_bets} />
-              <Metric label="状态" value={recap.settlement.settlement_status === "no_public_bets" ? "无公开注单" : recap.settlement.settlement_status} />
+              <Metric label="settled_bets" value={recap.settlement.settled_bets} helpKey="settledBets" />
+              <Metric label="won_bets" value={recap.settlement.won_bets} helpKey="wonBets" />
+              <Metric label="lost_bets" value={recap.settlement.lost_bets} helpKey="lostBets" />
+              <Metric label="void_bets" value={recap.settlement.void_bets} helpKey="voidBets" />
+              <Metric label="open_bets" value={recap.settlement.open_bets} helpKey="openBets" />
+              <Metric label="状态" value={recap.settlement.settlement_status === "no_public_bets" ? "无公开注单" : recap.settlement.settlement_status} helpKey="noPublicBets" />
             </div>
           </Panel>
 
@@ -221,35 +227,42 @@ export function RecapDetailPage() {
   );
 }
 
-function Panel({ title, icon: Icon, children }: { title: string; icon: typeof BarChart3; children: ReactNode }) {
+function Panel({ title, icon: Icon, children, helpKey }: { title: string; icon: typeof BarChart3; children: ReactNode; helpKey?: GlossaryKey }) {
   return (
     <section className="rounded-lg border border-white/10 bg-white/[0.055] p-5">
       <div className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <Icon size={18} className="text-gold" />
         {title}
+        <InfoTip glossaryKey={helpKey} label={title} />
       </div>
       {children}
     </section>
   );
 }
 
-function OddsRow({ title, odds }: { title: string; odds: Record<string, number> }) {
+function OddsRow({ title, odds, helpKey }: { title: string; odds: Record<string, number>; helpKey?: GlossaryKey }) {
   return (
     <div className="mt-3">
-      <div className="text-xs text-paper/45">{title}</div>
+      <div className="text-xs text-paper/45">
+        {title}
+        <InfoTip glossaryKey={helpKey} label={title} />
+      </div>
       <div className="mt-2 grid grid-cols-3 gap-2">
         {["3", "1", "0"].map((key) => (
-          <Metric key={key} label={selectionLabel(key)} value={odds[key] ? formatDecimal(odds[key]) : "无"} />
+          <Metric key={key} label={selectionLabel(key)} value={odds[key] ? formatDecimal(odds[key]) : "无"} helpKey="odds" />
         ))}
       </div>
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: ReactNode }) {
+function Metric({ label, value, helpKey }: { label: string; value: ReactNode; helpKey?: GlossaryKey }) {
   return (
     <div className="rounded-lg border border-white/10 bg-pitch/62 px-3 py-2">
-      <div className="text-xs text-paper/45">{label}</div>
+      <div className="text-xs text-paper/45">
+        {label}
+        <InfoTip glossaryKey={helpKey} label={label} />
+      </div>
       <div className="mt-1 text-sm font-semibold text-paper">{value}</div>
     </div>
   );
@@ -274,6 +287,7 @@ function Quality({ recap }: { recap: MatchRecap }) {
       <div className="pt-2 text-xs leading-5 text-paper/55">
         warnings: {recap.data_quality.warnings.length ? recap.data_quality.warnings.join(", ") : "无"}
       </div>
+      <MetricHelp title="数据质量说明">yes 表示该复盘区块有足够数据。warnings 是数据缺口提示，不代表系统故障。</MetricHelp>
     </div>
   );
 }

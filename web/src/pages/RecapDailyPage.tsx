@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { ClipboardCopy, FileText, ShieldCheck } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { MatchRecap, MatchRecapResponse, RecapRecentResponse } from "../api/types";
+import { InfoTip } from "../components/InfoTip";
+import { MetricHelp } from "../components/MetricHelp";
 import { buildDailyReportText, groupRecapsByDay, outcomeText, predictionText } from "../recaps/recapUtils";
 
 export function RecapDailyPage() {
@@ -53,6 +55,10 @@ export function RecapDailyPage() {
         </p>
       </section>
 
+      <MetricHelp title="这是什么？">
+        复盘日报把同一比赛日的赛果、模型命中、市场热门、EV 研究信号和结算状态整理成只读摘要，方便赛后回看。
+      </MetricHelp>
+
       {loading ? <div className="rounded-lg border border-white/10 p-5 text-paper/65">复盘日报加载中</div> : null}
       {error ? <div className="rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm">{error}</div> : null}
 
@@ -101,10 +107,23 @@ export function RecapDailyPage() {
                         {recap.home_team} <span className="text-gold">{recap.result.scoreline}</span> {recap.away_team}
                       </div>
                       <div className="mt-3 grid gap-2 text-sm text-paper/65">
-                        <span>模型：{predictionText(recap.model.prediction_correct)}，方向 {outcomeText(recap.model.predicted_outcome)}</span>
-                        <span>市场热门：{outcomeText(recap.market.favorite)}</span>
-                        <span>EV：{recap.ev.total_ev_signals} 条研究/观察信号</span>
-                        <span>结算：{recap.settlement.settlement_status === "no_public_bets" ? "暂无公开注单结算" : recap.settlement.settlement_status}</span>
+                        <span>
+                          模型
+                          <InfoTip glossaryKey="modelHit" />：{predictionText(recap.model.prediction_correct)}，方向 {outcomeText(recap.model.predicted_outcome)}
+                        </span>
+                        <span>
+                          市场热门
+                          <InfoTip glossaryKey="marketFavorite" />：{outcomeText(recap.market.favorite)}
+                        </span>
+                        <span>
+                          EV
+                          <InfoTip glossaryKey="evSignal" />：{recap.ev.total_ev_signals} 条研究/观察信号
+                        </span>
+                        <span>
+                          结算
+                          <InfoTip glossaryKey="noPublicBets" />：
+                          {recap.settlement.settlement_status === "no_public_bets" ? "暂无公开注单结算" : recap.settlement.settlement_status}
+                        </span>
                       </div>
                     </Link>
                   ))}

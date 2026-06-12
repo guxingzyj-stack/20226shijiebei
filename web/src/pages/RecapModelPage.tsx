@@ -3,6 +3,9 @@ import { Link } from "react-router-dom";
 import { BarChart3, GitCompareArrows, Sigma } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { MatchRecap, MatchRecapResponse, RecapRecentResponse, RecapSummary } from "../api/types";
+import { InfoTip } from "../components/InfoTip";
+import { MetricHelp } from "../components/MetricHelp";
+import type { GlossaryKey } from "../recaps/glossary";
 import { formatDateTime, formatPercent } from "../utils/format";
 import { aggregateRecaps, outcomeText, predictionText, predictionTone } from "../recaps/recapUtils";
 
@@ -64,10 +67,10 @@ export function RecapModelPage() {
           <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Metric label="已完赛" value={summary?.finished_matches ?? 0} />
             <Metric label="可复盘" value={summary?.recap_available_matches ?? 0} />
-            <Metric label="模型命中" value={summary?.model_correct_count ?? 0} />
-            <Metric label="模型未中" value={summary?.model_wrong_count ?? 0} />
+            <Metric label="模型命中" value={summary?.model_correct_count ?? 0} helpKey="modelHit" />
+            <Metric label="模型未中" value={summary?.model_wrong_count ?? 0} helpText="模型赛前最看好的方向，与最终赛果不一致。" />
             <Metric label="缺预测" value={summary?.model_missing_count ?? 0} />
-            <Metric label="命中率" value={hitRate === null ? "样本不足" : formatPercent(hitRate)} />
+            <Metric label="命中率" value={hitRate === null ? "样本不足" : formatPercent(hitRate)} helpKey="hitRate" />
           </section>
 
           <section className="grid gap-3 lg:grid-cols-3">
@@ -80,6 +83,7 @@ export function RecapModelPage() {
               <p className="text-sm leading-6 text-paper/65">
                 当前可复盘样本 {recaps.length} 场。样本不足时继续观察，不把该统计用于生产权重调整。
               </p>
+              <MetricHelp glossaryKey="sampleSmall" />
             </Panel>
             <Panel title="安全边界" icon={BarChart3}>
               <p className="text-sm leading-6 text-paper/65">P4 只读展示，不修改比分、注单、余额，也不改变 P1/P3 权重。</p>
@@ -147,10 +151,13 @@ function Panel({ title, icon: Icon, children }: { title: string; icon: typeof Ba
   );
 }
 
-function Metric({ label, value }: { label: string; value: ReactNode }) {
+function Metric({ label, value, helpKey, helpText }: { label: string; value: ReactNode; helpKey?: GlossaryKey; helpText?: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-pitch/62 px-3 py-2">
-      <div className="text-xs text-paper/45">{label}</div>
+      <div className="text-xs text-paper/45">
+        {label}
+        <InfoTip glossaryKey={helpKey} text={helpText} label={label} />
+      </div>
       <div className="mt-1 text-sm font-semibold text-paper">{value}</div>
     </div>
   );

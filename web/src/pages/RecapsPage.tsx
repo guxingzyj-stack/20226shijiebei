@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { ArrowRight, BarChart3, CheckCircle2, Clock3, FileText, Radar, ShieldCheck } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { MatchRecap, MatchRecapResponse, RecapRecentResponse, RecapSummary } from "../api/types";
+import { InfoTip } from "../components/InfoTip";
+import { MetricHelp } from "../components/MetricHelp";
 import { formatDateTime } from "../utils/format";
 import { outcomeText, predictionText, predictionTone, settlementText } from "../recaps/recapUtils";
 
@@ -57,13 +59,17 @@ export function RecapsPage() {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-            <Stat label="已完赛" value={summary?.finished_matches ?? 0} />
-            <Stat label="可复盘" value={summary?.recap_available_matches ?? 0} />
-            <Stat label="模型命中" value={summary?.model_correct_count ?? 0} />
-            <Stat label="EV 信号" value={summary?.ev_signal_count ?? 0} />
+            <Stat label="已完赛" value={summary?.finished_matches ?? 0} helpText="已有正式赛果的比赛数。" />
+            <Stat label="可复盘" value={summary?.recap_available_matches ?? 0} helpText="赛果、赔率或预测数据足够生成复盘的比赛。" />
+            <Stat label="模型命中" value={summary?.model_correct_count ?? 0} helpKey="modelHit" />
+            <Stat label="EV 信号" value={summary?.ev_signal_count ?? 0} helpKey="evSignal" />
           </div>
         </div>
       </section>
+
+      <MetricHelp title="这是什么？">
+        复盘报告只读展示已完赛比赛的赛果、市场方向、模型判断和 EV 研究信号。样本少时只能观察趋势，不适合下长期结论。
+      </MetricHelp>
 
       <section className="grid gap-3 md:grid-cols-3">
         <QuickLink to="/recaps/model" icon={Radar} title="模型表现" text="查看模型命中、市场分歧和样本状态" />
@@ -135,7 +141,7 @@ function QuickLink({ to, icon: Icon, title, text }: { to: string; icon: typeof B
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value, helpKey, helpText }: { label: string; value: number; helpKey?: Parameters<typeof InfoTip>[0]["glossaryKey"]; helpText?: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-pitch/65 px-3 py-2">
       <div className="flex items-center gap-1 text-xs text-paper/50">
@@ -144,6 +150,7 @@ function Stat({ label, value }: { label: string; value: number }) {
         {label === "模型命中" ? <CheckCircle2 size={13} /> : null}
         {label === "EV 信号" ? <BarChart3 size={13} /> : null}
         {label}
+        <InfoTip glossaryKey={helpKey} text={helpText} label={label} />
       </div>
       <div className="mt-1 text-lg font-semibold text-paper">{value}</div>
     </div>

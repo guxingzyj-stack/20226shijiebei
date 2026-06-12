@@ -3,6 +3,7 @@ import { Layout } from "./components/Layout";
 import { AuthPage } from "./pages/AuthPage";
 import { BetPage } from "./pages/BetPage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
+import { HelpPage } from "./pages/HelpPage";
 import { MatchDetailPage } from "./pages/MatchDetailPage";
 import { MatchesPage } from "./pages/MatchesPage";
 import { MyBetsPage } from "./pages/MyBetsPage";
@@ -22,6 +23,7 @@ export function App() {
         <Route path="/bet" element={<BetPage />} />
         <Route path="/bets" element={<MyBetsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/help" element={<HelpPage />} />
         <Route path="/recap" element={<RecapPage />} />
         <Route path="/recaps" element={<RecapsPage />} />
         <Route path="/recaps/model" element={<RecapModelPage />} />

@@ -7,6 +7,8 @@ import { useAuth } from "../auth/AuthContext";
 import { useBetSlip } from "../bet/BetSlipContext";
 import { BetSlipCompact } from "../components/BetSlip";
 import { EvBadge } from "../components/EvBadge";
+import { InfoTip } from "../components/InfoTip";
+import { MetricHelp } from "../components/MetricHelp";
 import { OddsHistoryMini } from "../components/OddsHistoryMini";
 import { ProbabilityBar } from "../components/ProbabilityBar";
 import { ScoreMatrix } from "../components/ScoreMatrix";
@@ -80,7 +82,10 @@ export function MatchDetailPage() {
           </h1>
           <div className="mt-5">
             {match.latest_prediction ? (
-              <ProbabilityBar prediction={match.latest_prediction} />
+              <div className="space-y-3">
+                <MetricHelp glossaryKey="modelPrediction" />
+                <ProbabilityBar prediction={match.latest_prediction} />
+              </div>
             ) : (
               <p className="text-sm text-paper/60">{match.prediction_status?.message || "该场暂未开售胜平负，预测生成中"}</p>
             )}
@@ -100,7 +105,10 @@ export function MatchDetailPage() {
         </section>
 
         <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
-          <h2 className="mb-4 text-lg font-semibold">最新赔率</h2>
+          <h2 className="mb-4 text-lg font-semibold">
+            最新赔率
+            <InfoTip glossaryKey="odds" />
+          </h2>
           <div className="grid gap-3 md:grid-cols-3">
             {had ? (
               ["3", "1", "0"].map((key) => (
@@ -138,9 +146,13 @@ export function MatchDetailPage() {
         </section>
 
         <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
-          <h2 className="mb-4 text-lg font-semibold">EV 信号</h2>
+          <h2 className="mb-4 text-lg font-semibold">
+            EV 信号
+            <InfoTip glossaryKey="evSignal" />
+          </h2>
+          <MetricHelp glossaryKey="evSignal" />
           {evSignals.length ? (
-            <div className="overflow-x-auto">
+            <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[620px] text-sm">
                 <thead className="text-left text-paper/45">
                   <tr>
@@ -148,7 +160,10 @@ export function MatchDetailPage() {
                     <th>选项</th>
                     <th>模型概率</th>
                     <th>赔率</th>
-                    <th>EV</th>
+                    <th>
+                      EV
+                      <InfoTip glossaryKey="ev" />
+                    </th>
                     <th>状态</th>
                   </tr>
                 </thead>
@@ -175,6 +190,7 @@ export function MatchDetailPage() {
       <div className="space-y-5">
         <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
           <h2 className="text-lg font-semibold">模型建议</h2>
+          <MetricHelp title="模拟建议说明">这里仍是虚拟资金模拟；当前投注功能关闭，不提供真实购彩建议。</MetricHelp>
           {token ? (
             suggestion ? (
               <div className="mt-4 space-y-3 text-sm">
@@ -185,7 +201,7 @@ export function MatchDetailPage() {
                 <div className="rounded-lg bg-pitch/70 p-4">
                   <div className="text-paper/55">Kelly/4 建议金额</div>
                   <div className="mt-1 text-2xl font-semibold text-gold">{formatMoney(suggestion.suggested_stake)}</div>
-                  <div className="mt-2 text-xs text-paper/50">已按余额 5% 上限控制，仅供虚拟资金模拟。</div>
+                  <div className="mt-2 text-xs text-paper/50">已按余额 5% 上限控制，仅供虚拟资金模拟，不是投注建议。</div>
                 </div>
               </div>
             ) : (

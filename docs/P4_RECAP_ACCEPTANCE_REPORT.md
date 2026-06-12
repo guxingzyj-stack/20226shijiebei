@@ -129,6 +129,18 @@ Layout tuning:
 global layout and other pages are unchanged
 ```
 
+## 7.2 Metric Help Layer
+
+Added a beginner-friendly metric explanation layer:
+
+```text
+/help explains model, odds, EV, settlement, system health, and safety terms
+recap pages show compact help tips beside model hit rate, EV, implied probability, and settlement status
+match schedule and match detail pages explain model prediction, odds, and EV signals
+leaderboard explains ROI as virtual-fund performance only
+EV text continues to state research signal, not betting advice
+```
+
 ## 8. Product Boundary
 
 P4 is complete enough for production display, but it remains a read-only review

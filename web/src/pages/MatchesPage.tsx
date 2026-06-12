@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { Match } from "../api/types";
 import { EvBadge } from "../components/EvBadge";
+import { MetricHelp } from "../components/MetricHelp";
 import { ProbabilityBar } from "../components/ProbabilityBar";
 import { formatDateKey, formatDateTime } from "../utils/format";
 
@@ -53,6 +54,10 @@ export function MatchesPage() {
           </p>
         </div>
       </section>
+
+      <MetricHelp title="这是什么？">
+        赛程页展示赛前模型概率、当前竞彩赔率和 EV 研究信号。未开售或已停售的比赛可能暂时显示“预测生成中”，不代表系统故障。
+      </MetricHelp>
 
       {loading ? <div className="rounded-lg border border-white/10 p-5 text-paper/65">赛程加载中</div> : null}
       {error ? <div className="rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm text-paper">{error}</div> : null}
