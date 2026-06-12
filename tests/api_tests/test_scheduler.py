@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from api import acceptance_report, ops_log, scheduler
 from api.ops_log import sanitize_error
@@ -23,6 +23,18 @@ def test_scheduler_enabled_creates_jobs(monkeypatch):
     assert set(jobs) == {"results_sync_job", "settlement_runner_job", "ops_health_check_job"}
     assert all(job.max_instances == 1 for job in jobs.values())
     assert all(job.coalesce is True for job in jobs.values())
+
+
+def test_run_on_startup_schedules_ops_health_immediately(monkeypatch):
+    monkeypatch.setenv("ENABLE_API_SCHEDULER", "true")
+    monkeypatch.setenv("RUN_SCHEDULER_ON_STARTUP", "true")
+    before = datetime.now(timezone.utc)
+
+    created = scheduler.create_scheduler()
+    jobs = {job.id: job for job in created.get_jobs()}
+
+    assert "ops_health_check_job" in jobs
+    assert jobs["ops_health_check_job"].next_run_time <= before + timedelta(seconds=5)
 
 
 def test_scheduler_jobs_catch_exceptions(monkeypatch):

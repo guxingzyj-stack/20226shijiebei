@@ -135,11 +135,17 @@ The watchdog can also be run manually:
 
 ```bash
 python -m api.ops_health_check
+python scripts/run_daily_ops_check.py
 ```
 
 It writes `ops_log.job_name='ops_health_check'` with status `ok`, `warn`, or
 `fail`. A no-op settlement state because there are no open bets is `WARN`; it is
 not proof that real bet settlement has passed.
+
+The daily runner is pure Python and is intended for production containers where
+shell HTTP/database clients may be unavailable. Do not run debug shell tracing
+because it may expand environment variables. The runner prints
+`DATABASE_URL_SET=true/false` only.
 
 ## 6. 014-C Operations Closeout
 
@@ -174,6 +180,7 @@ Read-only health checks:
 curl -sS https://fifa2026.zeabur.app/api/health
 python -m api.health_report
 python -m api.ops_health_check
+python scripts/run_daily_ops_check.py
 python -m api.result_consistency_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
@@ -183,6 +190,10 @@ python -m api.cleanup_test_data dry-run
 `scheduler_stale`, `latest_ops_health_check_at`, `ops_health_status`, and
 `ops_health_blockers`. If latest `ops_log` is older than 90 minutes,
 `api.health_report` must return `FAIL`.
+
+Normal daily operation no longer requires running the full 041 SQL bundle. Use
+`/api/health` first. If it shows `FAIL`, run the Python daily runner and
+`python -m api.ops_health_check` inside the API container, then inspect `ops_log`.
 
 Sale closed / stop selling is not a match result. The crawler may write `closed`,
 but only `results_sync` may mark a real match `finished` after full-time scores are

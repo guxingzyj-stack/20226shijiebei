@@ -20,6 +20,7 @@ Current production posture:
 ### 042 Watchdog
 
 - CLI: `python -m api.ops_health_check`
+- daily runner: `python scripts/run_daily_ops_check.py`
 - scheduler job: `ops_health_check_job`
 - default interval: `OPS_HEALTH_CHECK_INTERVAL_MINUTES=30`
 - stale threshold: `OPS_HEALTH_STALE_THRESHOLD_MINUTES=90`
@@ -28,6 +29,27 @@ Current production posture:
 - alerts are optional; missing webhook must not fail health checks
 - every run writes `ops_log.job_name='ops_health_check'`
 - no-open-bets is `WARN`, not real settlement PASS
+
+### Daily Operations Check
+
+Daily manual SQL/curl bundles from task 041 are no longer the normal path.
+Routine observation should use:
+
+```bash
+curl https://fifa2026.zeabur.app/api/health
+```
+
+The system runs `ops_health_check` every 30 minutes through the API scheduler and
+writes `ops_log`. If `/api/health` reports `ops_health_status=FAIL`, enter the
+API container and run:
+
+```bash
+python scripts/run_daily_ops_check.py
+python -m api.ops_health_check
+```
+
+The Python runner does not require shell HTTP/database clients and prints only
+`DATABASE_URL_SET=true/false`, never the connection string.
 
 ### 019 Emergency Repair
 
@@ -89,6 +111,7 @@ Current production posture:
 ```bash
 python -m api.health_report
 python -m api.ops_health_check
+python scripts/run_daily_ops_check.py
 python -m api.result_consistency_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
