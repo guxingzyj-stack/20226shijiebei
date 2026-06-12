@@ -54,7 +54,7 @@ class Database:
             row = cur.fetchone()
             return dict(row) if row else None
 
-    def list_matches(self, status: str = "upcoming") -> list[dict[str, Any]]:
+    def list_matches(self, status: str = "all") -> list[dict[str, Any]]:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             if status == "upcoming":
                 cur.execute(
@@ -63,6 +63,27 @@ class Database:
                            result_home, result_away, ht_home, ht_away
                     FROM matches
                     WHERE status IN ('scheduled', 'closed', 'no_market')
+                      AND result_home IS NULL
+                      AND result_away IS NULL
+                    ORDER BY kickoff_at
+                    """
+                )
+            elif status == "finished":
+                cur.execute(
+                    """
+                    SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
+                           result_home, result_away, ht_home, ht_away
+                    FROM matches
+                    WHERE status IN ('finished', 'completed')
+                    ORDER BY kickoff_at
+                    """
+                )
+            elif status == "all":
+                cur.execute(
+                    """
+                    SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
+                           result_home, result_away, ht_home, ht_away
+                    FROM matches
                     ORDER BY kickoff_at
                     """
                 )
@@ -77,6 +98,26 @@ class Database:
                     """,
                     (status,),
                 )
+            return [dict(row) for row in cur.fetchall()]
+
+    def prediction_history(self, match_id: str) -> list[dict[str, Any]]:
+        with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT p.match_id,
+                       p.created_at,
+                       p.model_version,
+                       COALESCE(mv.name, p.model_version::text) AS model_version_name,
+                       p.p_home,
+                       p.p_draw,
+                       p.p_away
+                FROM predictions p
+                LEFT JOIN model_versions mv ON mv.id = p.model_version
+                WHERE p.match_id = %s
+                ORDER BY p.created_at, p.id
+                """,
+                (match_id,),
+            )
             return [dict(row) for row in cur.fetchall()]
 
     def get_match(self, match_id: str) -> dict[str, Any] | None:

@@ -19,6 +19,7 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<MatchesPage />} />
+        <Route path="/matches" element={<MatchesPage />} />
         <Route path="/matches/:matchId" element={<MatchDetailPage />} />
         <Route path="/bet" element={<BetPage />} />
         <Route path="/bets" element={<MyBetsPage />} />

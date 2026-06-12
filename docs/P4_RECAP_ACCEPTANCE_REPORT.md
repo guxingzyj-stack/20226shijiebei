@@ -152,6 +152,22 @@ EV copy was simplified for regular users:
 scoreline EV is labelled as high-volatility review-only signal
 ```
 
+## 7.4 Match List And Detail Analytics
+
+Added schedule and match detail readability improvements:
+
+```text
+/api/matches supports status=all/upcoming/finished
+web schedule defaults to all matches and adds 全部 / 未开赛 / 已完赛 filters
+today's matches are sorted first, then by kickoff time
+finished match cards show centered score, model pre-match direction, and hit/miss status
+finished cards link to /recaps/{match_id} when a complete result exists
+finished-like matches without result show 赛果回填中 and link to match detail
+match detail right rail now includes odds trend, model vs market comparison, score-matrix metrics, team form, prediction drift, EV explanation, and betting gate status
+team form and prediction history endpoints are read-only and return insufficient_data when local data is unavailable
+ScoreMatrix highlights final score cells and labels result backfill / out-of-range states
+```
+
 ## 8. Product Boundary
 
 P4 is complete enough for production display, but it remains a read-only review

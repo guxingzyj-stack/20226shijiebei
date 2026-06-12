@@ -69,6 +69,49 @@ export type Suggestion = {
   reason?: string | null;
 };
 
+export type TeamFormItem = {
+  date: string;
+  opponent: string;
+  score: string;
+  home_away: "home" | "away" | string;
+  outcome: "W" | "D" | "L" | string;
+  tournament?: string | null;
+};
+
+export type TeamFormResponse = {
+  match_id: string;
+  data_status: "ok" | "insufficient_data" | string;
+  source?: string;
+  home_team: string;
+  away_team: string;
+  home_form: TeamFormItem[];
+  away_form: TeamFormItem[];
+};
+
+export type PredictionHistoryPoint = {
+  created_at: string;
+  model_version?: number | string | null;
+  model_version_name?: string | null;
+  p_home: string | number;
+  p_draw: string | number;
+  p_away: string | number;
+};
+
+export type PredictionHistoryResponse = {
+  match_id: string;
+  data_status: "ok" | "insufficient_data" | string;
+  points: PredictionHistoryPoint[];
+};
+
+export type HealthStatus = {
+  ok: boolean;
+  scheduler_stale?: boolean;
+  betting_open_gate_status?: string;
+  recommend_open_betting?: boolean;
+  betting_open_blockers?: string[];
+  betting_open_warnings?: string[];
+};
+
 export type BetLeg = {
   match_id: string;
   play_type: string;

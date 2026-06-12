@@ -34,4 +34,74 @@ def test_upcoming_query_includes_closed_and_no_market_matches(monkeypatch):
     Database().list_matches(status="upcoming")
 
     assert "status IN ('scheduled', 'closed', 'no_market')" in calls[0][0]
+    assert "result_home IS NULL" in calls[0][0]
+    assert "result_away IS NULL" in calls[0][0]
+    assert calls[0][1] is None
+
+
+def test_finished_query_uses_finished_and_completed_status(monkeypatch):
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            calls.append((sql, params))
+
+        def fetchall(self):
+            return []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, *args, **kwargs):
+            return Cursor()
+
+    monkeypatch.setattr("api.db.connect", lambda: Conn())
+
+    Database().list_matches(status="finished")
+
+    assert "status IN ('finished', 'completed')" in calls[0][0]
+    assert calls[0][1] is None
+
+
+def test_all_query_does_not_filter_status(monkeypatch):
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            calls.append((sql, params))
+
+        def fetchall(self):
+            return []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, *args, **kwargs):
+            return Cursor()
+
+    monkeypatch.setattr("api.db.connect", lambda: Conn())
+
+    Database().list_matches(status="all")
+
+    assert "WHERE status" not in calls[0][0]
     assert calls[0][1] is None

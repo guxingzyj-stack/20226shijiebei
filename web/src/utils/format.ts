@@ -50,6 +50,6 @@ export function playTypeLabel(playType: string): string {
 }
 
 export function selectionLabel(selection: string): string {
-  const labels: Record<string, string> = { "3": "主胜", "1": "平", "0": "客胜" };
+  const labels: Record<string, string> = { "3": "主胜", "1": "平局", "0": "客胜" };
   return labels[selection] || selection;
 }

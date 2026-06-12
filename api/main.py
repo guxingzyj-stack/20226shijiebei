@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import date, datetime
 from decimal import Decimal
+import csv
 import os
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -127,7 +130,7 @@ def login(payload: UserLogin, db: Database = Depends(get_db)) -> TokenResponse:
 
 
 @app.get("/api/matches")
-def list_matches(status: str = Query("upcoming"), db: Database = Depends(get_db)) -> list[dict]:
+def list_matches(status: str = Query("all"), db: Database = Depends(get_db)) -> list[dict]:
     matches = db.list_matches(status=status)
     for match in matches:
         prediction = db.latest_prediction(str(match["match_id"]))
@@ -153,6 +156,37 @@ def match_detail(match_id: str, db: Database = Depends(get_db)) -> dict:
 @app.get("/api/matches/{match_id}/odds-history")
 def odds_history(match_id: str, play_type: str | None = Query(None), db: Database = Depends(get_db)) -> list[dict]:
     return db.odds_history(match_id, play_type=play_type)
+
+
+@app.get("/api/matches/{match_id}/prediction-history")
+def prediction_history(match_id: str, db: Database = Depends(get_db)) -> dict:
+    match = db.get_match(match_id)
+    if match is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="match not found")
+    points = [
+        {
+            "created_at": row.get("created_at"),
+            "model_version": row.get("model_version"),
+            "model_version_name": row.get("model_version_name"),
+            "p_home": row.get("p_home"),
+            "p_draw": row.get("p_draw"),
+            "p_away": row.get("p_away"),
+        }
+        for row in db.prediction_history(match_id)
+    ]
+    return {
+        "match_id": match_id,
+        "data_status": "ok" if points else "insufficient_data",
+        "points": points,
+    }
+
+
+@app.get("/api/matches/{match_id}/team-form")
+def team_form(match_id: str, db: Database = Depends(get_db)) -> dict:
+    match = db.get_match(match_id)
+    if match is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="match not found")
+    return _team_form_for_match(match)
 
 
 @app.post("/api/bets", response_model=BetResponse)
@@ -260,10 +294,119 @@ def _prediction_status(prediction: dict | None, match: dict | None = None) -> di
         return {
             "available": False,
             "reason": "prediction_pending",
-            "message": "prediction pending",
+            "message": "模型预测生成中",
         }
     return {
         "available": False,
         "reason": "missing_current_market_odds",
         "message": "该场暂未开售胜平负，预测生成中",
     }
+
+
+def _team_form_for_match(match: dict) -> dict:
+    home_team = str(match.get("home_team") or "").strip()
+    away_team = str(match.get("away_team") or "").strip()
+    cutoff = _parse_date(match.get("kickoff_at"))
+    home_form = _team_form_from_history(home_team, cutoff)
+    away_form = _team_form_from_history(away_team, cutoff)
+    return {
+        "match_id": match.get("match_id"),
+        "data_status": "ok" if home_form or away_form else "insufficient_data",
+        "source": "local_historical_results",
+        "home_team": home_team,
+        "away_team": away_team,
+        "home_form": home_form,
+        "away_form": away_form,
+    }
+
+
+def _team_form_from_history(team_name: str, cutoff: date | None, limit: int = 5) -> list[dict]:
+    path = _history_results_path()
+    if path is None or not path.exists():
+        return []
+    english_name = _to_english_team_name_safe(team_name)
+    if not english_name:
+        return []
+    rows: list[dict] = []
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                match_date = _parse_date(row.get("date"))
+                if match_date is None or (cutoff is not None and match_date >= cutoff):
+                    continue
+                home = str(row.get("home_team") or "").strip()
+                away = str(row.get("away_team") or "").strip()
+                if english_name not in {home, away}:
+                    continue
+                home_score = _parse_int(row.get("home_score"))
+                away_score = _parse_int(row.get("away_score"))
+                if home_score is None or away_score is None:
+                    continue
+                is_home = home == english_name
+                goals_for = home_score if is_home else away_score
+                goals_against = away_score if is_home else home_score
+                outcome = "W" if goals_for > goals_against else "D" if goals_for == goals_against else "L"
+                rows.append(
+                    {
+                        "date": match_date.isoformat(),
+                        "opponent": away if is_home else home,
+                        "score": f"{home_score}-{away_score}",
+                        "home_away": "home" if is_home else "away",
+                        "outcome": outcome,
+                        "tournament": row.get("tournament"),
+                    }
+                )
+    except (OSError, csv.Error, UnicodeDecodeError):
+        return []
+    rows.sort(key=lambda item: str(item["date"]), reverse=True)
+    return rows[:limit]
+
+
+def _history_results_path() -> Path | None:
+    try:
+        from model.history import DEFAULT_RESULTS_PATH
+
+        return Path(DEFAULT_RESULTS_PATH)
+    except Exception:
+        return Path(__file__).resolve().parents[1] / "data" / "international_results.csv"
+
+
+def _to_english_team_name_safe(team_name: str) -> str | None:
+    clean = team_name.replace(" ", "").strip()
+    if not clean:
+        return None
+    try:
+        from model.team_names import to_english_team_name
+
+        return to_english_team_name(clean)
+    except Exception:
+        return clean
+
+
+def _parse_date(value: object) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text).date()
+    except ValueError:
+        try:
+            return date.fromisoformat(text[:10])
+        except ValueError:
+            return None
+
+
+def _parse_int(value: object) -> int | None:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
