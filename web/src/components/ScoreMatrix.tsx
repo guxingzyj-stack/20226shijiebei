@@ -20,7 +20,7 @@ export function ScoreMatrix({ matrix, resultHome, resultAway, matchStatus }: Sco
   const finishedMissingResult = ["finished", "completed"].includes(matchStatus || "") && !hasResult;
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/10 p-3">
+      <div className="max-w-full overflow-x-auto rounded-lg border border-white/10 bg-black/10 p-3">
         <div className="grid min-w-[560px] gap-1" style={{ gridTemplateColumns: `40px repeat(${normalized[0].length}, minmax(36px, 1fr))` }}>
           <div />
           {normalized[0].map((_, away) => (

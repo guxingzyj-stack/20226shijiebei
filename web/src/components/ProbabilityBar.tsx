@@ -11,7 +11,7 @@ export function ProbabilityBar({ prediction }: { prediction?: Prediction | null 
   const total = Math.max(home + draw + away, 0.0001);
   const items = [
     { label: "主胜", value: home, className: "bg-gold" },
-    { label: "平", value: draw, className: "bg-paper/70" },
+    { label: "平局", value: draw, className: "bg-paper/70" },
     { label: "客胜", value: away, className: "bg-danger" },
   ];
   return (
@@ -21,11 +21,11 @@ export function ProbabilityBar({ prediction }: { prediction?: Prediction | null 
           <div key={item.label} className={item.className} style={{ width: `${(item.value / total) * 100}%` }} />
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-2 text-xs text-paper/70">
+      <div className="grid w-full grid-cols-3 gap-1 text-center text-xs text-paper/70 sm:gap-2">
         {items.map((item) => (
-          <div key={item.label}>
-            <span className="block text-paper/50">{item.label}</span>
-            <strong className="text-paper">{formatPercent(item.value)}</strong>
+          <div key={item.label} className="min-w-0 rounded-md bg-white/5 px-1.5 py-1">
+            <span className="block whitespace-nowrap text-paper/50">{item.label}</span>
+            <strong className="block whitespace-nowrap text-paper">{formatPercent(item.value)}</strong>
           </div>
         ))}
       </div>

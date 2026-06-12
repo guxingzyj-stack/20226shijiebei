@@ -67,13 +67,13 @@ export function MatchesPage() {
         </div>
       </section>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
         {FILTERS.map((filter) => (
           <button
             key={filter.key}
             type="button"
             onClick={() => setSearchParams(filter.key === "all" ? {} : { status: filter.key })}
-            className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+            className={`min-w-[86px] rounded-full border px-4 py-2 text-sm font-medium transition ${
               activeFilter === filter.key ? "border-gold bg-gold text-pitch" : "border-white/12 text-paper/70 hover:border-gold/50"
             }`}
           >
@@ -119,10 +119,10 @@ function MatchCard({ match }: { match: Match }) {
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs text-paper/50">
+                  <div className="text-xs text-paper/50">
             {match.match_num || match.league} · {formatDateTime(match.kickoff_at)}
           </div>
-          <div className="mt-2 text-lg font-semibold">
+          <div className="mt-2 break-words text-lg font-semibold">
             {match.home_team} <span className="text-paper/35">vs</span> {match.away_team}
           </div>
         </div>
@@ -131,10 +131,10 @@ function MatchCard({ match }: { match: Match }) {
 
       {completeResult ? (
         <div className="space-y-3">
-          <div className="flex items-center justify-center gap-4 rounded-lg bg-black/15 py-4">
-            <span className="text-lg font-semibold">{match.home_team}</span>
-            <span className="text-3xl font-bold text-gold">{match.result_home}:{match.result_away}</span>
-            <span className="text-lg font-semibold">{match.away_team}</span>
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg bg-black/15 px-3 py-4 text-center">
+            <span className="break-words text-sm font-semibold sm:text-lg">{match.home_team}</span>
+            <span className="whitespace-nowrap text-3xl font-bold text-gold">{match.result_home} - {match.result_away}</span>
+            <span className="break-words text-sm font-semibold sm:text-lg">{match.away_team}</span>
           </div>
           <div className="grid gap-2 text-sm text-paper/65 md:grid-cols-2">
             <span>

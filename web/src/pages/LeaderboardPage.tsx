@@ -29,18 +29,18 @@ export function LeaderboardPage() {
       {error ? <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm">{error}</div> : null}
       <div className="rounded-lg border border-white/10 bg-white/[0.06] p-3">
         {rows.map((row, index) => (
-          <div key={`${row.username}-${index}`} className={`grid grid-cols-[48px_1fr_auto] items-center gap-3 rounded-lg px-3 py-3 ${row.username === username ? "bg-gold/15" : ""}`}>
+          <div key={`${row.username}-${index}`} className={`grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-3 sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3 sm:px-3 ${row.username === username ? "bg-gold/15" : ""}`}>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-pitch/70 text-gold">
               {index < 3 ? <Trophy size={18} /> : index + 1}
             </div>
-            <div>
-              <div className="font-semibold">{row.username}</div>
-              <div className="text-xs text-paper/50">
+            <div className="min-w-0">
+              <div className="truncate font-semibold">{row.username}</div>
+              <div className="break-words text-xs text-paper/50">
                 {row.settled_bets ?? 0} settled bets
                 {row.roi !== undefined && row.roi !== null ? ` · ROI ${Number(row.roi).toFixed(2)}%` : ""}
               </div>
             </div>
-            <div className="text-right font-semibold text-gold">{formatMoney(row.balance)}</div>
+            <div className="max-w-[96px] break-words text-right text-sm font-semibold text-gold sm:max-w-none sm:text-base">{formatMoney(row.balance)}</div>
           </div>
         ))}
         {!rows.length ? <div className="p-4 text-sm text-paper/60">排行榜暂无数据。</div> : null}

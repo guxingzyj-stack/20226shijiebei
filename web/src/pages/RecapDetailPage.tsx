@@ -159,7 +159,7 @@ export function RecapDetailPage() {
                 ) : null}
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[780px] text-sm">
+                <table className="mobile-card-table w-full sm:min-w-[780px] text-sm">
                   <thead className="text-left text-paper/45">
                     <tr>
                       <th className="py-2">玩法</th>
@@ -178,14 +178,14 @@ export function RecapDetailPage() {
                   <tbody>
                     {visibleEvRows.map((signal, index) => (
                       <tr key={`${signal.play_type}-${signal.selection}-${signal.model_version}-${index}`} className="border-t border-white/10">
-                        <td className="py-2">{playTypeLabel(signal.play_type)}</td>
-                        <td>{selectionLabel(signal.selection)}</td>
-                        <td>{formatPercent(signal.model_prob)}</td>
-                        <td>{formatDecimal(signal.odds)}</td>
-                        <td className={Number(signal.ev || 0) > 0 ? "text-gold" : "text-paper/65"}>{formatDecimal(signal.ev, 3)}</td>
-                        <td>{signal.occurrence_count > 1 ? `出现次数 x ${signal.occurrence_count}` : "1"}</td>
-                        <td>{evResultText(signal.hit)}</td>
-                        <td>{signal.research_only ? "研究信号" : "观察信号"}</td>
+                        <td data-label="玩法" className="py-2">{playTypeLabel(signal.play_type)}</td>
+                        <td data-label="选项">{selectionLabel(signal.selection)}</td>
+                        <td data-label="模型概率">{formatPercent(signal.model_prob)}</td>
+                        <td data-label="赔率">{formatDecimal(signal.odds)}</td>
+                        <td data-label="EV" className={Number(signal.ev || 0) > 0 ? "text-lg font-semibold text-gold sm:text-sm" : "text-paper/65"}>{formatDecimal(signal.ev, 3)}</td>
+                        <td data-label="出现次数">{signal.occurrence_count > 1 ? `出现次数 x ${signal.occurrence_count}` : "1"}</td>
+                        <td data-label="结果">{evResultText(signal.hit)}</td>
+                        <td data-label="标记">{signal.research_only ? "研究信号，不是投注建议" : "观察信号"}</td>
                       </tr>
                     ))}
                   </tbody>

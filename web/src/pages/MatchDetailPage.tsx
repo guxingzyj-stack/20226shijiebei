@@ -85,8 +85,8 @@ export function MatchDetailPage() {
   if (!match) return <div className="rounded-lg border border-white/10 p-5 text-paper/65">比赛详情加载中</div>;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="space-y-5">
+    <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="min-w-0 space-y-5">
         <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-soft">
           <div className="text-sm text-paper/55">{match.match_num} · {formatDateTime(match.kickoff_at)}</div>
           <h1 className="mt-2 text-2xl font-semibold md:text-3xl">
@@ -174,7 +174,7 @@ export function MatchDetailPage() {
           <MetricHelp glossaryKey="evSignal" />
           {evSignals.length ? (
             <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[620px] text-sm">
+              <table className="mobile-card-table w-full sm:min-w-[620px] text-sm">
                 <thead className="text-left text-paper/45">
                   <tr>
                     <th className="py-2">玩法</th>
@@ -191,12 +191,12 @@ export function MatchDetailPage() {
                 <tbody>
                   {evSignals.map((signal) => (
                     <tr key={`${signal.play_type}-${signal.selection}`} className="border-t border-white/10">
-                      <td className="py-2">{playTypeLabel(signal.play_type)}</td>
-                      <td>{selectionLabel(signal.selection)}</td>
-                      <td>{formatPercent(signal.model_prob)}</td>
-                      <td>{formatDecimal(signal.odds)}</td>
-                      <td><EvBadge ev={signal.ev} /></td>
-                      <td className="text-paper/60">{signal.research_only ? "研究信号" : "可观察"}</td>
+                      <td data-label="玩法" className="py-2">{playTypeLabel(signal.play_type)}</td>
+                      <td data-label="选项">{selectionLabel(signal.selection)}</td>
+                      <td data-label="模型概率">{formatPercent(signal.model_prob)}</td>
+                      <td data-label="赔率">{formatDecimal(signal.odds)}</td>
+                      <td data-label="EV"><EvBadge ev={signal.ev} /></td>
+                      <td data-label="状态" className="text-paper/60">{signal.research_only ? "研究信号，不是投注建议" : "可观察"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -234,7 +234,7 @@ type RightRailProps = {
 function RightRail({ match, had, history, suggestion, token, teamForm, predictionHistory }: RightRailProps) {
   const finished = hasCompleteResult(match);
   return (
-    <div className="space-y-5 lg:sticky lg:top-[88px] lg:self-start">
+    <div className="min-w-0 space-y-5 lg:sticky lg:top-[88px] lg:self-start">
       {finished ? (
         <>
           <Panel title="赛果卡"><ResultCard match={match} /></Panel>
@@ -266,7 +266,7 @@ function RightRail({ match, had, history, suggestion, token, teamForm, predictio
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-soft">
+    <section className="min-w-0 rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-soft">
       <h2 className="mb-4 text-lg font-semibold">{title}</h2>
       {children}
     </section>
