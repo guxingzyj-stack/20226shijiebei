@@ -44,8 +44,8 @@ export function RecapDailyPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-soft">
+    <div className="space-y-4">
+      <section className="rounded-lg border border-white/10 bg-white/[0.06] p-4 shadow-soft">
         <p className="text-sm font-medium text-gold">赛后复盘</p>
         <h1 className="mt-1 text-2xl font-semibold md:text-3xl">复盘日报</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-paper/68">
@@ -67,7 +67,7 @@ export function RecapDailyPage() {
           {groups.map((group) => {
             const reportText = buildDailyReportText(group);
             return (
-              <section key={group.dateKey} className="rounded-lg border border-white/10 bg-white/[0.055] p-5">
+              <section key={group.dateKey} className="rounded-lg border border-white/10 bg-white/[0.055] p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="flex items-center gap-2 text-lg font-semibold">
@@ -89,7 +89,7 @@ export function RecapDailyPage() {
                   </button>
                 </div>
 
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {group.recaps.map((recap) => (
                     <Link
                       key={recap.match_id}
@@ -110,12 +110,12 @@ export function RecapDailyPage() {
                   ))}
                 </div>
 
-                <div className="mt-4 rounded-lg border border-white/10 bg-pitch/68 p-4">
+                <div className="mt-3 rounded-lg border border-white/10 bg-pitch/68 p-3">
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-paper">
                     <ShieldCheck size={16} className="text-gold" />
                     日报文案预览
                   </div>
-                  <pre className="whitespace-pre-wrap text-xs leading-5 text-paper/68">{reportText}</pre>
+                  <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap text-xs leading-5 text-paper/68">{reportText}</pre>
                 </div>
               </section>
             );

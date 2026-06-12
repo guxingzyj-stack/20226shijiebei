@@ -1,9 +1,10 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, CircleSlash, ShieldCheck } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { MatchRecap, MatchRecapResponse } from "../api/types";
 import { formatDateTime, formatDecimal, formatPercent, playTypeLabel, selectionLabel } from "../utils/format";
+import { aggregateEvSignals, evResultText } from "../recaps/recapUtils";
 
 const outcomeLabel: Record<string, string> = {
   home: "主胜",
@@ -16,6 +17,7 @@ export function RecapDetailPage() {
   const [response, setResponse] = useState<MatchRecapResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showAllEv, setShowAllEv] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,9 +38,29 @@ export function RecapDetailPage() {
     };
   }, [matchId]);
 
+  useEffect(() => {
+    setShowAllEv(false);
+  }, [matchId]);
+
+  const recap = response?.recap ?? null;
+  const evRows = useMemo(
+    () =>
+      recap
+        ? aggregateEvSignals(
+            recap.ev.signals.map((signal) => ({
+              ...signal,
+              match_id: recap.match_id,
+              match_label: `${recap.home_team} vs ${recap.away_team}`,
+            })),
+          )
+        : [],
+    [recap],
+  );
+  const visibleEvRows = showAllEv ? evRows : evRows.slice(0, 20);
+
   if (loading) return <div className="rounded-lg border border-white/10 p-5 text-paper/65">复盘详情加载中</div>;
   if (error) return <div className="rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm">{error}</div>;
-  if (!response?.available || !response.recap) {
+  if (!response?.available || !recap) {
     return (
       <div className="space-y-4">
         <Link to="/recaps" className="inline-flex items-center gap-2 text-sm text-paper/60 hover:text-gold">
@@ -51,8 +73,6 @@ export function RecapDetailPage() {
       </div>
     );
   }
-
-  const recap = response.recap;
 
   return (
     <div className="space-y-5">
@@ -118,34 +138,50 @@ export function RecapDetailPage() {
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)]">
         <Panel title="EV 明细" icon={BarChart3}>
-          {recap.ev.signals.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead className="text-left text-paper/45">
-                  <tr>
-                    <th className="py-2">玩法</th>
-                    <th>选项</th>
-                    <th>模型概率</th>
-                    <th>赔率</th>
-                    <th>EV</th>
-                    <th>结果</th>
-                    <th>标记</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recap.ev.signals.slice(0, 20).map((signal) => (
-                    <tr key={`${signal.play_type}-${signal.selection}-${signal.model_version}`} className="border-t border-white/10">
-                      <td className="py-2">{playTypeLabel(signal.play_type)}</td>
-                      <td>{selectionLabel(signal.selection)}</td>
-                      <td>{formatPercent(signal.model_prob)}</td>
-                      <td>{formatDecimal(signal.odds)}</td>
-                      <td className={Number(signal.ev || 0) > 0 ? "text-gold" : "text-paper/65"}>{formatDecimal(signal.ev, 3)}</td>
-                      <td>{signal.hit === true ? "命中" : signal.hit === false ? "未中" : "不可判定"}</td>
-                      <td>{signal.research_only ? "研究信号" : "观察信号"}</td>
+          {evRows.length ? (
+            <div>
+              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <p className="text-xs text-paper/50">默认展示 Top 20，按 EV 从高到低排序，并聚合重复信号。</p>
+                {evRows.length > 20 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllEv((value) => !value)}
+                    className="inline-flex items-center justify-center rounded-lg border border-gold/45 px-3 py-2 text-sm text-gold transition hover:bg-gold/10"
+                  >
+                    {showAllEv ? "收起" : `展开全部 ${evRows.length} 条聚合信号`}
+                  </button>
+                ) : null}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[780px] text-sm">
+                  <thead className="text-left text-paper/45">
+                    <tr>
+                      <th className="py-2">玩法</th>
+                      <th>选项</th>
+                      <th>模型概率</th>
+                      <th>赔率</th>
+                      <th>EV</th>
+                      <th>出现次数</th>
+                      <th>结果</th>
+                      <th>标记</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {visibleEvRows.map((signal, index) => (
+                      <tr key={`${signal.play_type}-${signal.selection}-${signal.model_version}-${index}`} className="border-t border-white/10">
+                        <td className="py-2">{playTypeLabel(signal.play_type)}</td>
+                        <td>{selectionLabel(signal.selection)}</td>
+                        <td>{formatPercent(signal.model_prob)}</td>
+                        <td>{formatDecimal(signal.odds)}</td>
+                        <td className={Number(signal.ev || 0) > 0 ? "text-gold" : "text-paper/65"}>{formatDecimal(signal.ev, 3)}</td>
+                        <td>{signal.occurrence_count > 1 ? `出现次数 x ${signal.occurrence_count}` : "1"}</td>
+                        <td>{evResultText(signal.hit)}</td>
+                        <td>{signal.research_only ? "研究信号" : "观察信号"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <p className="text-sm text-paper/60">暂无 EV 信号。</p>

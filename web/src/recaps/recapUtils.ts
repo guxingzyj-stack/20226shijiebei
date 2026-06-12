@@ -30,6 +30,43 @@ export function settlementText(value: string | null | undefined): string {
   return value;
 }
 
+export function evResultText(value: boolean | null | undefined): string {
+  if (value === true) return "命中";
+  if (value === false) return "复盘未命中";
+  return "待判定";
+}
+
+type NumericLike = number | string;
+
+export type AggregatedEvSignal<T extends { match_id?: string; match_label?: string; play_type: string; selection: string; odds: NumericLike }> = T & {
+  occurrence_count: number;
+};
+
+export function aggregateEvSignals<
+  T extends { match_id?: string; match_label?: string; play_type: string; selection: string; odds: NumericLike; ev: NumericLike },
+>(
+  signals: T[],
+): AggregatedEvSignal<T>[] {
+  const grouped = new Map<string, AggregatedEvSignal<T>>();
+  for (const signal of signals) {
+    const matchKey = signal.match_id || signal.match_label || "";
+    const key = [matchKey, signal.play_type, signal.selection, String(signal.odds)].join("|");
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, { ...signal, occurrence_count: 1 });
+      continue;
+    }
+
+    const occurrenceCount = existing.occurrence_count + 1;
+    if (Number(signal.ev || 0) > Number(existing.ev || 0)) {
+      grouped.set(key, { ...signal, occurrence_count: occurrenceCount });
+    } else {
+      existing.occurrence_count = occurrenceCount;
+    }
+  }
+  return [...grouped.values()].sort((left, right) => Number(right.ev || 0) - Number(left.ev || 0));
+}
+
 export type RecapAggregate = {
   marketCorrectCount: number;
   modelMarketAgreeCount: number;

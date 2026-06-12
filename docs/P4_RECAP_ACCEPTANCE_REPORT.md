@@ -106,6 +106,29 @@ research_only EV is labelled as research signal, not betting advice
 no user_id, bet_id, or internal id is rendered
 ```
 
+## 7.1 P4-UI-OPT Readability
+
+EV display rules:
+
+```text
+/recaps/ev defaults to Top 20 EV rows
+/recaps/{match_id} EV detail defaults to Top 20 EV rows
+EV rows are sorted by EV descending
+duplicate display rows are aggregated by match + play_type + selection + odds
+aggregated duplicates show occurrence_count
+users can expand all rows and collapse back to Top 20
+missed EV review text uses "复盘未命中"
+research_only EV remains labelled as "研究信号"
+```
+
+Layout tuning:
+
+```text
+/recaps/model uses tighter local spacing and card padding
+/recaps/daily uses tighter local spacing and a capped daily preview area
+global layout and other pages are unchanged
+```
+
 ## 8. Product Boundary
 
 P4 is complete enough for production display, but it remains a read-only review

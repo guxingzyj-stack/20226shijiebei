@@ -47,8 +47,8 @@ export function RecapModelPage() {
       : null;
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-soft">
+    <div className="space-y-4">
+      <section className="rounded-lg border border-white/10 bg-white/[0.06] p-4 shadow-soft">
         <p className="text-sm font-medium text-gold">赛后复盘</p>
         <h1 className="mt-1 text-2xl font-semibold md:text-3xl">模型表现统计</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-paper/68">
@@ -70,7 +70,7 @@ export function RecapModelPage() {
             <Metric label="命中率" value={hitRate === null ? "样本不足" : formatPercent(hitRate)} />
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-3">
+          <section className="grid gap-3 lg:grid-cols-3">
             <Panel title="市场 vs 模型" icon={GitCompareArrows}>
               <Metric label="市场热门命中" value={aggregate.marketCorrectCount} />
               <Metric label="模型与市场同向" value={aggregate.modelMarketAgreeCount} />
@@ -86,7 +86,7 @@ export function RecapModelPage() {
             </Panel>
           </section>
 
-          <section className="rounded-lg border border-white/10 bg-white/[0.055] p-5">
+          <section className="rounded-lg border border-white/10 bg-white/[0.055] p-4">
             <h2 className="text-lg font-semibold">最近比赛表现</h2>
             {recaps.length ? (
               <div className="mt-4 overflow-x-auto">
@@ -137,8 +137,8 @@ export function RecapModelPage() {
 
 function Panel({ title, icon: Icon, children }: { title: string; icon: typeof BarChart3; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-white/10 bg-white/[0.055] p-5">
-      <div className="mb-4 flex items-center gap-2 text-lg font-semibold">
+    <section className="rounded-lg border border-white/10 bg-white/[0.055] p-4">
+      <div className="mb-3 flex items-center gap-2 text-lg font-semibold">
         <Icon size={18} className="text-gold" />
         {title}
       </div>

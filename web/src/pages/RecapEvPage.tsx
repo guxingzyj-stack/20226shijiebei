@@ -4,7 +4,7 @@ import { AlertTriangle, BarChart3, ShieldCheck } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { MatchRecap, MatchRecapResponse, RecapRecentResponse } from "../api/types";
 import { formatDecimal, formatPercent, playTypeLabel, selectionLabel } from "../utils/format";
-import { aggregateRecaps } from "../recaps/recapUtils";
+import { type AggregatedEvSignal, aggregateEvSignals, aggregateRecaps, evResultText } from "../recaps/recapUtils";
 
 type EvRow = MatchRecap["ev"]["signals"][number] & {
   match_id: string;
@@ -16,6 +16,7 @@ export function RecapEvPage() {
   const [recaps, setRecaps] = useState<MatchRecap[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,10 +43,10 @@ export function RecapEvPage() {
   }, []);
 
   const aggregate = useMemo(() => aggregateRecaps(recaps), [recaps]);
-  const rows = useMemo<EvRow[]>(
+  const rows = useMemo<AggregatedEvSignal<EvRow>[]>(
     () =>
-      recaps
-        .flatMap((recap) =>
+      aggregateEvSignals(
+        recaps.flatMap((recap) =>
           recap.ev.signals.map((signal) => ({
             ...signal,
             match_id: recap.match_id,
@@ -53,9 +54,10 @@ export function RecapEvPage() {
             scoreline: recap.result.scoreline,
           })),
         )
-        .sort((left, right) => Number(right.ev || 0) - Number(left.ev || 0)),
+      ),
     [recaps],
   );
+  const visibleRows = expanded ? rows : rows.slice(0, 20);
 
   return (
     <div className="space-y-5">
@@ -95,7 +97,21 @@ export function RecapEvPage() {
           </section>
 
           <section className="rounded-lg border border-white/10 bg-white/[0.055] p-5">
-            <h2 className="text-lg font-semibold">EV 信号列表</h2>
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">EV 信号列表</h2>
+                <p className="mt-1 text-xs text-paper/50">默认展示 Top 20，按 EV 从高到低排序，并聚合重复信号。</p>
+              </div>
+              {rows.length > 20 ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((value) => !value)}
+                  className="inline-flex items-center justify-center rounded-lg border border-gold/45 px-3 py-2 text-sm text-gold transition hover:bg-gold/10"
+                >
+                  {expanded ? "收起" : `展开全部 ${rows.length} 条聚合信号`}
+                </button>
+              ) : null}
+            </div>
             {rows.length ? (
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[900px] text-sm">
@@ -108,12 +124,13 @@ export function RecapEvPage() {
                       <th>模型概率</th>
                       <th>赔率</th>
                       <th>EV</th>
+                      <th>出现次数</th>
                       <th>标记</th>
                       <th>结果</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.slice(0, 80).map((signal, index) => (
+                    {visibleRows.map((signal, index) => (
                       <tr key={`${signal.match_id}-${signal.play_type}-${signal.selection}-${signal.model_version}-${index}`} className="border-t border-white/10">
                         <td className="py-2">
                           <Link to={`/recaps/${encodeURIComponent(signal.match_id)}`} className="text-paper hover:text-gold">
@@ -126,8 +143,9 @@ export function RecapEvPage() {
                         <td>{formatPercent(signal.model_prob)}</td>
                         <td>{formatDecimal(signal.odds)}</td>
                         <td className={Number(signal.ev || 0) > 0 ? "text-gold" : "text-paper/65"}>{formatDecimal(signal.ev, 3)}</td>
+                        <td>{signal.occurrence_count > 1 ? `出现次数 x ${signal.occurrence_count}` : "1"}</td>
                         <td>{signal.research_only ? "研究信号" : signal.suggestion_eligible ? "候选信号" : "观察信号"}</td>
-                        <td>{signal.hit === true ? "命中" : signal.hit === false ? "未中" : "待判定"}</td>
+                        <td>{evResultText(signal.hit)}</td>
                       </tr>
                     ))}
                   </tbody>
