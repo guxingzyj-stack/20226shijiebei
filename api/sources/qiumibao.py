@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 import json
@@ -84,6 +84,14 @@ def events_source_report(date: str, match_id: str, fetcher=fetch_event_json) -> 
         }
 
 
+def score_from_events(events: list[dict[str, Any]]) -> str | None:
+    for event in reversed(events):
+        score = str(event.get("score_after_event") or "").strip()
+        if score and "-" in score:
+            return score
+    return None
+
+
 def normalize_score_payload(payload: dict[str, Any]) -> list[SourceMatch]:
     rows = _extract_rows(payload)
     if rows is None:
@@ -140,7 +148,6 @@ def normalize_status(value: Any) -> str:
     if text in {"closed", "停售"}:
         return "closed"
     return "unknown"
-
 
 def normalize_event_payload(payload: dict[str, Any]) -> list[SourceEvent]:
     rows = payload.get("data")

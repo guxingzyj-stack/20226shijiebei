@@ -105,6 +105,8 @@ The report only generates a checklist. It never writes scores.
 For deeper dry-run source comparison, use:
 
 ```bash
+PYTHONPATH=. python -m api.result_source_mapping_probe --source qiumibao --recent
+PYTHONPATH=. python -m api.result_source_mapping_probe --source qiumibao --match-id 500-1359182
 PYTHONPATH=. python -m api.result_source_compare --match-id 500-1359182
 PYTHONPATH=. python -m api.result_source_compare --all-overdue
 PYTHONPATH=. python -m api.result_source_compare --recent-finished
@@ -124,6 +126,20 @@ Team-name matching normalizes visible, full-width, and invisible spaces.
 
 If a recently finished match returns `LOCAL_DB_ONLY`, treat it as a mapping or
 confirmation gap, not as a verified multi-source result.
+
+059 adds source-discovery statuses for that gap:
+
+```text
+matched
+source_fetch_error
+source_empty
+source_available_but_match_not_in_window
+team_name_mismatch
+kickoff_time_mismatch
+ambiguous_candidates
+mapping_missing
+fifa_mapping_missing
+```
 
 ## Health Fields
 

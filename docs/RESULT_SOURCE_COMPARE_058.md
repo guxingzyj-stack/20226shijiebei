@@ -30,6 +30,14 @@ mapping_status:
 next_step: ...
 ```
 
+For source discovery and candidate diagnostics, use the 059 mapping probe first:
+
+```bash
+PYTHONPATH=. python -m api.result_source_mapping_probe --source qiumibao --match-id 500-1359182
+PYTHONPATH=. python -m api.result_source_mapping_probe --source qiumibao --recent
+PYTHONPATH=. python -m api.result_source_mapping_probe --source fifa --recent
+```
+
 ## Source Roles
 
 ### 500_trade_jczq
@@ -125,6 +133,12 @@ output must be `MAPPING_MISSING`.
 `qiumibao_score` row. It must not use local `500-...` ids. If no qiumibao match
 id is available, the events source returns `mapping_missing` and does not fetch
 the event URL, avoiding false HTTP 404 noise.
+
+059 adds a dedicated mapping probe that reports candidate rows with raw team
+names, normalized team names, kickoff deltas, `external_id`, candidate count,
+and specific mapping statuses such as `team_name_mismatch`,
+`kickoff_time_mismatch`, `ambiguous_candidates`, and
+`source_available_but_match_not_in_window`.
 
 ## Decision Rules
 

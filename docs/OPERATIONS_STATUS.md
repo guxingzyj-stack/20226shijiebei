@@ -22,6 +22,7 @@ Current production posture:
 - current main result source: `500_trade_jczq` HTML page, not an official structured source
 - result-overdue CLI: `python -m api.result_overdue_report`
 - multi-source dry-run compare CLI: `python -m api.result_source_compare --all-overdue`
+- source mapping probe CLI: `python -m api.result_source_mapping_probe --source qiumibao --recent`
 - multi-source compare 058-B rule: `OK_MATCH` requires at least one external
   score source to confirm the local DB score; local-only scores now report
   `LOCAL_DB_ONLY`
@@ -30,6 +31,11 @@ Current production posture:
   producing avoidable 404s
 - source matching normalizes odd spaced team names such as `加 拿 大`, `墨 西 哥`,
   `韩 国`, and full-width/invisible whitespace
+- 059 qiumibao mapping probe can distinguish `matched`, `source_fetch_error`,
+  `source_empty`, `source_available_but_match_not_in_window`,
+  `team_name_mismatch`, `kickoff_time_mismatch`, and `ambiguous_candidates`
+- FIFA Match Centre remains `fifa_mapping_missing` until a durable local
+  match_id to FIFA id/url mapping is built
 
 ### 042 Watchdog
 
@@ -131,6 +137,7 @@ python -m api.ops_health_check
 python scripts/run_daily_ops_check.py
 python -m api.result_consistency_report
 python -m api.result_overdue_report
+python -m api.result_source_mapping_probe --source qiumibao --recent
 python -m api.result_source_compare --all-overdue
 python -m api.scheduler_observe
 python -m api.betting_open_gate

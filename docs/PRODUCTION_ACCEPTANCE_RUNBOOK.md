@@ -233,6 +233,7 @@ If `/api/health.result_overdue_closed_count > 0`, run:
 ```bash
 PYTHONPATH=. python -m api.results_sync once
 PYTHONPATH=. python -m api.result_overdue_report
+PYTHONPATH=. python -m api.result_source_mapping_probe --source qiumibao --recent
 PYTHONPATH=. python -m api.result_source_compare --all-overdue
 ```
 
@@ -242,11 +243,14 @@ official verified fallback CSV process. Do not manually update scores with SQL.
 For a single stuck match, run:
 
 ```bash
+PYTHONPATH=. python -m api.result_source_mapping_probe --source qiumibao --match-id <match_id>
 PYTHONPATH=. python -m api.result_source_compare --match-id <match_id>
 ```
 
-The compare report is dry-run only. `NEEDS_VERIFIED_FALLBACK` means prepare a
-reviewed fallback CSV row; it does not authorize manual SQL score writes.
+The mapping and compare reports are dry-run only. `LOCAL_DB_ONLY` means the
+local DB has a score but no external source has confirmed it. `NEEDS_VERIFIED_FALLBACK`
+means prepare a reviewed fallback CSV row; it does not authorize manual SQL
+score writes.
 
 Sale closed / stop selling is not a match result. The crawler may write `closed`,
 but only `results_sync` may mark a real match `finished` after full-time scores are

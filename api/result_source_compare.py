@@ -1,22 +1,26 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 from datetime import datetime, timedelta, timezone
-import re
 from typing import Any
-import unicodedata
 
 from psycopg.rows import dict_row
 
 from api.db import connect
 from api.ops_log import sanitize_error
 from api.result_overdue_report import overdue_matches
+from api.result_source_mapping import (
+    MATCHED,
+    SOURCE_AVAILABLE_BUT_MATCH_NOT_IN_WINDOW,
+    analyze_external_mapping,
+    fifa_mapping_placeholder,
+    normalize_team_name,
+)
 from api.results_sync import fetch_results_html, parse_results_html
 from api.sources import qiumibao
 
 
 DATE_WINDOW_HOURS = 4
-INVISIBLE_SPACE_RE = re.compile(r"[\s\u00a0\u1680\u180e\u2000-\u200f\u2028\u2029\u202f\u205f\u2060\u3000\ufeff]+")
 
 
 def compare_match(match_id: str) -> dict[str, Any]:
@@ -139,7 +143,7 @@ def _source_500(match_id: str) -> dict[str, Any]:
             "score": _score(found.result_home, found.result_away),
             "ht_score": _score(found.ht_home, found.ht_away),
             "confidence": "low" if found.status != "finished" or found.result_home is None else "medium",
-            "mapping_status": "mapped",
+            "mapping_status": "matched",
             "parser_error": None,
         }
     except Exception as exc:
@@ -158,6 +162,19 @@ def _source_qiumibao_score(local: dict[str, Any], date: str | None) -> dict[str,
             "mapping_status": "unknown",
             "parser_error": report["parser_error"],
         }
+    mapping = analyze_external_mapping(local, report["matches"])
+    if mapping["mapping_status"] != MATCHED:
+        source = _source_missing("mapping_missing")
+        source.update(
+            {
+                "mapping_status": mapping["mapping_status"],
+                "mapping_reason": mapping["reason"],
+                "candidate_count": mapping["candidate_count"],
+                "local_match": mapping["local_match"],
+                "candidates": mapping["candidates"],
+            }
+        )
+        return source
     match = _map_source_match(local, report["matches"])
     if match is None:
         return _source_missing("mapping_missing")
@@ -168,7 +185,12 @@ def _source_qiumibao_score(local: dict[str, Any], date: str | None) -> dict[str,
         "ht_score": _score(match.get("ht_home"), match.get("ht_away")),
         "confidence": "medium_high" if match["status"] == "finished" and match.get("result_home") is not None else "medium",
         "external_id": match.get("external_id"),
-        "mapping_status": "mapped" if match.get("external_id") else "mapped_without_external_id",
+        "qiumibao_external_id": match.get("external_id"),
+        "mapping_status": "matched" if match.get("external_id") else "mapped_without_external_id",
+        "mapping_reason": mapping["reason"],
+        "candidate_count": mapping["candidate_count"],
+        "local_match": mapping["local_match"],
+        "candidates": mapping["candidates"],
         "parser_error": None,
     }
 
@@ -193,32 +215,39 @@ def _source_qiumibao_events(local: dict[str, Any], date: str | None, qiumibao_sc
             "minute": None,
             "score_from_events": None,
             "confidence": "unknown",
-            "mapping_status": "mapped",
+            "mapping_status": "matched",
             "external_id": external_id,
             "events": [],
             "parser_error": report["parser_error"],
         }
-    goals = [event for event in report["events"] if "球" in str(event.get("event_type") or "")]
+    events = report["events"]
+    goals = [
+        event
+        for event in events
+        if "球" in str(event.get("event_type") or "") or "goal" in str(event.get("event_type") or "").lower()
+    ]
     return {
-        "seen": bool(report["events"]),
+        "seen": bool(events),
         "status": "unknown",
         "minute": "FT" if _is_finished(local) else None,
-        "score_from_events": None,
-        "confidence": "medium" if report["events"] else "unknown",
-        "mapping_status": "mapped",
+        "score_from_events": qiumibao.score_from_events(events),
+        "confidence": "medium" if events else "unknown",
+        "mapping_status": "matched",
         "external_id": external_id,
-        "events": report["events"],
+        "events": events,
+        "events_count": len(events),
         "goals_count": len(goals),
     }
 
-
 def _source_fifa_placeholder() -> dict[str, Any]:
+    mapping = fifa_mapping_placeholder()
     return {
         "seen": False,
-        "mapping_status": "missing",
+        "mapping_status": mapping["mapping_status"],
         "score": None,
         "confidence": "unknown",
-        "suggested_next_step": "build_mapping",
+        "mapping_reason": mapping["reason"],
+        "suggested_next_step": mapping["suggested_next_step"],
     }
 
 
@@ -301,7 +330,11 @@ def _next_step(suggested_action: str, mapping_status: dict[str, str]) -> str:
         return "HUMAN_REVIEW"
     if suggested_action == "NEEDS_VERIFIED_FALLBACK":
         return "PREPARE_VERIFIED_FALLBACK"
-    if "missing" in {mapping_status.get("qiumibao_score"), mapping_status.get("fifa_match_centre")}:
+    if mapping_status.get("qiumibao_score") == SOURCE_AVAILABLE_BUT_MATCH_NOT_IN_WINDOW:
+        return "SOURCE_AVAILABLE_BUT_MATCH_NOT_IN_WINDOW"
+    if mapping_status.get("qiumibao_score") in {"mapping_missing", "source_empty", "team_name_mismatch", "kickoff_time_mismatch", "ambiguous_candidates"}:
+        return "BUILD_QIUMIBAO_MAPPING"
+    if mapping_status.get("fifa_match_centre") == "fifa_mapping_missing":
         return "BUILD_QIUMIBAO_OR_FIFA_MAPPING"
     if suggested_action == "LOCAL_DB_ONLY":
         return "WAIT_EXTERNAL_CONFIRMATION"
@@ -401,11 +434,6 @@ def _as_datetime(value: Any) -> datetime | None:
 
 def _clean_team(value: Any) -> str:
     return normalize_team_name(value)
-
-
-def normalize_team_name(value: Any) -> str:
-    text = unicodedata.normalize("NFKC", str(value or ""))
-    return INVISIBLE_SPACE_RE.sub("", text).strip().lower()
 
 
 def _missing_local_result(local: dict[str, Any]) -> bool:
