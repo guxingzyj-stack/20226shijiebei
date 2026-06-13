@@ -102,6 +102,17 @@ NEEDS_VERIFIED_FALLBACK: recent results_sync ran but the match is still overdue
 
 The report only generates a checklist. It never writes scores.
 
+For deeper dry-run source comparison, use:
+
+```bash
+PYTHONPATH=. python -m api.result_source_compare --match-id 500-1359182
+PYTHONPATH=. python -m api.result_source_compare --all-overdue
+PYTHONPATH=. python -m api.result_source_compare --recent-finished
+```
+
+This compares local DB, 500_trade_jczq, qiumibao score JSON, qiumibao events,
+and FIFA mapping status without writing the database.
+
 ## Health Fields
 
 `/api/health` now includes:

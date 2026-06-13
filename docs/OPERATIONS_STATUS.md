@@ -21,6 +21,7 @@ Current production posture:
 - `/api/health` exposes `scheduler_last_seen`, `scheduler_last_seen_age_minutes`, `scheduler_stale`, `scheduler_startup_error`, `latest_ops_health_check_at`, `ops_health_status`, `ops_health_blockers`, latest `results_sync` summary, and overdue closed-result counts
 - current main result source: `500_trade_jczq` HTML page, not an official structured source
 - result-overdue CLI: `python -m api.result_overdue_report`
+- multi-source dry-run compare CLI: `python -m api.result_source_compare --all-overdue`
 
 ### 042 Watchdog
 
@@ -122,6 +123,7 @@ python -m api.ops_health_check
 python scripts/run_daily_ops_check.py
 python -m api.result_consistency_report
 python -m api.result_overdue_report
+python -m api.result_source_compare --all-overdue
 python -m api.scheduler_observe
 python -m api.betting_open_gate
 python -m api.cleanup_test_data dry-run
