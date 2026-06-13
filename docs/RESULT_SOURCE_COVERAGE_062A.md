@@ -154,6 +154,17 @@ If multiple matches remain missing more than one hour after full time, evaluate
 whether to temporarily increase `results_sync` frequency to 15 minutes during
 finished-match peak windows. Do not change frequency preemptively.
 
+063 adds an automated observation path:
+
+```bash
+PYTHONPATH=. python -m api.result_ingest_monitor --run-once --source 500 --window-hours 36
+PYTHONPATH=. python -m api.result_ingest_monitor --summary --since-hours 48
+```
+
+`result_ingest_observations` is an observation table only. It is not used to
+write scores, settle bets, or open betting gates. The monitor scheduler remains
+disabled by default with `ENABLE_RESULT_INGEST_MONITOR=false`.
+
 ### Postponed / Abandoned / Exceptional Matches
 
 No postponed, abandoned, cancelled, or rescheduled match has been observed yet.
@@ -173,3 +184,13 @@ Safety rules:
 - exceptional matches must not auto-settle
 - no full-time score means no `result_home/result_away` write
 - postponed / abandoned matches must not be treated as `finished`
+
+063 provides a non-production probe for these states:
+
+```bash
+PYTHONPATH=. python -m api.abnormal_status_probe --dry-run
+PYTHONPATH=. python -m api.abnormal_status_probe --confirm RUN_ABNORMAL_STATUS_PROBE
+```
+
+Confirm mode is refused in production unless `ALLOW_TEST_PROBES=true`. The probe
+uses fixed `test-` match ids and cleans up its own data.

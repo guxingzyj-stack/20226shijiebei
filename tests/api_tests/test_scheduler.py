@@ -24,6 +24,7 @@ def test_scheduler_default_disabled(monkeypatch):
 
 def test_scheduler_enabled_creates_jobs(monkeypatch):
     monkeypatch.setenv("ENABLE_API_SCHEDULER", "true")
+    monkeypatch.delenv("ENABLE_RESULT_INGEST_MONITOR", raising=False)
     monkeypatch.setenv("RESULTS_SYNC_INTERVAL_MINUTES", "60")
     monkeypatch.setenv("SETTLEMENT_RUNNER_INTERVAL_MINUTES", "30")
     monkeypatch.setenv("OPS_HEALTH_CHECK_INTERVAL_MINUTES", "30")
@@ -35,6 +36,19 @@ def test_scheduler_enabled_creates_jobs(monkeypatch):
     assert set(jobs) == {"results_sync_job", "settlement_runner_job", "ops_health_check_job"}
     assert all(job.max_instances == 1 for job in jobs.values())
     assert all(job.coalesce is True for job in jobs.values())
+
+
+def test_result_ingest_monitor_job_created_only_when_enabled(monkeypatch):
+    monkeypatch.setenv("ENABLE_API_SCHEDULER", "true")
+    monkeypatch.setenv("ENABLE_RESULT_INGEST_MONITOR", "true")
+    monkeypatch.setenv("RESULT_INGEST_MONITOR_INTERVAL_MINUTES", "30")
+
+    created = scheduler.create_scheduler()
+    jobs = {job.id: job for job in created.get_jobs()}
+
+    assert "result_ingest_monitor_job" in jobs
+    assert jobs["result_ingest_monitor_job"].max_instances == 1
+    assert jobs["result_ingest_monitor_job"].coalesce is True
 
 
 def test_run_on_startup_schedules_first_interval(monkeypatch):
@@ -108,10 +122,12 @@ def test_scheduler_jobs_catch_exceptions(monkeypatch):
     monkeypatch.setattr(scheduler, "run_results_sync_job", fail)
     monkeypatch.setattr(scheduler, "run_settlement_job", fail)
     monkeypatch.setattr(scheduler, "run_ops_health_check", fail)
+    monkeypatch.setattr(scheduler, "run_result_ingest_monitor_once", fail)
 
     scheduler.results_sync_job()
     scheduler.settlement_runner_job()
     scheduler.ops_health_check_job()
+    scheduler.result_ingest_monitor_job()
 
 
 def test_scheduler_start_error_is_logged(monkeypatch, capsys):

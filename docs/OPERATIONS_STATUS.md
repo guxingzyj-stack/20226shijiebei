@@ -94,6 +94,16 @@ Current production posture:
   an untested blind spot. They must not auto-settle, must not write full-time
   scores without clear source evidence, and must not be misclassified as
   `finished`.
+- 063 adds `result_ingest_monitor`, an append-only observation monitor. It
+  writes `result_ingest_observations` and `ops_log`, but never writes
+  `matches`, scores, settlement, betting state, predictions, or odds snapshots.
+- 063 monitor scheduler defaults to disabled:
+  `ENABLE_RESULT_INGEST_MONITOR=false`,
+  `RESULT_INGEST_MONITOR_INTERVAL_MINUTES=30`,
+  `RESULT_INGEST_MONITOR_WINDOW_HOURS=36`.
+- 063 abnormal status probe is non-production/test-only. Confirm mode is refused
+  in production unless `ALLOW_TEST_PROBES=true`, uses only fixed `test-` match
+  ids, and cleans up probe-created data.
 
 ### 042 Watchdog
 
@@ -201,6 +211,9 @@ python -m api.result_source_coverage_audit --source 500 --recent
 python -m api.result_source_coverage_audit --source 500 --all-started
 python -m api.result_source_coverage_audit --source 500 --closed-missing
 python -m api.result_source_coverage_audit --source 500 --half-time-fields
+python -m api.result_ingest_monitor --run-once --source 500 --window-hours 36
+python -m api.result_ingest_monitor --summary --since-hours 48
+python -m api.abnormal_status_probe --dry-run
 python -m api.worldcup_live_probe --recent
 python -m api.worldcup_live_probe --compare-local --all-overdue
 python -m api.worldcup_live_probe --map-local --recent

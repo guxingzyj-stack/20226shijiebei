@@ -358,6 +358,53 @@ Operational watch points:
    exists.
 ```
 
+063 automates the observation loop. Deploy with the monitor scheduler disabled:
+
+```text
+ENABLE_RESULT_INGEST_MONITOR=false
+RESULT_INGEST_MONITOR_INTERVAL_MINUTES=30
+RESULT_INGEST_MONITOR_WINDOW_HOURS=36
+```
+
+Then manually validate:
+
+```bash
+PYTHONPATH=. python -m api.result_ingest_monitor --run-once --source 500 --window-hours 36
+PYTHONPATH=. python -m api.result_ingest_monitor --summary --since-hours 48
+```
+
+Expected:
+
+```text
+result_ingest_observations has appended rows
+matches is not modified
+summary prints ingest delay metrics
+result_consistency_report remains PASS
+ops_health_check does not get worse
+```
+
+Only after repeated manual success should the API scheduler enable:
+
+```text
+ENABLE_RESULT_INGEST_MONITOR=true
+```
+
+Do not increase `results_sync` frequency preemptively.
+
+Abnormal-state pressure testing is not a production workflow. Dry-run is safe:
+
+```bash
+PYTHONPATH=. python -m api.abnormal_status_probe --dry-run
+```
+
+Confirm mode requires non-production or explicit test override:
+
+```text
+ALLOW_TEST_PROBES=true
+```
+
+It uses only fixed `test-` matches and must not touch real `500-` matches.
+
 Normal daily operation no longer requires running the full 041 SQL bundle. Use
 `/api/health` first. If it shows `FAIL`, run the Python daily runner and
 `python -m api.ops_health_check` inside the API container, then inspect `ops_log`.
