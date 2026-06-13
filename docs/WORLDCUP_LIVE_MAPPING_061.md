@@ -305,3 +305,72 @@ apply normalized alias keys
 
 It is used for zhibo8 rows, local rows, live candidates, and qiumibao time
 diagnostics. It does not write normalized names back to the database.
+
+## 061-E Raw Field Inspection And Candidate Details
+
+061-E confirms that the qiumibao score endpoint is a mixed-event rolling feed,
+not a World Cup-only or football-only endpoint. A pure `start_time` match is not
+a stable unique key by itself.
+
+Raw inspection:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --dump-qiumibao-raw --limit 3
+```
+
+The raw dump prints:
+
+```text
+source_url
+rows_seen
+raw row keys
+one-level left/right fields
+classification_field_candidates
+writes_db: false
+```
+
+If classification fields such as `sport`, `category`, `league`, `competition`,
+or `tournament` are absent, the system reports `not_found` and falls back to a
+structural dry-run filter only.
+
+Football-like filter:
+
+```text
+classified_football:
+  explicit football/soccer/football-like classification field.
+
+classified_non_football:
+  explicit basketball/tennis/volleyball style classification field.
+
+football_like:
+  no explicit classification, period/score shape is compatible with football.
+
+non_football_like:
+  period contains quarter/set/game markers or score is too high for football.
+
+unknown_sport:
+  classification fields exist but do not clearly identify the sport.
+```
+
+Enhanced time mapping:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --match-id 500-1359182 --show-candidates --limit 10
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --match-id 500-1359182 --football-like-only --show-candidates --limit 10
+```
+
+Candidate details include qiumibao id, raw/UTC start time, time delta, status,
+period, score, half score, left/right ids, sport filter status,
+classification fields, and raw keys. When `--football-like-only` is used the
+report also prints before/after candidate counts and filtered-out summaries.
+
+Known-result team-id discovery:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --qiumibao-known-result-candidates --recent-finished --limit 20
+```
+
+This is only an investigation aid. It compares local finished scores to
+qiumibao candidates within 30 minutes and prints possible `left_id/right_id`
+directions (`same_order`, `reversed_order`, `no_score_match`). It does not build
+a team-id mapping table and does not confirm any result automatically.

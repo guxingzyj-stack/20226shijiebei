@@ -267,6 +267,32 @@ Do not treat `possible_zhibo8_ids` as qiumibao score ids. If qiumibao time
 mapping returns `ambiguous_qiumibao_candidates` or `ambiguous_local_candidates`,
 the row is not safe for any future writer.
 
+For 061-E diagnostics, inspect qiumibao raw fields and candidate details first:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --dump-qiumibao-raw --limit 3
+PYTHONPATH=. python -m api.worldcup_live_probe --dump-qiumibao --limit 30
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --match-id 500-1359182 --show-candidates --limit 10
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --match-id 500-1359182 --football-like-only --show-candidates --limit 10
+PYTHONPATH=. python -m api.worldcup_live_probe --qiumibao-known-result-candidates --recent-finished --limit 20
+```
+
+Expected:
+
+```text
+raw dump shows source_url, rows_seen, raw keys, and classification_field_candidates
+missing sport/category/league fields are printed as not_found
+ambiguous rows print candidate details
+football-like-only prints before/after filter counts
+known-result candidates print possible left_id/right_id directions
+writes_db: false
+```
+
+The qiumibao feed is a mixed rolling feed unless raw fields prove otherwise.
+`football_like` is only a coarse diagnostic filter. Team-id reverse discovery is
+only an investigation aid and must not create automatic mappings or write
+scores.
+
 Normal daily operation no longer requires running the full 041 SQL bundle. Use
 `/api/health` first. If it shows `FAIL`, run the Python daily runner and
 `python -m api.ops_health_check` inside the API container, then inspect `ops_log`.

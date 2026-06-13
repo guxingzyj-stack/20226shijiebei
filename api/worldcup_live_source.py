@@ -110,6 +110,13 @@ class QiumibaoTimeCandidate:
     raw_away_team: str | None
     normalized_home_team: str
     normalized_away_team: str
+    raw_status: str | None = None
+    status: str | None = None
+    result_home: int | None = None
+    result_away: int | None = None
+    sport_filter_status: str | None = None
+    classification_fields: dict[str, Any] | None = None
+    raw_keys: list[str] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -220,33 +227,33 @@ def map_local_match(match_id: str) -> dict[str, Any]:
     return _mapping_report(live_report, [local] if local else [])
 
 
-def map_qiumibao_by_time_upcoming(limit: int = 24) -> dict[str, Any]:
+def map_qiumibao_by_time_upcoming(limit: int = 24, football_like_only: bool = False) -> dict[str, Any]:
     qiumibao_report = qiumibao.score_source_report(date=None)
-    return build_qiumibao_time_mapping_report(qiumibao_report, _upcoming_local_matches(limit))
+    return build_qiumibao_time_mapping_report(qiumibao_report, _upcoming_local_matches(limit), football_like_only=football_like_only)
 
 
-def map_qiumibao_by_time_recent_finished(limit: int = 10) -> dict[str, Any]:
+def map_qiumibao_by_time_recent_finished(limit: int = 10, football_like_only: bool = False) -> dict[str, Any]:
     qiumibao_report = qiumibao.score_source_report(date=None)
-    return build_qiumibao_time_mapping_report(qiumibao_report, _recent_finished_locals(limit))
+    return build_qiumibao_time_mapping_report(qiumibao_report, _recent_finished_locals(limit), football_like_only=football_like_only)
 
 
-def map_qiumibao_by_time_all_overdue() -> dict[str, Any]:
+def map_qiumibao_by_time_all_overdue(football_like_only: bool = False) -> dict[str, Any]:
     qiumibao_report = qiumibao.score_source_report(date=None)
     locals_ = [_local_match(str(row["match_id"])) for row in overdue_matches(limit=20)]
-    report = build_qiumibao_time_mapping_report(qiumibao_report, [local for local in locals_ if local])
+    report = build_qiumibao_time_mapping_report(qiumibao_report, [local for local in locals_ if local], football_like_only=football_like_only)
     report["overdue_count"] = len(locals_)
     return report
 
 
-def map_qiumibao_by_time_match(match_id: str) -> dict[str, Any]:
+def map_qiumibao_by_time_match(match_id: str, football_like_only: bool = False) -> dict[str, Any]:
     qiumibao_report = qiumibao.score_source_report(date=None)
     local = _local_match(match_id)
-    return build_qiumibao_time_mapping_report(qiumibao_report, [local] if local else [])
+    return build_qiumibao_time_mapping_report(qiumibao_report, [local] if local else [], football_like_only=football_like_only)
 
 
-def build_qiumibao_time_mapping_report(qiumibao_report: dict[str, Any], locals_: list[dict[str, Any]]) -> dict[str, Any]:
+def build_qiumibao_time_mapping_report(qiumibao_report: dict[str, Any], locals_: list[dict[str, Any]], football_like_only: bool = False) -> dict[str, Any]:
     qrows = qiumibao_report.get("matches") or []
-    mappings = _qiumibao_time_mapping_rows(locals_, qrows)
+    mappings = _qiumibao_time_mapping_rows(locals_, qrows, football_like_only=football_like_only)
     return {
         "mode": "dry-run",
         "writes_db": False,
@@ -259,8 +266,26 @@ def build_qiumibao_time_mapping_report(qiumibao_report: dict[str, Any], locals_:
         "no_qiumibao_time_candidate_count": sum(1 for row in mappings if row["mapping_status"] == "no_qiumibao_time_candidate"),
         "ambiguous_qiumibao_candidates_count": sum(1 for row in mappings if row["mapping_status"] == "ambiguous_qiumibao_candidates"),
         "ambiguous_local_candidates_count": sum(1 for row in mappings if row["mapping_status"] == "ambiguous_local_candidates"),
+        "matched_by_time_after_football_filter_count": sum(1 for row in mappings if row["mapping_status"] == "matched_by_time_after_football_filter"),
+        "ambiguous_after_football_filter_count": sum(1 for row in mappings if row["mapping_status"] == "ambiguous_after_football_filter"),
         "overdue_count": 0,
+        "football_like_only": football_like_only,
         "mappings": mappings,
+    }
+
+
+def qiumibao_known_result_candidates_recent_finished(limit: int = 20) -> dict[str, Any]:
+    qiumibao_report = qiumibao.score_source_report(date=None)
+    locals_ = _recent_finished_locals(limit)
+    rows = [_known_result_candidate_row(local, qiumibao_report.get("matches") or []) for local in locals_]
+    return {
+        "mode": "dry-run",
+        "writes_db": False,
+        "source_fetch_ok": bool(qiumibao_report.get("source_fetch_ok")),
+        "parser_error": qiumibao_report.get("parser_error"),
+        "local_matches_seen": len(locals_),
+        "qiumibao_matches_seen": len(qiumibao_report.get("matches") or []),
+        "known_result_candidates": rows,
     }
 
 
@@ -575,12 +600,15 @@ def _mapping_report(live_report: dict[str, Any], locals_: list[dict[str, Any]]) 
     }
 
 
-def _qiumibao_time_mapping_rows(locals_: list[dict[str, Any]], qrows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _qiumibao_time_mapping_rows(locals_: list[dict[str, Any]], qrows: list[dict[str, Any]], football_like_only: bool = False) -> list[dict[str, Any]]:
     local_candidates: dict[str, list[tuple[dict[str, Any], int]]] = {}
+    local_before_candidates: dict[str, list[tuple[dict[str, Any], int]]] = {}
     qiumibao_usage: dict[str, int] = {}
     for local in locals_:
         local_key = str(local.get("match_id") or "")
-        candidates = _qiumibao_time_candidates_for_local(local, qrows)
+        before_candidates = _qiumibao_time_candidates_for_local(local, qrows)
+        candidates = _filter_football_like_candidates(before_candidates) if football_like_only else before_candidates
+        local_before_candidates[local_key] = before_candidates
         local_candidates[local_key] = candidates
         for qrow, _diff in candidates:
             qkey = _qiumibao_candidate_key(qrow)
@@ -589,6 +617,7 @@ def _qiumibao_time_mapping_rows(locals_: list[dict[str, Any]], qrows: list[dict[
     rows: list[dict[str, Any]] = []
     for local in locals_:
         local_key = str(local.get("match_id") or "")
+        before_candidates = local_before_candidates.get(local_key, [])
         candidates = local_candidates.get(local_key, [])
         if not candidates:
             status = "no_qiumibao_time_candidate"
@@ -605,9 +634,11 @@ def _qiumibao_time_mapping_rows(locals_: list[dict[str, Any]], qrows: list[dict[
                 reason = "one qiumibao row matched multiple local matches"
                 chosen = None
             else:
-                status = "matched_by_time"
-                reason = "unique qiumibao row matched local kickoff within 15 minutes"
+                status = "matched_by_time_after_football_filter" if football_like_only else "matched_by_time"
+                reason = "unique qiumibao row matched after football-like filter" if football_like_only else "unique qiumibao row matched local kickoff within 15 minutes"
                 chosen = candidates[0]
+        if football_like_only and len(candidates) > 1:
+            status = "ambiguous_after_football_filter"
         candidate_dicts = [_qiumibao_time_candidate(qrow, local, diff).as_dict() for qrow, diff in candidates[:10]]
         rows.append(
             {
@@ -615,8 +646,12 @@ def _qiumibao_time_mapping_rows(locals_: list[dict[str, Any]], qrows: list[dict[
                 "best_candidate": _qiumibao_time_candidate(chosen[0], local, chosen[1]).as_dict() if chosen else None,
                 "candidates": candidate_dicts,
                 "mapping_status": status,
-                "confidence": "high" if status == "matched_by_time" else "none",
+                "confidence": "high" if status in {"matched_by_time", "matched_by_time_after_football_filter"} else "none",
                 "reason": reason,
+                "before_filter_candidates_count": len(before_candidates),
+                "after_filter_candidates_count": len(candidates),
+                "filtered_out_count": max(len(before_candidates) - len(candidates), 0),
+                "filtered_out_reasons_summary": _filtered_out_reasons(before_candidates, candidates),
             }
         )
     return rows
@@ -654,6 +689,13 @@ def _qiumibao_time_candidate(qrow: dict[str, Any], local: dict[str, Any], diff_s
         raw_away_team=qrow.get("away_team"),
         normalized_home_team=normalize_team_name(qrow.get("home_team")),
         normalized_away_team=normalize_team_name(qrow.get("away_team")),
+        raw_status=qrow.get("raw_status"),
+        status=qrow.get("status"),
+        result_home=qrow.get("result_home"),
+        result_away=qrow.get("result_away"),
+        sport_filter_status=qrow.get("sport_filter_status"),
+        classification_fields=qrow.get("classification_fields") or {},
+        raw_keys=qrow.get("raw_keys") or [],
     )
 
 
@@ -676,6 +718,66 @@ def _qiumibao_candidate_key(qrow: dict[str, Any]) -> str:
     if qrow.get("external_id") is not None:
         return f"id:{qrow['external_id']}"
     return f"time:{_iso(qrow.get('start_time_utc') or qrow.get('kickoff_at'))}:teams:{qrow.get('home_team')}:{qrow.get('away_team')}"
+
+
+def _filter_football_like_candidates(candidates: list[tuple[dict[str, Any], int]]) -> list[tuple[dict[str, Any], int]]:
+    return [
+        (qrow, diff)
+        for qrow, diff in candidates
+        if qrow.get("sport_filter_status") in {"classified_football", "football_like"}
+    ]
+
+
+def _filtered_out_reasons(before_candidates: list[tuple[dict[str, Any], int]], after_candidates: list[tuple[dict[str, Any], int]]) -> dict[str, int]:
+    kept = {_qiumibao_candidate_key(qrow) for qrow, _diff in after_candidates}
+    counts: dict[str, int] = {}
+    for qrow, _diff in before_candidates:
+        if _qiumibao_candidate_key(qrow) in kept:
+            continue
+        status = str(qrow.get("sport_filter_status") or "unknown_sport")
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def _known_result_candidate_row(local: dict[str, Any], qrows: list[dict[str, Any]]) -> dict[str, Any]:
+    local_time = _as_datetime(local.get("kickoff_at"))
+    candidates: list[dict[str, Any]] = []
+    if local_time is not None:
+        for qrow in qrows:
+            qtime = _as_datetime(qrow.get("start_time_utc") or qrow.get("kickoff_at"))
+            if qtime is None:
+                continue
+            diff = int(abs((qtime - local_time).total_seconds()))
+            if diff > 30 * 60 or qrow.get("sport_filter_status") not in {"classified_football", "football_like"}:
+                continue
+            candidates.append(
+                {
+                    **_qiumibao_time_candidate(qrow, local, diff).as_dict(),
+                    "score_match_direction": _score_match_direction(local, qrow),
+                }
+            )
+    return {
+        "local_match_id": local.get("match_id"),
+        "local_home_team": local.get("home_team"),
+        "local_away_team": local.get("away_team"),
+        "local_result": _score(local.get("result_home"), local.get("result_away")),
+        "local_kickoff_at_utc": _iso(local.get("kickoff_at")),
+        "candidates": candidates[:10],
+    }
+
+
+def _score_match_direction(local: dict[str, Any], qrow: dict[str, Any]) -> str:
+    lh = local.get("result_home")
+    la = local.get("result_away")
+    qh = qrow.get("result_home")
+    qa = qrow.get("result_away")
+    if lh is None or la is None or qh is None or qa is None:
+        return "no_score_match"
+    if lh == qh and la == qa:
+        return "same_order"
+    if lh == qa and la == qh:
+        return "reversed_order"
+    return "no_score_match"
 
 
 def _recent_finished_locals(limit: int) -> list[dict[str, Any]]:

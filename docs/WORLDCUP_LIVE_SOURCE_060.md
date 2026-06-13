@@ -247,3 +247,17 @@ This path uses qiumibao `start_time` converted from Unix seconds to UTC and
 matches it to local `matches.kickoff_at` within 15 minutes. It prints
 `writes_db: false` and is only a diagnostic. It does not write scores and does
 not require zhibo8 to expose a qiumibao id.
+
+061-E adds raw qiumibao field inspection and candidate details:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --dump-qiumibao-raw --limit 3
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --match-id <match_id> --show-candidates --limit 10
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --match-id <match_id> --football-like-only --show-candidates --limit 10
+PYTHONPATH=. python -m api.worldcup_live_probe --qiumibao-known-result-candidates --recent-finished --limit 20
+```
+
+The current qiumibao score feed should be treated as a mixed-event rolling feed
+unless raw fields prove otherwise. If explicit sport/category fields are absent,
+the football-like filter is only a coarse diagnostic. It is not a permission to
+write results.

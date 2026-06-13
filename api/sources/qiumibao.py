@@ -12,6 +12,23 @@ from api.ops_log import sanitize_error
 SCORE_BASE = "https://bifen4pc.qiumibao.com/json"
 EVENT_BASE = "https://dc4pc.qiumibao.com/dc/matchs/data"
 USER_AGENT = "Mozilla/5.0"
+CLASSIFICATION_FIELD_CANDIDATES = (
+    "sport_type",
+    "sport",
+    "category",
+    "league",
+    "competition",
+    "match_type",
+    "type",
+    "ball_type",
+    "tournament",
+    "name",
+    "cn",
+    "title",
+)
+FOOTBALL_TERMS = ("football", "soccer", "足球", "zuqiu", "world cup", "世界杯")
+NON_FOOTBALL_TERMS = ("basketball", "篮球", "nba", "tennis", "网球", "volleyball", "排球")
+NON_FOOTBALL_PERIOD_TERMS = ("节", "局", "盘")
 
 
 @dataclass(frozen=True)
@@ -35,6 +52,10 @@ class SourceMatch:
     period_cn: str | None = None
     score_msg_full: str | None = None
     score_msg_list: list[str] | None = None
+    sport_filter_status: str = "unknown_sport"
+    sport_filter_reason: str | None = None
+    classification_fields: dict[str, Any] | None = None
+    raw_keys: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -47,8 +68,12 @@ class SourceEvent:
 
 
 def fetch_score_json(date: str | None = None, timeout: int = 15) -> dict[str, Any]:
+    return _fetch_json(score_url(date), timeout=timeout)
+
+
+def score_url(date: str | None = None) -> str:
     suffix = f"/{date}/v2/list.htm" if date else "/v2/list.htm"
-    return _fetch_json(f"{SCORE_BASE}{suffix}", timeout=timeout)
+    return f"{SCORE_BASE}{suffix}"
 
 
 def fetch_event_json(date: str, match_id: str, timeout: int = 15) -> dict[str, Any]:
@@ -71,6 +96,34 @@ def score_source_report(date: str | None = None, fetcher=fetch_score_json) -> di
             "source_fetch_ok": False,
             "parser_error": sanitize_error(exc),
             "matches": [],
+        }
+
+
+def raw_score_source_report(date: str | None = None, fetcher=fetch_score_json) -> dict[str, Any]:
+    try:
+        payload = fetcher(date)
+        rows = _extract_rows(payload) or []
+        raw_rows = [row for row in rows if isinstance(row, dict)]
+        return {
+            "source_name": "qiumibao_score_raw",
+            "source_fetch_ok": True,
+            "parser_error": None,
+            "source_url": score_url(date),
+            "date": date,
+            "rows_seen": len(raw_rows),
+            "raw_rows": raw_rows,
+            "classification_field_candidates": inspect_classification_fields(raw_rows),
+        }
+    except Exception as exc:
+        return {
+            "source_name": "qiumibao_score_raw",
+            "source_fetch_ok": False,
+            "parser_error": sanitize_error(exc),
+            "source_url": score_url(date),
+            "date": date,
+            "rows_seen": 0,
+            "raw_rows": [],
+            "classification_field_candidates": inspect_classification_fields([]),
         }
 
 
@@ -173,6 +226,7 @@ def normalize_match(row: dict[str, Any]) -> SourceMatch | None:
         away_score = None
     if not external_id and not home_team and not away_team:
         return None
+    sport_filter = qiumibao_sport_filter(row, normalized_home_score=home_score, normalized_away_score=away_score)
     kickoff_value = _first(row, "time", "match_time", "start_time", "date")
     kickoff_at = _normalize_kickoff(kickoff_value)
     start_time_value = _first(row, "start_time", "time", "match_time")
@@ -196,7 +250,67 @@ def normalize_match(row: dict[str, Any]) -> SourceMatch | None:
         period_cn=str(period_cn) if period_cn else None,
         score_msg_full=score_msg_full,
         score_msg_list=score_msg_list or None,
+        sport_filter_status=sport_filter["sport_filter_status"],
+        sport_filter_reason=sport_filter["reason"],
+        classification_fields=sport_filter["classification_fields"],
+        raw_keys=sorted(str(key) for key in row.keys()),
     )
+
+
+def is_qiumibao_football_row(row: dict[str, Any]) -> bool:
+    return qiumibao_sport_filter(row)["sport_filter_status"] in {"classified_football", "football_like"}
+
+
+def qiumibao_sport_filter(
+    row: dict[str, Any],
+    normalized_home_score: int | None = None,
+    normalized_away_score: int | None = None,
+) -> dict[str, Any]:
+    classification = _classification_values(row)
+    text_values = [str(value).strip().lower() for value in classification.values() if value is not None and str(value).strip()]
+    if any(_contains_any(value, FOOTBALL_TERMS) for value in text_values):
+        return _sport_filter_result("classified_football", "classification field says football", classification, row)
+    if any(_contains_any(value, NON_FOOTBALL_TERMS) for value in text_values):
+        return _sport_filter_result("classified_non_football", "classification field says non-football", classification, row)
+    if text_values:
+        return _sport_filter_result("unknown_sport", "classification fields exist but sport is unclear", classification, row)
+
+    period = str(_first(row, "period_cn", "period", "status_cn", "state") or "")
+    if any(term in period for term in NON_FOOTBALL_PERIOD_TERMS):
+        return _sport_filter_result("non_football_like", "period looks like another sport", classification, row)
+
+    home_score = normalized_home_score
+    away_score = normalized_away_score
+    if home_score is None:
+        left = row.get("left") if isinstance(row.get("left"), dict) else {}
+        home_score = _parse_int(_first(row, "home_score", "score1", "left_score") or _first(left, "score"))
+    if away_score is None:
+        right = row.get("right") if isinstance(row.get("right"), dict) else {}
+        away_score = _parse_int(_first(row, "away_score", "score2", "right_score") or _first(right, "score"))
+    if home_score is not None and away_score is not None and (home_score > 9 or away_score > 9):
+        return _sport_filter_result("non_football_like", "score is too high for football", classification, row)
+    return _sport_filter_result("football_like", "structure is compatible with football", classification, row)
+
+
+def inspect_classification_fields(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    report: dict[str, dict[str, Any]] = {}
+    for field in CLASSIFICATION_FIELD_CANDIDATES:
+        values: list[str] = []
+        for row in rows:
+            for value in _field_values(row, field):
+                text = _short_text(value)
+                if text and text not in values:
+                    values.append(text)
+                if len(values) >= 5:
+                    break
+            if len(values) >= 5:
+                break
+        report[field] = {
+            "status": "found" if values else "not_found",
+            "count": sum(1 for row in rows if _field_values(row, field)),
+            "sample_values": values,
+        }
+    return report
 
 
 def normalize_status(value: Any) -> str:
@@ -267,6 +381,47 @@ def _first(row: dict[str, Any], *names: str) -> Any:
         if value is not None and value != "":
             return value
     return None
+
+
+def _classification_values(row: dict[str, Any]) -> dict[str, Any]:
+    values: dict[str, Any] = {}
+    for field in CLASSIFICATION_FIELD_CANDIDATES:
+        found = _field_values(row, field)
+        if found:
+            values[field] = found[0] if len(found) == 1 else found
+    return values
+
+
+def _field_values(row: dict[str, Any], field: str) -> list[Any]:
+    values: list[Any] = []
+    direct = row.get(field)
+    if direct is not None and direct != "":
+        values.append(direct)
+    for side in ("left", "right"):
+        child = row.get(side)
+        if isinstance(child, dict):
+            value = child.get(field)
+            if value is not None and value != "":
+                values.append(value)
+    return values
+
+
+def _sport_filter_result(status: str, reason: str, classification: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "sport_filter_status": status,
+        "reason": reason,
+        "classification_fields": classification,
+        "raw_keys": sorted(str(key) for key in row.keys()),
+    }
+
+
+def _contains_any(value: str, terms: tuple[str, ...]) -> bool:
+    return any(term in value for term in terms)
+
+
+def _short_text(value: Any, limit: int = 80) -> str:
+    text = str(value).replace("\n", " ").strip()
+    return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
 def _first_path(row: dict[str, Any], *paths: str) -> Any:

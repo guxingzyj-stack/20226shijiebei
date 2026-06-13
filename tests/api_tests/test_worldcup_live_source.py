@@ -11,8 +11,10 @@ from api.worldcup_live_source import (
     build_qiumibao_time_mapping_report,
     build_worldcup_live_matches,
     fetch_worldcup_live_report,
+    qiumibao_known_result_candidates_recent_finished,
     score_live_to_local_match,
 )
+from api.worldcup_live_probe import _print_qiumibao_raw_report
 
 
 def test_zhibo8_worldcup_schedule_parser_extracts_match():
@@ -79,6 +81,33 @@ def test_qiumibao_score_parser_tolerates_missing_team_names():
     assert match.home_team is None
     assert match.away_team is None
     assert match.status == "scheduled"
+
+
+def test_qiumibao_raw_dump_report_keeps_raw_keys_and_not_found_fields(capsys):
+    payload = {"list": [{"id": "raw1", "start_time": 1781377200, "period_cn": "90'", "left": {"id": 1}, "right": {"id": 2}}]}
+    report = qiumibao.raw_score_source_report(fetcher=lambda date=None: payload)
+
+    assert report["source_fetch_ok"] is True
+    assert report["rows_seen"] == 1
+    assert sorted(report["raw_rows"][0].keys()) == ["id", "left", "period_cn", "right", "start_time"]
+    assert report["classification_field_candidates"]["sport"]["status"] == "not_found"
+
+    _print_qiumibao_raw_report(report, limit=1)
+    output = capsys.readouterr().out
+    assert "Qiumibao Raw Dump" in output
+    assert "writes_db: false" in output
+    assert "keys:" in output
+    assert "classification_field_candidates:" in output
+
+
+def test_qiumibao_sport_filter_classifies_period_and_score_shapes():
+    assert qiumibao.qiumibao_sport_filter({"period_cn": "\u7b2c1\u8282"})["sport_filter_status"] == "non_football_like"
+    assert qiumibao.qiumibao_sport_filter({"period_cn": "\u7b2c1\u5c40"})["sport_filter_status"] == "non_football_like"
+    assert qiumibao.qiumibao_sport_filter({"period_cn": "90'", "left": {"score": 1}, "right": {"score": 1}})["sport_filter_status"] == "football_like"
+    assert qiumibao.qiumibao_sport_filter({"period_cn": "90'", "left": {"score": 60}, "right": {"score": 59}})["sport_filter_status"] == "non_football_like"
+    assert qiumibao.qiumibao_sport_filter({"period_cn": "\u5b8c\u573a", "left": {"score": 1}, "right": {"score": 1}})["sport_filter_status"] == "football_like"
+    assert qiumibao.qiumibao_sport_filter({"sport": "basketball"})["sport_filter_status"] == "classified_non_football"
+    assert qiumibao.qiumibao_sport_filter({"sport": "football"})["sport_filter_status"] == "classified_football"
 
 
 def test_events_for_match_without_match_id_does_not_request_events():
@@ -443,6 +472,27 @@ def test_qiumibao_time_mapping_reports_ambiguous_qiumibao_candidates():
 
     assert report["mappings"][0]["mapping_status"] == "ambiguous_qiumibao_candidates"
     assert report["ambiguous_qiumibao_candidates_count"] == 1
+    assert len(report["mappings"][0]["candidates"]) == 2
+    assert report["mappings"][0]["candidates"][0]["sport_filter_status"] == "football_like"
+    assert report["mappings"][0]["candidates"][0]["raw_keys"]
+
+
+def test_qiumibao_time_mapping_can_filter_non_football_candidates():
+    local = _local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+    qreport = _qiumibao_report([
+        _qrow("q1", "2026-06-13T01:00:00+00:00", sport_filter_status="football_like"),
+        _qrow("q2", "2026-06-13T01:10:00+00:00", sport_filter_status="non_football_like"),
+    ])
+
+    report = build_qiumibao_time_mapping_report(qreport, [local], football_like_only=True)
+    row = report["mappings"][0]
+
+    assert row["mapping_status"] == "matched_by_time_after_football_filter"
+    assert row["before_filter_candidates_count"] == 2
+    assert row["after_filter_candidates_count"] == 1
+    assert row["filtered_out_count"] == 1
+    assert row["filtered_out_reasons_summary"] == {"non_football_like": 1}
+    assert report["writes_db"] is False
 
 
 def test_qiumibao_time_mapping_reports_ambiguous_local_candidates():
@@ -457,6 +507,36 @@ def test_qiumibao_time_mapping_reports_ambiguous_local_candidates():
         "ambiguous_local_candidates",
     ]
     assert report["ambiguous_local_candidates_count"] == 2
+
+
+def test_known_result_candidates_report_score_directions(monkeypatch):
+    locals_ = [
+        {**_local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00"), "result_home": 1, "result_away": 1},
+        {**_local("\u5361\u5854\u5c14", "\u745e\u58eb", "2026-06-13T02:00:00+00:00"), "match_id": "500-2", "result_home": 2, "result_away": 1},
+    ]
+    monkeypatch.setattr("api.worldcup_live_source._recent_finished_locals", lambda limit: locals_)
+    monkeypatch.setattr(
+        "api.worldcup_live_source.qiumibao.score_source_report",
+        lambda date=None: _qiumibao_report(
+            [
+                _qrow("q1", "2026-06-13T01:00:00+00:00", result_home=1, result_away=1),
+                _qrow("q2", "2026-06-13T02:00:00+00:00", result_home=1, result_away=2),
+                _qrow("q3", "2026-06-13T02:10:00+00:00", result_home=0, result_away=0),
+            ]
+        ),
+    )
+
+    report = qiumibao_known_result_candidates_recent_finished(limit=20)
+
+    assert report["writes_db"] is False
+    directions = [
+        candidate["score_match_direction"]
+        for row in report["known_result_candidates"]
+        for candidate in row["candidates"]
+    ]
+    assert "same_order" in directions
+    assert "reversed_order" in directions
+    assert "no_score_match" in directions
 
 
 def _local(home: str, away: str, kickoff_at: str) -> dict:
@@ -499,7 +579,13 @@ def _qiumibao_report(rows: list[dict]) -> dict:
     }
 
 
-def _qrow(external_id: str, kickoff_at: str) -> dict:
+def _qrow(
+    external_id: str,
+    kickoff_at: str,
+    sport_filter_status: str = "football_like",
+    result_home: int | None = None,
+    result_away: int | None = None,
+) -> dict:
     return {
         "external_id": external_id,
         "home_team": "\u7f8e\u56fd",
@@ -507,13 +593,16 @@ def _qrow(external_id: str, kickoff_at: str) -> dict:
         "kickoff_at": kickoff_at,
         "start_time_raw": "1781312400",
         "start_time_utc": kickoff_at,
-        "status": "scheduled",
+        "status": "finished" if result_home is not None and result_away is not None else "scheduled",
         "raw_status": "1",
         "period_cn": "\u672a\u8d5b",
-        "result_home": None,
-        "result_away": None,
+        "result_home": result_home,
+        "result_away": result_away,
         "ht_home": None,
         "ht_away": None,
         "left_id": "10",
         "right_id": "20",
+        "sport_filter_status": sport_filter_status,
+        "classification_fields": {},
+        "raw_keys": ["id", "start_time", "period_cn", "left", "right"],
     }
