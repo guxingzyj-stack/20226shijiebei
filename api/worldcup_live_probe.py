@@ -10,6 +10,11 @@ from api.worldcup_live_source import (
     compare_local_match,
     compare_local_recent_finished,
     fetch_worldcup_live_report,
+    map_local_all_overdue,
+    map_local_match,
+    map_local_recent,
+    map_local_recent_finished,
+    map_local_upcoming,
 )
 
 
@@ -20,7 +25,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dump-zhibo8", action="store_true", help="Dump parsed zhibo8 schedule rows.")
     parser.add_argument("--dump-qiumibao", action="store_true", help="Dump parsed qiumibao score rows.")
     parser.add_argument("--compare-local", action="store_true", help="Compare local matches against live source rows.")
+    parser.add_argument("--map-local", action="store_true", help="Map live source rows to local matches with candidate scoring.")
     parser.add_argument("--recent-finished", action="store_true", help="Use recent finished local matches for --compare-local.")
+    parser.add_argument("--upcoming", action="store_true", help="Use upcoming scheduled/closed local matches for --map-local.")
     parser.add_argument("--all-overdue", action="store_true", help="Use overdue local matches for --compare-local.")
     parser.add_argument("--limit", type=int, default=5)
     args = parser.parse_args(argv)
@@ -31,6 +38,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dump_qiumibao:
         _print_source_report("qiumibao_score", qiumibao.score_source_report(), args.limit)
+        return 0
+
+    if args.map_local:
+        if args.match_id:
+            _print_mapping_report(map_local_match(args.match_id), args.limit)
+        elif args.all_overdue:
+            _print_mapping_report(map_local_all_overdue(), args.limit)
+        elif args.recent_finished:
+            _print_mapping_report(map_local_recent_finished(args.limit), args.limit)
+        elif args.upcoming:
+            _print_mapping_report(map_local_upcoming(args.limit), args.limit)
+        else:
+            _print_mapping_report(map_local_recent(args.limit), args.limit)
         return 0
 
     if args.match_id:
@@ -112,6 +132,55 @@ def _print_compare_report(report: dict[str, Any], limit: int) -> None:
             "reason",
         ):
             print(f"  - {key}: {_compact(row.get(key))}")
+
+
+def _print_mapping_report(report: dict[str, Any], limit: int) -> None:
+    print("WorldCup Live Local Mapping Report")
+    _print_common(report)
+    print(f"- local_matches_seen: {report.get('local_matches_seen', 0)}")
+    print(f"- comparison_status_summary: {json.dumps(report.get('comparison_status_summary') or {}, ensure_ascii=False, sort_keys=True)}")
+    mappings = report.get("mappings") or []
+    print(f"- shown_mappings: {min(limit, len(mappings))}")
+    for row in mappings[:limit]:
+        local = row.get("local_match") or {}
+        best = row.get("best_candidate") or {}
+        print("- local_match:")
+        for key in (
+            "match_id",
+            "match_num",
+            "raw_home_team",
+            "raw_away_team",
+            "normalized_home_team",
+            "normalized_away_team",
+            "kickoff_at",
+            "status",
+            "result",
+        ):
+            print(f"  - {key}: {_compact(local.get(key))}")
+        print("  best_candidate:")
+        if best:
+            for key in (
+                "live_home_team",
+                "live_away_team",
+                "live_kickoff_at",
+                "live_status",
+                "live_score",
+                "live_half_score",
+                "zhibo8_match_ref",
+                "qiumibao_match_id",
+                "match_score",
+                "confidence",
+                "mapping_status",
+                "mapping_reason",
+            ):
+                print(f"    - {key}: {_compact(best.get(key))}")
+        else:
+            print("    - none")
+        print(f"  - mapping_status: {_compact(row.get('mapping_status'))}")
+        print(f"  - confidence: {_compact(row.get('confidence'))}")
+        print(f"  - comparison_status: {_compact(row.get('comparison_status'))}")
+        print(f"  - reason: {_compact(row.get('reason'))}")
+        print(f"  - candidates_count: {len(row.get('candidates') or [])}")
 
 
 def _print_common(report: dict[str, Any]) -> None:

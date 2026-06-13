@@ -49,6 +49,17 @@ PYTHONPATH=. python -m api.worldcup_live_probe --compare-local --all-overdue
 This adds zhibo8 schedule context around qiumibao score/event rows. It is still a
 comparison source only and returns `writes_db: false`.
 
+After 061, the preferred high-level diagnostic entry point is:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --recent
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --upcoming
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --all-overdue
+```
+
+058 remains the lower-level source comparison layer; 061 adds local match
+candidate scoring and ambiguity protection.
+
 ## Source Roles
 
 ### 500_trade_jczq

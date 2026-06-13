@@ -217,6 +217,8 @@ python -m api.result_consistency_report
 python -m api.result_overdue_report
 python -m api.worldcup_live_probe --recent
 python -m api.worldcup_live_probe --compare-local --all-overdue
+python -m api.worldcup_live_probe --map-local --recent
+python -m api.worldcup_live_probe --map-local --all-overdue
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
 ```
@@ -227,8 +229,9 @@ python -m api.cleanup_test_data dry-run
 `api.health_report` must return `FAIL`.
 
 The `api.worldcup_live_probe` commands are BaiLongma-style zhibo8/qiumibao
-live-source dry-runs. They print `writes_db: false` and must not be used as a
-score writer without explicit approval.
+live-source dry-runs. The `--map-local` variants score candidate mappings to
+local `matches.match_id`. They print `writes_db: false` and must not be used as
+a score writer without explicit approval.
 
 Normal daily operation no longer requires running the full 041 SQL bundle. Use
 `/api/health` first. If it shows `FAIL`, run the Python daily runner and

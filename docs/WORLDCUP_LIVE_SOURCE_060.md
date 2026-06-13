@@ -202,3 +202,19 @@ PYTHONPATH=. python -m api.worldcup_live_probe --compare-local --all-overdue
 If output is stable for multiple matchdays and conflicts remain zero, this chain
 can become a candidate comparison source. It should not become a score writer
 without explicit approval.
+
+## 061 Local Mapping
+
+Task 061 adds local `matches.match_id` candidate scoring on top of this live
+source chain:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --recent
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --match-id 500-1359189
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --upcoming
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --recent-finished
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --all-overdue
+```
+
+See `docs/WORLDCUP_LIVE_MAPPING_061.md`. The 061 mapping layer is still dry-run
+and does not write results.

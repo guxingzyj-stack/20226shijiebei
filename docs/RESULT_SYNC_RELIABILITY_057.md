@@ -112,6 +112,8 @@ PYTHONPATH=. python -m api.result_source_compare --all-overdue
 PYTHONPATH=. python -m api.result_source_compare --recent-finished
 PYTHONPATH=. python -m api.worldcup_live_probe --recent
 PYTHONPATH=. python -m api.worldcup_live_probe --compare-local --all-overdue
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --recent
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --all-overdue
 ```
 
 This compares local DB, 500_trade_jczq, qiumibao score JSON, qiumibao events,
@@ -120,6 +122,11 @@ and FIFA mapping status without writing the database.
 The 060 live probe additionally mirrors BaiLongma's `/worldcup` approach by
 using zhibo8 homepage schedule rows to contextualize qiumibao score/event rows.
 It is still dry-run only and does not replace `results_sync`.
+
+061 extends this with local `matches.match_id` candidate scoring. The mapping
+report can return `matched`, `mapping_missing`, `team_name_mismatch`,
+`kickoff_time_mismatch`, `ambiguous_candidates`, `low_confidence`, or
+`source_window_missing`; none of these statuses write scores.
 
 058-B tightened the comparison rules:
 

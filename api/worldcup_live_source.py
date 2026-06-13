@@ -13,6 +13,8 @@ from api.sources import qiumibao, zhibo8
 
 
 DATE_WINDOW_HOURS = 4
+LOCAL_MAPPING_WINDOW_HOURS = 4
+AMBIGUOUS_SCORE_DELTA = 0.05
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,33 @@ class WorldCupLiveMatch:
     mapping_status: str = "mapping_missing"
     mapping_reason: str | None = None
     parser_error: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return self.__dict__.copy()
+
+
+@dataclass(frozen=True)
+class LocalLiveCandidate:
+    local_match_id: str | None
+    live_home_team: str | None
+    live_away_team: str | None
+    live_kickoff_at: str | None
+    live_status: str | None
+    live_score: str | None
+    live_half_score: str | None
+    zhibo8_match_ref: str | None
+    qiumibao_match_id: str | None
+    qiumibao_left_id: str | None
+    qiumibao_right_id: str | None
+    normalized_live_home_team: str
+    normalized_live_away_team: str
+    home_team_match: bool
+    away_team_match: bool
+    time_delta_minutes: int | None
+    match_score: float
+    confidence: str
+    mapping_status: str
+    mapping_reason: str
 
     def as_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -122,6 +151,102 @@ def compare_local_match(match_id: str) -> dict[str, Any]:
     local = _local_match(match_id)
     comparisons = [_compare_local_to_live(local, live_report["matches"])] if local else []
     return _comparison_report(live_report, comparisons)
+
+
+def map_local_recent(limit: int = 12) -> dict[str, Any]:
+    live_report = fetch_worldcup_live_report()
+    locals_ = _recent_local_matches(limit)
+    return _mapping_report(live_report, locals_)
+
+
+def map_local_upcoming(limit: int = 24) -> dict[str, Any]:
+    live_report = fetch_worldcup_live_report()
+    locals_ = _upcoming_local_matches(limit)
+    return _mapping_report(live_report, locals_)
+
+
+def map_local_recent_finished(limit: int = 10) -> dict[str, Any]:
+    live_report = fetch_worldcup_live_report()
+    locals_ = _recent_finished_locals(limit)
+    return _mapping_report(live_report, locals_)
+
+
+def map_local_all_overdue() -> dict[str, Any]:
+    live_report = fetch_worldcup_live_report()
+    locals_ = [_local_match(str(row["match_id"])) for row in overdue_matches(limit=20)]
+    report = _mapping_report(live_report, [local for local in locals_ if local])
+    report["overdue_count"] = len(locals_)
+    return report
+
+
+def map_local_match(match_id: str) -> dict[str, Any]:
+    live_report = fetch_worldcup_live_report()
+    local = _local_match(match_id)
+    return _mapping_report(live_report, [local] if local else [])
+
+
+def score_live_to_local_match(live_match: dict[str, Any] | WorldCupLiveMatch, local_match: dict[str, Any]) -> LocalLiveCandidate:
+    live = live_match.as_dict() if isinstance(live_match, WorldCupLiveMatch) else live_match
+    local_home = normalize_team_name(local_match.get("home_team"))
+    local_away = normalize_team_name(local_match.get("away_team"))
+    live_home = normalize_team_name(live.get("home_team"))
+    live_away = normalize_team_name(live.get("away_team"))
+    home_match = bool(local_home and live_home and local_home == live_home)
+    away_match = bool(local_away and live_away and local_away == live_away)
+    delta = _time_delta_minutes(_as_datetime(local_match.get("kickoff_at")), _as_datetime(live.get("kickoff_at")))
+    score = 0.0
+    reasons: list[str] = []
+    if home_match:
+        score += 0.35
+        reasons.append("home_team_normalized_match")
+    if away_match:
+        score += 0.35
+        reasons.append("away_team_normalized_match")
+    if delta is not None and delta <= 30:
+        score += 0.20
+        reasons.append("kickoff_within_30_minutes")
+    elif delta is not None and delta <= 120:
+        score += 0.10
+        reasons.append("kickoff_within_120_minutes")
+    if _match_num_or_external_ref(local_match, live):
+        score += 0.20
+        reasons.append("local_match_id_matches_live_external_ref")
+    if _match_num_or_code(local_match, live):
+        score += 0.10
+        reasons.append("match_num_or_code_related")
+
+    if home_match and away_match and delta is not None and delta <= 30:
+        status = "matched"
+    elif home_match and away_match:
+        status = "kickoff_time_mismatch"
+    elif delta is not None and delta <= 30:
+        status = "team_name_mismatch"
+    elif score >= 0.55:
+        status = "low_confidence"
+    else:
+        status = "mapping_missing"
+    return LocalLiveCandidate(
+        local_match_id=local_match.get("match_id"),
+        live_home_team=live.get("home_team"),
+        live_away_team=live.get("away_team"),
+        live_kickoff_at=live.get("kickoff_at"),
+        live_status=live.get("status"),
+        live_score=live.get("score"),
+        live_half_score=live.get("half_score"),
+        zhibo8_match_ref=live.get("zhibo8_match_ref"),
+        qiumibao_match_id=live.get("qiumibao_match_id"),
+        qiumibao_left_id=live.get("qiumibao_left_id"),
+        qiumibao_right_id=live.get("qiumibao_right_id"),
+        normalized_live_home_team=live_home,
+        normalized_live_away_team=live_away,
+        home_team_match=home_match,
+        away_team_match=away_match,
+        time_delta_minutes=delta,
+        match_score=round(min(score, 1.0), 3),
+        confidence=_confidence(score, status),
+        mapping_status=status,
+        mapping_reason=", ".join(reasons) if reasons else "no strong team/time/id signal",
+    )
 
 
 def _merge_match(schedule: dict[str, Any] | None, qrow: dict[str, Any] | None, mapping_status: str, mapping_reason: str, events: list[dict[str, Any]]) -> WorldCupLiveMatch:
@@ -223,6 +348,72 @@ def _compare_local_to_live(local: dict[str, Any], live_matches: list[dict[str, A
     return _local_result(local, live, comparison, None)
 
 
+def _map_one_local(local: dict[str, Any], live_matches: list[dict[str, Any]]) -> dict[str, Any]:
+    candidates = [score_live_to_local_match(live, local) for live in live_matches]
+    candidates.sort(key=lambda item: item.match_score, reverse=True)
+    local_summary = _local_mapping_summary(local)
+    if not candidates:
+        return _mapping_row(local_summary, None, [], "source_window_missing", "live source returned no rows")
+    best = candidates[0]
+    if len(candidates) > 1 and best.match_score >= 0.50 and abs(best.match_score - candidates[1].match_score) <= AMBIGUOUS_SCORE_DELTA:
+        status = "ambiguous_candidates"
+        reason = "multiple candidates have close scores"
+        chosen = None
+    elif best.mapping_status == "matched" and best.match_score >= 0.80:
+        status = "matched"
+        reason = best.mapping_reason
+        chosen = best
+    elif best.mapping_status in {"team_name_mismatch", "kickoff_time_mismatch", "low_confidence"}:
+        status = best.mapping_status
+        reason = best.mapping_reason
+        chosen = best
+    else:
+        status = "mapping_missing"
+        reason = "no live match matched local team/time/id signals"
+        chosen = None
+    comparison = _comparison_from_candidate(local, chosen, status)
+    return _mapping_row(local_summary, chosen, candidates[:10], status, reason, comparison)
+
+
+def _mapping_row(
+    local_summary: dict[str, Any],
+    best: LocalLiveCandidate | None,
+    candidates: list[LocalLiveCandidate],
+    status: str,
+    reason: str,
+    comparison_status: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "local_match": local_summary,
+        "best_candidate": best.as_dict() if best else None,
+        "candidates": [candidate.as_dict() for candidate in candidates],
+        "mapping_status": status,
+        "confidence": best.confidence if best else "none",
+        "reason": reason,
+        "comparison_status": comparison_status or ("AMBIGUOUS_CANDIDATES" if status == "ambiguous_candidates" else "MAPPING_MISSING"),
+    }
+
+
+def _comparison_from_candidate(local: dict[str, Any], candidate: LocalLiveCandidate | None, mapping_status: str) -> str:
+    local_score = _score(local.get("result_home"), local.get("result_away"))
+    if mapping_status == "ambiguous_candidates":
+        return "AMBIGUOUS_CANDIDATES"
+    if not candidate or mapping_status not in {"matched", "low_confidence"}:
+        return "LOCAL_DB_ONLY" if local_score else "MAPPING_MISSING"
+    live_score = candidate.live_score
+    if local_score and live_score and local_score == live_score:
+        return "OK_MATCH"
+    if local_score and not live_score:
+        return "LOCAL_DB_ONLY"
+    if local_score and live_score and local_score != live_score:
+        return "CONFLICT_NEEDS_REVIEW"
+    if not local_score and candidate.live_status == "finished" and live_score:
+        return "NEEDS_VERIFIED_FALLBACK"
+    if candidate.live_status != "finished":
+        return "WAIT_SOURCE"
+    return "LIVE_SOURCE_ONLY"
+
+
 def _local_result(local: dict[str, Any], live: dict[str, Any] | None, comparison_status: str, reason: str | None) -> dict[str, Any]:
     return {
         "local_match_id": local.get("match_id"),
@@ -260,6 +451,24 @@ def _comparison_report(live_report: dict[str, Any], comparisons: list[dict[str, 
     }
 
 
+def _mapping_report(live_report: dict[str, Any], locals_: list[dict[str, Any]]) -> dict[str, Any]:
+    mappings = [_map_one_local(local, live_report["matches"]) for local in locals_]
+    return {
+        "mode": "dry-run",
+        "writes_db": False,
+        "source_fetch_ok": live_report["source_fetch_ok"],
+        "zhibo8_matches_seen": live_report["zhibo8_matches_seen"],
+        "qiumibao_matches_seen": live_report["qiumibao_matches_seen"],
+        "merged_matches_count": live_report["merged_matches_count"],
+        "mapping_status_summary": _status_counts(row["mapping_status"] for row in mappings),
+        "comparison_status_summary": _status_counts(row["comparison_status"] for row in mappings),
+        "conflicts_count": sum(1 for row in mappings if row["comparison_status"] == "CONFLICT_NEEDS_REVIEW"),
+        "overdue_count": 0,
+        "local_matches_seen": len(locals_),
+        "mappings": mappings,
+    }
+
+
 def _recent_finished_locals(limit: int) -> list[dict[str, Any]]:
     with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
@@ -278,11 +487,46 @@ def _recent_finished_locals(limit: int) -> list[dict[str, Any]]:
         return [dict(row) for row in cur.fetchall()]
 
 
+def _recent_local_matches(limit: int) -> list[dict[str, Any]]:
+    with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
+                   result_home, result_away, ht_home, ht_away
+            FROM matches
+            WHERE kickoff_at >= now() - interval '48 hours'
+              AND kickoff_at <= now() + interval '72 hours'
+            ORDER BY kickoff_at
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def _upcoming_local_matches(limit: int) -> list[dict[str, Any]]:
+    with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
+                   result_home, result_away, ht_home, ht_away
+            FROM matches
+            WHERE status IN ('scheduled', 'closed')
+              AND result_home IS NULL
+              AND result_away IS NULL
+            ORDER BY kickoff_at
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
 def _local_match(match_id: str) -> dict[str, Any] | None:
     with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT match_id, match_num, home_team, away_team, kickoff_at, status,
+            SELECT match_id, match_num, league, home_team, away_team, kickoff_at, status,
                    result_home, result_away, ht_home, ht_away
             FROM matches
             WHERE match_id = %s
@@ -291,6 +535,21 @@ def _local_match(match_id: str) -> dict[str, Any] | None:
         )
         row = cur.fetchone()
         return dict(row) if row else None
+
+
+def _local_mapping_summary(local: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "match_id": local.get("match_id"),
+        "match_num": local.get("match_num"),
+        "league": local.get("league"),
+        "raw_home_team": local.get("home_team"),
+        "raw_away_team": local.get("away_team"),
+        "normalized_home_team": normalize_team_name(local.get("home_team")),
+        "normalized_away_team": normalize_team_name(local.get("away_team")),
+        "kickoff_at": _iso(local.get("kickoff_at")),
+        "status": local.get("status"),
+        "result": _score(local.get("result_home"), local.get("result_away")),
+    }
 
 
 def _status_counts(values) -> dict[str, int]:
@@ -313,6 +572,42 @@ def _within_hours(left: Any, right: Any, hours: int) -> bool:
     if left_dt is None or right_dt is None:
         return False
     return abs((left_dt - right_dt).total_seconds()) <= hours * 3600
+
+
+def _time_delta_minutes(left: datetime | None, right: datetime | None) -> int | None:
+    if left is None or right is None:
+        return None
+    return int(abs((left - right).total_seconds()) // 60)
+
+
+def _match_num_or_external_ref(local: dict[str, Any], live: dict[str, Any]) -> bool:
+    local_ref = _local_numeric_ref(local)
+    if not local_ref:
+        return False
+    return local_ref in {str(live.get("zhibo8_match_ref") or ""), str(live.get("qiumibao_match_id") or "")}
+
+
+def _match_num_or_code(local: dict[str, Any], live: dict[str, Any]) -> bool:
+    match_num = str(local.get("match_num") or "").replace(" ", "")
+    code = str(live.get("code") or live.get("qiumibao_code") or "").replace(" ", "")
+    return bool(match_num and code and match_num == code)
+
+
+def _local_numeric_ref(local: dict[str, Any]) -> str | None:
+    match_id = str(local.get("match_id") or "")
+    if match_id.startswith("500-"):
+        return match_id.split("-", 1)[1]
+    return None
+
+
+def _confidence(score: float, status: str) -> str:
+    if status == "matched" and score >= 0.90:
+        return "high"
+    if score >= 0.75:
+        return "medium"
+    if score >= 0.50:
+        return "low"
+    return "none"
 
 
 def _date_for_live(schedule: dict[str, Any] | None, qrow: dict[str, Any]) -> str | None:

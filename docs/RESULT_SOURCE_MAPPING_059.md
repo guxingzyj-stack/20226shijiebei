@@ -205,6 +205,17 @@ qiumibao event JSON after a qiumibao match id is known
 See `docs/WORLDCUP_LIVE_SOURCE_060.md`. The chain is still dry-run and must not
 write scores automatically.
 
+061 adds stable local `matches.match_id` candidate scoring:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --recent
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --match-id 500-1359189
+PYTHONPATH=. python -m api.worldcup_live_probe --map-local --all-overdue
+```
+
+See `docs/WORLDCUP_LIVE_MAPPING_061.md`. Ambiguous candidates are reported and
+are never auto-selected.
+
 ## FIFA Match Centre
 
 Current status:

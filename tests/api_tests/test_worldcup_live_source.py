@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from api.sources import qiumibao, zhibo8
+from api.result_source_mapping import normalize_team_name
 from api.worldcup_live_source import (
     _compare_local_to_live,
+    _map_one_local,
     _events_for_match,
     build_worldcup_live_matches,
     fetch_worldcup_live_report,
+    score_live_to_local_match,
 )
 
 
@@ -197,3 +200,106 @@ def test_fetch_worldcup_live_report_is_dry_run_and_writes_nothing():
     assert report["writes_db"] is False
     assert report["source_fetch_ok"] is True
     assert report["merged_matches_count"] == 1
+
+
+def test_normalize_team_name_removes_chinese_inner_spaces_and_aliases():
+    assert normalize_team_name("\u7f8e \u56fd") == "\u7f8e\u56fd"
+    assert normalize_team_name("\u5df4 \u62c9 \u572d") == "\u5df4\u62c9\u572d"
+    assert normalize_team_name("\u52a0 \u62ff \u5927") == "\u52a0\u62ff\u5927"
+    assert normalize_team_name("\u58a8 \u897f \u54e5") == "\u58a8\u897f\u54e5"
+    assert normalize_team_name("USA") == "\u7f8e\u56fd"
+    assert normalize_team_name("Brazil") == "\u5df4\u897f"
+
+
+def test_live_to_local_score_matched_high_confidence():
+    local = _local("\u7f8e \u56fd", "\u5df4 \u62c9 \u572d", "2026-06-13T01:00:00+00:00")
+    live = _live("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+
+    candidate = score_live_to_local_match(live, local)
+
+    assert candidate.mapping_status == "matched"
+    assert candidate.confidence == "high"
+    assert candidate.match_score >= 0.9
+
+
+def test_live_to_local_score_team_match_but_kickoff_mismatch():
+    local = _local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+    live = _live("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T06:00:00+00:00")
+
+    candidate = score_live_to_local_match(live, local)
+
+    assert candidate.mapping_status == "kickoff_time_mismatch"
+
+
+def test_live_to_local_score_time_match_but_team_mismatch():
+    local = _local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+    live = _live("\u5fb7\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+
+    candidate = score_live_to_local_match(live, local)
+
+    assert candidate.mapping_status == "team_name_mismatch"
+
+
+def test_map_one_local_detects_ambiguous_candidates():
+    local = _local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+    live_matches = [
+        _live("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00", ref="111"),
+        _live("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:01:00+00:00", ref="222"),
+    ]
+
+    row = _map_one_local(local, live_matches)
+
+    assert row["mapping_status"] == "ambiguous_candidates"
+    assert row["comparison_status"] == "AMBIGUOUS_CANDIDATES"
+
+
+def test_map_one_local_comparison_statuses():
+    local_missing = _local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+    live_finished = _live("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00", score="4-1", status="finished")
+    assert _map_one_local(local_missing, [live_finished])["comparison_status"] == "NEEDS_VERIFIED_FALLBACK"
+
+    local_same = {**local_missing, "result_home": 4, "result_away": 1}
+    assert _map_one_local(local_same, [live_finished])["comparison_status"] == "OK_MATCH"
+
+    local_conflict = {**local_missing, "result_home": 1, "result_away": 4}
+    assert _map_one_local(local_conflict, [live_finished])["comparison_status"] == "CONFLICT_NEEDS_REVIEW"
+
+
+def test_map_one_local_is_dry_run_shape():
+    local = _local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+    row = _map_one_local(local, [])
+
+    assert row["mapping_status"] == "source_window_missing"
+    assert row["local_match"]["normalized_home_team"] == "\u7f8e\u56fd"
+
+
+def _local(home: str, away: str, kickoff_at: str) -> dict:
+    return {
+        "match_id": "500-1359189",
+        "match_num": "\u5468\u4e94005",
+        "league": "\u4e16\u754c\u676f",
+        "home_team": home,
+        "away_team": away,
+        "kickoff_at": kickoff_at,
+        "status": "closed",
+        "result_home": None,
+        "result_away": None,
+    }
+
+
+def _live(home: str, away: str, kickoff_at: str, score: str | None = None, status: str = "scheduled", ref: str = "1359189") -> dict:
+    result_home = result_away = None
+    if score:
+        result_home, result_away = [int(part) for part in score.split("-", 1)]
+    return {
+        "home_team": home,
+        "away_team": away,
+        "kickoff_at": kickoff_at,
+        "status": status,
+        "score": score,
+        "half_score": None,
+        "result_home": result_home,
+        "result_away": result_away,
+        "zhibo8_match_ref": ref,
+        "qiumibao_match_id": ref,
+    }

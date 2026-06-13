@@ -62,6 +62,41 @@ TEAM_ALIASES = {
     "democraticrepublicofcongo": "刚果(金)",
 }
 
+TEAM_ALIASES.update(
+    {
+        "\u7f8e\u56fd": "\u7f8e\u56fd",
+        "\u5df4\u62c9\u572d": "\u5df4\u62c9\u572d",
+        "\u52a0\u62ff\u5927": "\u52a0\u62ff\u5927",
+        "\u6ce2\u9ed1": "\u6ce2\u9ed1",
+        "\u97e9\u56fd": "\u97e9\u56fd",
+        "\u6377\u514b": "\u6377\u514b",
+        "\u58a8\u897f\u54e5": "\u58a8\u897f\u54e5",
+        "\u5357\u975e": "\u5357\u975e",
+        "\u5361\u5854\u5c14": "\u5361\u5854\u5c14",
+        "\u745e\u58eb": "\u745e\u58eb",
+        "\u5df4\u897f": "\u5df4\u897f",
+        "\u6469\u6d1b\u54e5": "\u6469\u6d1b\u54e5",
+        "\u6d77\u5730": "\u6d77\u5730",
+        "\u82cf\u683c\u5170": "\u82cf\u683c\u5170",
+        "\u6fb3\u5927\u5229\u4e9a": "\u6fb3\u5927\u5229\u4e9a",
+        "\u571f\u8033\u5176": "\u571f\u8033\u5176",
+        "\u5fb7\u56fd": "\u5fb7\u56fd",
+        "\u5e93\u62c9\u7d22": "\u5e93\u62c9\u7d22",
+        "\u521a\u679c\uff08\u91d1\uff09": "\u521a\u679c(\u91d1)",
+        "\u521a\u679c(\u91d1)": "\u521a\u679c(\u91d1)",
+        "brazil": "\u5df4\u897f",
+        "morocco": "\u6469\u6d1b\u54e5",
+        "germany": "\u5fb7\u56fd",
+        "scotland": "\u82cf\u683c\u5170",
+        "turkey": "\u571f\u8033\u5176",
+        "australia": "\u6fb3\u5927\u5229\u4e9a",
+        "qatar": "\u5361\u5854\u5c14",
+        "switzerland": "\u745e\u58eb",
+        "haiti": "\u6d77\u5730",
+        "curacao": "\u5e93\u62c9\u7d22",
+    }
+)
+
 
 @dataclass(frozen=True)
 class MappingCandidate:
