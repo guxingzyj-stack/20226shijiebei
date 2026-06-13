@@ -1,7 +1,7 @@
 # Result Source Compare 058
 
-Status: dry-run comparison layer added. It does not write scores and does not
-change the main result source.
+Status: dry-run comparison layer added and 058-B mapping/decision rules fixed.
+It does not write scores and does not change the main result source.
 
 ## CLI
 
@@ -16,6 +16,18 @@ The report always includes:
 ```text
 mode: dry-run
 writes_db: false
+```
+
+Each match comparison also includes:
+
+```text
+external_confirmed: true/false
+external_confirming_sources: [...]
+mapping_status:
+  qiumibao_score: mapped/missing/unknown
+  qiumibao_events: mapped/missing/unknown
+  fifa_match_centre: mapped/missing/unknown
+next_step: ...
 ```
 
 ## Source Roles
@@ -85,19 +97,46 @@ write policy: never auto-write directly from article text
 The comparison layer maps external rows to local matches conservatively:
 
 ```text
-1. external_id equals local match_id or local numeric id without 500-
-2. home_team + away_team + kickoff_at within a four-hour window
-3. otherwise MAPPING_MISSING
+1. Normalize both local and external team names before matching.
+2. external_id equals local match_id or local numeric id without 500-
+3. home_team + away_team + kickoff_at within a four-hour window
+4. otherwise MAPPING_MISSING
 ```
 
-It does not fuzzy-match uncertain team names. If mapping is unclear, the output
-must be `MAPPING_MISSING`.
+Team normalization removes half-width spaces, full-width spaces, invisible
+whitespace, BOM/zero-width characters, and applies NFKC normalization. This is
+only for matching; it does not change display names.
+
+Examples:
+
+```text
+加 拿 大 -> 加拿大
+波 黑 -> 波黑
+墨 西 哥 -> 墨西哥
+南 非 -> 南非
+韩 国 -> 韩国
+捷 克 -> 捷克
+```
+
+It still does not fuzzy-match uncertain team names. If mapping is unclear, the
+output must be `MAPPING_MISSING`.
+
+`qiumibao_events` requires qiumibao's own match id from the mapped
+`qiumibao_score` row. It must not use local `500-...` ids. If no qiumibao match
+id is available, the events source returns `mapping_missing` and does not fetch
+the event URL, avoiding false HTTP 404 noise.
 
 ## Decision Rules
 
 ```text
 OK_MATCH:
-  local DB already has a result and external score agrees
+  local DB already has a result, at least one external score source is seen=true,
+  that external score agrees with local DB, and no source conflicts exist
+
+LOCAL_DB_ONLY:
+  local DB has a result, but all external sources are missing, unmapped, not
+  found, or unavailable. This is not an OK confirmation; it means external
+  mapping/confirmation still needs work.
 
 NEEDS_VERIFIED_FALLBACK:
   local DB is missing result, but qiumibao_score says finished with score
@@ -111,6 +150,12 @@ MAPPING_MISSING:
 WAIT_SOURCE:
   source is not finished, not available, or not enough evidence yet
 ```
+
+The 058 initial production dry-run exposed this important bug: finished local
+matches were returned as `OK_MATCH` even when `500_trade_jczq`,
+`qiumibao_score`, `qiumibao_events`, and `fifa_match_centre` had not actually
+confirmed the score. 058-B fixes that by requiring `external_confirmed=true`
+for `OK_MATCH`.
 
 ## Why No Automatic Score Write
 

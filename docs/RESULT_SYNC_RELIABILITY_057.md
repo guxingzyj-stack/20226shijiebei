@@ -113,6 +113,18 @@ PYTHONPATH=. python -m api.result_source_compare --recent-finished
 This compares local DB, 500_trade_jczq, qiumibao score JSON, qiumibao events,
 and FIFA mapping status without writing the database.
 
+058-B tightened the comparison rules:
+
+```text
+OK_MATCH now requires external_confirmed=true.
+LOCAL_DB_ONLY means the local DB has a score but no external source confirmed it.
+qiumibao_events only fetches after qiumibao_score maps a real qiumibao match id.
+Team-name matching normalizes visible, full-width, and invisible spaces.
+```
+
+If a recently finished match returns `LOCAL_DB_ONLY`, treat it as a mapping or
+confirmation gap, not as a verified multi-source result.
+
 ## Health Fields
 
 `/api/health` now includes:

@@ -8,6 +8,15 @@ from api import result_source_compare
 from api.sources import qiumibao
 
 
+def test_normalize_team_name_removes_visible_and_invisible_spaces():
+    assert result_source_compare.normalize_team_name("加 拿 大") == "加拿大"
+    assert result_source_compare.normalize_team_name("波\u3000黑") == "波黑"
+    assert result_source_compare.normalize_team_name("\ufeff墨 西 哥\u200b") == "墨西哥"
+    assert result_source_compare.normalize_team_name("南 非") == "南非"
+    assert result_source_compare.normalize_team_name("韩 国") == "韩国"
+    assert result_source_compare.normalize_team_name("捷 克") == "捷克"
+
+
 def test_qiumibao_score_json_parses_finished_score():
     payload = {
         "list": [
@@ -51,13 +60,29 @@ def test_compare_ok_when_local_and_qiumibao_agree(monkeypatch):
     monkeypatch.setattr(result_source_compare, "_local_match", lambda match_id: local)
     monkeypatch.setattr(result_source_compare, "_source_500", lambda match_id: {"seen": True, "status": "finished", "score": "1-1", "ht_score": None, "confidence": "medium"})
     monkeypatch.setattr(result_source_compare.qiumibao, "score_source_report", lambda date=None: _q_score("1", "1"))
-    monkeypatch.setattr(result_source_compare, "_source_qiumibao_events", lambda local, date: {"seen": True, "status": "unknown", "events": [], "confidence": "medium"})
+    monkeypatch.setattr(result_source_compare, "_source_qiumibao_events", lambda local, date, qiumibao_score_source=None: {"seen": True, "status": "unknown", "events": [], "confidence": "medium"})
 
     report = result_source_compare.compare_match("500-1359182")
 
     assert report["writes_db"] is False
     assert report["comparison"]["suggested_action"] == "OK_MATCH"
+    assert report["comparison"]["external_confirmed"] is True
+    assert "qiumibao_score" in report["comparison"]["external_confirming_sources"]
     assert report["comparison"]["conflicts"] == []
+
+
+def test_compare_local_score_without_external_confirmation_is_local_db_only(monkeypatch):
+    local = _local_match(result_home=2, result_away=0, status="finished")
+    monkeypatch.setattr(result_source_compare, "_local_match", lambda match_id: local)
+    monkeypatch.setattr(result_source_compare, "_source_500", lambda match_id: {"seen": False, "status": "source_not_found", "score": None, "ht_score": None, "confidence": "unknown"})
+    monkeypatch.setattr(result_source_compare.qiumibao, "score_source_report", lambda date=None: {"source_fetch_ok": True, "matches": []})
+    monkeypatch.setattr(result_source_compare, "_source_qiumibao_events", lambda local, date, qiumibao_score_source=None: {"seen": False, "status": "mapping_missing", "events": [], "confidence": "unknown"})
+
+    report = result_source_compare.compare_match("500-1359182")
+
+    assert report["comparison"]["suggested_action"] == "LOCAL_DB_ONLY"
+    assert report["comparison"]["external_confirmed"] is False
+    assert report["comparison"]["external_confirming_sources"] == []
 
 
 def test_compare_needs_verified_fallback_when_local_missing_but_source_finished(monkeypatch):
@@ -65,7 +90,7 @@ def test_compare_needs_verified_fallback_when_local_missing_but_source_finished(
     monkeypatch.setattr(result_source_compare, "_local_match", lambda match_id: local)
     monkeypatch.setattr(result_source_compare, "_source_500", lambda match_id: {"seen": False, "status": "source_not_found", "score": None, "ht_score": None, "confidence": "unknown"})
     monkeypatch.setattr(result_source_compare.qiumibao, "score_source_report", lambda date=None: _q_score("1", "1"))
-    monkeypatch.setattr(result_source_compare, "_source_qiumibao_events", lambda local, date: {"seen": True, "status": "unknown", "events": [], "confidence": "medium"})
+    monkeypatch.setattr(result_source_compare, "_source_qiumibao_events", lambda local, date, qiumibao_score_source=None: {"seen": True, "status": "unknown", "events": [], "confidence": "medium"})
 
     report = result_source_compare.compare_match("500-1359182")
 
@@ -78,7 +103,7 @@ def test_compare_conflict_needs_review(monkeypatch):
     monkeypatch.setattr(result_source_compare, "_local_match", lambda match_id: local)
     monkeypatch.setattr(result_source_compare, "_source_500", lambda match_id: {"seen": True, "status": "finished", "score": "2-0", "ht_score": None, "confidence": "medium"})
     monkeypatch.setattr(result_source_compare.qiumibao, "score_source_report", lambda date=None: _q_score("1", "1"))
-    monkeypatch.setattr(result_source_compare, "_source_qiumibao_events", lambda local, date: {"seen": True, "status": "unknown", "events": [], "confidence": "medium"})
+    monkeypatch.setattr(result_source_compare, "_source_qiumibao_events", lambda local, date, qiumibao_score_source=None: {"seen": True, "status": "unknown", "events": [], "confidence": "medium"})
 
     report = result_source_compare.compare_match("500-1359182")
 
@@ -91,11 +116,28 @@ def test_compare_mapping_missing(monkeypatch):
     monkeypatch.setattr(result_source_compare, "_local_match", lambda match_id: local)
     monkeypatch.setattr(result_source_compare, "_source_500", lambda match_id: {"seen": False, "status": "source_not_found", "score": None, "ht_score": None, "confidence": "unknown"})
     monkeypatch.setattr(result_source_compare.qiumibao, "score_source_report", lambda date=None: {"source_fetch_ok": True, "matches": []})
-    monkeypatch.setattr(result_source_compare, "_source_qiumibao_events", lambda local, date: {"seen": False, "status": "mapping_missing", "events": [], "confidence": "unknown"})
+    monkeypatch.setattr(result_source_compare, "_source_qiumibao_events", lambda local, date, qiumibao_score_source=None: {"seen": False, "status": "mapping_missing", "events": [], "confidence": "unknown"})
 
     report = result_source_compare.compare_match("500-1359182")
 
     assert report["comparison"]["suggested_action"] == "MAPPING_MISSING"
+
+
+def test_qiumibao_events_requires_external_match_id(monkeypatch):
+    def fail_if_called(date, match_id):
+        raise AssertionError("events fetcher should not be called without qiumibao external_id")
+
+    monkeypatch.setattr(result_source_compare.qiumibao, "events_source_report", fail_if_called)
+
+    source = result_source_compare._source_qiumibao_events(
+        _local_match(result_home=1, result_away=1, status="finished"),
+        "2026-06-12",
+        {"seen": False, "status": "mapping_missing"},
+    )
+
+    assert source["seen"] is False
+    assert source["status"] == "mapping_missing"
+    assert source["mapping_status"] == "missing"
 
 
 def test_qiumibao_network_failure_does_not_crash():

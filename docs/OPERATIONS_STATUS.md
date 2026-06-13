@@ -22,6 +22,14 @@ Current production posture:
 - current main result source: `500_trade_jczq` HTML page, not an official structured source
 - result-overdue CLI: `python -m api.result_overdue_report`
 - multi-source dry-run compare CLI: `python -m api.result_source_compare --all-overdue`
+- multi-source compare 058-B rule: `OK_MATCH` requires at least one external
+  score source to confirm the local DB score; local-only scores now report
+  `LOCAL_DB_ONLY`
+- qiumibao events are only fetched after `qiumibao_score` maps a real qiumibao
+  match id; missing mapping is reported as `mapping_missing` instead of
+  producing avoidable 404s
+- source matching normalizes odd spaced team names such as `加 拿 大`, `墨 西 哥`,
+  `韩 国`, and full-width/invisible whitespace
 
 ### 042 Watchdog
 
