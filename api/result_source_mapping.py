@@ -22,7 +22,7 @@ MAPPING_MISSING = "mapping_missing"
 FIFA_MAPPING_MISSING = "fifa_mapping_missing"
 
 
-TEAM_ALIASES = {
+TEAM_ALIASES_RAW = {
     "加拿大": "加拿大",
     "canada": "加拿大",
     "波黑": "波黑",
@@ -62,7 +62,7 @@ TEAM_ALIASES = {
     "democraticrepublicofcongo": "刚果(金)",
 }
 
-TEAM_ALIASES.update(
+TEAM_ALIASES_RAW.update(
     {
         "\u7f8e\u56fd": "\u7f8e\u56fd",
         "\u5df4\u62c9\u572d": "\u5df4\u62c9\u572d",
@@ -98,6 +98,17 @@ TEAM_ALIASES.update(
 )
 
 
+def _team_key(value: Any) -> str:
+    text = unicodedata.normalize("NFKC", str(value or ""))
+    text = INVISIBLE_SPACE_RE.sub("", text)
+    text = "".join(text.split()).lower()
+    text = text.replace("（", "(").replace("）", ")")
+    return text
+
+
+TEAM_ALIASES = {_team_key(key): value for key, value in TEAM_ALIASES_RAW.items()}
+
+
 @dataclass(frozen=True)
 class MappingCandidate:
     external_id: str | None
@@ -117,8 +128,7 @@ class MappingCandidate:
 
 
 def normalize_team_name(value: Any) -> str:
-    text = unicodedata.normalize("NFKC", str(value or ""))
-    compact = INVISIBLE_SPACE_RE.sub("", text).strip().lower()
+    compact = _team_key(value)
     return TEAM_ALIASES.get(compact, compact)
 
 

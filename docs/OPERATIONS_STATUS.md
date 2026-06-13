@@ -27,6 +27,8 @@ Current production posture:
 - live source overdue compare CLI: `python -m api.worldcup_live_probe --compare-local --all-overdue`
 - live source local mapping CLI: `python -m api.worldcup_live_probe --map-local --recent`
 - live source overdue mapping CLI: `python -m api.worldcup_live_probe --map-local --all-overdue`
+- qiumibao time mapping CLI: `python -m api.worldcup_live_probe --map-qiumibao-by-time --upcoming`
+- qiumibao overdue time mapping CLI: `python -m api.worldcup_live_probe --map-qiumibao-by-time --all-overdue`
 - multi-source compare 058-B rule: `OK_MATCH` requires at least one external
   score source to confirm the local DB score; local-only scores now report
   `LOCAL_DB_ONLY`
@@ -55,6 +57,10 @@ Current production posture:
 - 061-C splits id diagnostics into `possible_zhibo8_ids`,
   `possible_qiumibao_ids`, and `possible_external_ids`; zhibo8 links such as
   `match1869145v.htm` must not be treated as qiumibao score ids.
+- 061-D fixes the production team-normalization call chain and adds a qiumibao
+  direct time-mapping diagnostic. qiumibao `start_time` is converted to UTC and
+  compared with local `kickoff_at` in a 15 minute window. The report is
+  dry-run only and prints `writes_db=false`.
 
 ### 042 Watchdog
 
@@ -162,6 +168,8 @@ python -m api.worldcup_live_probe --recent
 python -m api.worldcup_live_probe --compare-local --all-overdue
 python -m api.worldcup_live_probe --map-local --recent
 python -m api.worldcup_live_probe --map-local --all-overdue
+python -m api.worldcup_live_probe --map-qiumibao-by-time --upcoming
+python -m api.worldcup_live_probe --map-qiumibao-by-time --all-overdue
 python -m api.scheduler_observe
 python -m api.betting_open_gate
 python -m api.cleanup_test_data dry-run

@@ -21,6 +21,8 @@ class SourceMatch:
     home_team: str | None
     away_team: str | None
     kickoff_at: str | None
+    start_time_raw: str | None
+    start_time_utc: str | None
     status: str
     result_home: int | None = None
     result_away: int | None = None
@@ -171,12 +173,17 @@ def normalize_match(row: dict[str, Any]) -> SourceMatch | None:
         away_score = None
     if not external_id and not home_team and not away_team:
         return None
+    kickoff_value = _first(row, "time", "match_time", "start_time", "date")
+    kickoff_at = _normalize_kickoff(kickoff_value)
+    start_time_value = _first(row, "start_time", "time", "match_time")
     return SourceMatch(
         source_name="qiumibao_score",
         external_id=str(external_id) if external_id is not None else None,
         home_team=str(home_team).strip() if home_team else None,
         away_team=str(away_team).strip() if away_team else None,
-        kickoff_at=_normalize_kickoff(_first(row, "time", "match_time", "start_time", "date")),
+        kickoff_at=kickoff_at,
+        start_time_raw=str(start_time_value) if start_time_value is not None else None,
+        start_time_utc=kickoff_at,
         status=status,
         result_home=home_score,
         result_away=away_score,

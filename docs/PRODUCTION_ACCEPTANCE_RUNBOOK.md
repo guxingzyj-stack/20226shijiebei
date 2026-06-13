@@ -219,6 +219,8 @@ python -m api.worldcup_live_probe --recent
 python -m api.worldcup_live_probe --compare-local --all-overdue
 python -m api.worldcup_live_probe --map-local --recent
 python -m api.worldcup_live_probe --map-local --all-overdue
+python -m api.worldcup_live_probe --map-qiumibao-by-time --upcoming
+python -m api.worldcup_live_probe --map-qiumibao-by-time --all-overdue
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
 ```
@@ -241,6 +243,29 @@ For 061-B diagnostics, confirm:
 zhibo8_matched_but_qiumibao_unlinked is WAIT_SOURCE, not score evidence
 possible_zhibo8_ids and possible_qiumibao_ids are separate
 ```
+
+For 061-D diagnostics, use the qiumibao direct UTC time mapping path:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --upcoming
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --recent-finished
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --all-overdue
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --match-id <match_id>
+```
+
+Expected:
+
+```text
+Qiumibao Time Mapping Report
+writes_db: false
+qiumibao start_time is interpreted as UTC Unix timestamp
+local kickoff_at is compared in UTC
+safe window is <= 15 minutes
+```
+
+Do not treat `possible_zhibo8_ids` as qiumibao score ids. If qiumibao time
+mapping returns `ambiguous_qiumibao_candidates` or `ambiguous_local_candidates`,
+the row is not safe for any future writer.
 
 Normal daily operation no longer requires running the full 041 SQL bundle. Use
 `/api/health` first. If it shows `FAIL`, run the Python daily runner and

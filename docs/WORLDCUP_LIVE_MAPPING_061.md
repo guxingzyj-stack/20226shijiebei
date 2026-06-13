@@ -248,3 +248,60 @@ possible_external_ids:
 If `possible_qiumibao_ids` is empty but `possible_zhibo8_ids` is present, the
 chain has schedule-level evidence only. It must still report qiumibao as
 unlinked and must not infer a score/event binding.
+
+## 061-D Qiumibao Time Mapping Diagnostic
+
+061-D adds a separate dry-run path for qiumibao score rows. This path does not
+depend on zhibo8 ids. It compares qiumibao `start_time` to local
+`matches.kickoff_at` in UTC.
+
+Command:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --upcoming
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --recent-finished
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --all-overdue
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --match-id 500-1359172
+```
+
+Rules:
+
+```text
+qiumibao start_time Unix seconds -> UTC datetime
+local kickoff_at -> UTC datetime
+safe window: <= 15 minutes
+writes_db: false
+```
+
+Status values:
+
+```text
+matched_by_time:
+  exactly one qiumibao row matches one local match in the 15 minute window.
+
+no_qiumibao_time_candidate:
+  no qiumibao row is close enough by UTC kickoff time.
+
+ambiguous_qiumibao_candidates:
+  one local match has multiple qiumibao rows in the window.
+
+ambiguous_local_candidates:
+  one qiumibao row is close enough to multiple local matches.
+```
+
+This diagnostic is the preferred path for qiumibao score-id discovery. zhibo8
+ids such as `match1869145v.htm` remain `possible_zhibo8_ids`; they are not
+qiumibao score ids.
+
+Team normalization now uses one shared path:
+
+```text
+Unicode NFKC
+remove invisible whitespace
+remove all regular whitespace with split/join
+normalize bracket variants
+apply normalized alias keys
+```
+
+It is used for zhibo8 rows, local rows, live candidates, and qiumibao time
+diagnostics. It does not write normalized names back to the database.

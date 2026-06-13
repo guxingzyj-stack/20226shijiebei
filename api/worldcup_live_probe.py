@@ -15,6 +15,10 @@ from api.worldcup_live_source import (
     map_local_recent,
     map_local_recent_finished,
     map_local_upcoming,
+    map_qiumibao_by_time_all_overdue,
+    map_qiumibao_by_time_match,
+    map_qiumibao_by_time_recent_finished,
+    map_qiumibao_by_time_upcoming,
 )
 
 
@@ -26,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dump-qiumibao", action="store_true", help="Dump parsed qiumibao score rows.")
     parser.add_argument("--compare-local", action="store_true", help="Compare local matches against live source rows.")
     parser.add_argument("--map-local", action="store_true", help="Map live source rows to local matches with candidate scoring.")
+    parser.add_argument("--map-qiumibao-by-time", action="store_true", help="Map qiumibao score rows to local matches by UTC kickoff time only.")
     parser.add_argument("--recent-finished", action="store_true", help="Use recent finished local matches for --compare-local.")
     parser.add_argument("--upcoming", action="store_true", help="Use upcoming scheduled/closed local matches for --map-local.")
     parser.add_argument("--all-overdue", action="store_true", help="Use overdue local matches for --compare-local.")
@@ -38,6 +43,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dump_qiumibao:
         _print_source_report("qiumibao_score", qiumibao.score_source_report(), args.limit)
+        return 0
+
+    if args.map_qiumibao_by_time:
+        if args.match_id:
+            _print_qiumibao_time_mapping_report(map_qiumibao_by_time_match(args.match_id), args.limit)
+        elif args.all_overdue:
+            _print_qiumibao_time_mapping_report(map_qiumibao_by_time_all_overdue(), args.limit)
+        elif args.recent_finished:
+            _print_qiumibao_time_mapping_report(map_qiumibao_by_time_recent_finished(args.limit), args.limit)
+        else:
+            _print_qiumibao_time_mapping_report(map_qiumibao_by_time_upcoming(args.limit), args.limit)
         return 0
 
     if args.map_local:
@@ -198,6 +214,65 @@ def _print_mapping_report(report: dict[str, Any], limit: int) -> None:
         print(f"  - candidates_count: {len(row.get('candidates') or [])}")
 
 
+def _print_qiumibao_time_mapping_report(report: dict[str, Any], limit: int) -> None:
+    print("Qiumibao Time Mapping Report")
+    print("- mode: dry-run")
+    print("- writes_db: false")
+    print(f"- source_fetch_ok: {_bool(report.get('source_fetch_ok'))}")
+    print(f"- parser_error: {_compact(report.get('parser_error'))}")
+    print(f"- local_matches_seen: {report.get('local_matches_seen', 0)}")
+    print(f"- qiumibao_matches_seen: {report.get('qiumibao_matches_seen', 0)}")
+    print(f"- mapping_status_summary: {json.dumps(report.get('mapping_status_summary') or {}, ensure_ascii=False, sort_keys=True)}")
+    print(f"- matched_by_time_count: {report.get('matched_by_time_count', 0)}")
+    print(f"- no_qiumibao_time_candidate_count: {report.get('no_qiumibao_time_candidate_count', 0)}")
+    print(f"- ambiguous_qiumibao_candidates_count: {report.get('ambiguous_qiumibao_candidates_count', 0)}")
+    print(f"- ambiguous_local_candidates_count: {report.get('ambiguous_local_candidates_count', 0)}")
+    print(f"- overdue_count: {report.get('overdue_count', 0)}")
+    mappings = report.get("mappings") or []
+    print(f"- shown_mappings: {min(limit, len(mappings))}")
+    for row in mappings[:limit]:
+        local = row.get("local_match") or {}
+        best = row.get("best_candidate") or {}
+        print("- local_match:")
+        for key in (
+            "match_id",
+            "match_num",
+            "raw_home_team",
+            "raw_away_team",
+            "normalized_home_team",
+            "normalized_away_team",
+            "kickoff_at_utc",
+            "status",
+            "local_result",
+        ):
+            print(f"  - {key}: {_compact(local.get(key))}")
+        print(f"  - mapping_status: {_compact(row.get('mapping_status'))}")
+        print(f"  - confidence: {_compact(row.get('confidence'))}")
+        print(f"  - reason: {_compact(row.get('reason'))}")
+        print("  best_candidate:")
+        if best:
+            for key in (
+                "qiumibao_match_id",
+                "qiumibao_start_time_raw",
+                "qiumibao_start_time_utc",
+                "time_diff_seconds",
+                "qiumibao_state",
+                "qiumibao_period_cn",
+                "qiumibao_score",
+                "qiumibao_half_score",
+                "qiumibao_left_id",
+                "qiumibao_right_id",
+                "raw_home_team",
+                "raw_away_team",
+                "normalized_home_team",
+                "normalized_away_team",
+            ):
+                print(f"    - {key}: {_compact(best.get(key))}")
+        else:
+            print("    - none")
+        print(f"  - candidates_count: {len(row.get('candidates') or [])}")
+
+
 def _print_common(report: dict[str, Any]) -> None:
     print("- mode: dry-run")
     print("- writes_db: false")
@@ -245,6 +320,8 @@ def _source_keys(row: dict[str, Any]) -> tuple[str, ...]:
         "right_id",
         "period_cn",
         "raw_status",
+        "start_time_raw",
+        "start_time_utc",
     )
 
 

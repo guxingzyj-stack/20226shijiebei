@@ -8,6 +8,7 @@ from api.worldcup_live_source import (
     _compare_local_to_live,
     _map_one_local,
     _events_for_match,
+    build_qiumibao_time_mapping_report,
     build_worldcup_live_matches,
     fetch_worldcup_live_report,
     score_live_to_local_match,
@@ -67,6 +68,8 @@ def test_qiumibao_score_parser_keeps_ids_period_and_half_score():
     assert match.result_away == 1
     assert match.ht_home == 1
     assert match.ht_away == 0
+    assert match.start_time_raw == "1781377200"
+    assert match.start_time_utc == "2026-06-13T19:00:00+00:00"
 
 
 def test_qiumibao_score_parser_tolerates_missing_team_names():
@@ -223,6 +226,13 @@ def test_normalize_team_name_removes_chinese_inner_spaces_and_aliases():
     assert normalize_team_name("\u97e9 \u56fd") == "\u97e9\u56fd"
     assert normalize_team_name("\u6377 \u514b") == "\u6377\u514b"
     assert normalize_team_name("\u5357 \u975e") == "\u5357\u975e"
+    assert normalize_team_name("\u7f8e\u3000\u56fd") == "\u7f8e\u56fd"
+    assert normalize_team_name("\u7f8e\u200b \u56fd") == "\u7f8e\u56fd"
+    assert normalize_team_name("\u5df4\u200d \u62c9\u2060 \u572d") == "\u5df4\u62c9\u572d"
+    assert normalize_team_name("United States") == "\u7f8e\u56fd"
+    assert normalize_team_name("South Korea") == "\u97e9\u56fd"
+    assert normalize_team_name("South Africa") == "\u5357\u975e"
+    assert normalize_team_name("Czech Republic") == "\u6377\u514b"
 
 
 def test_live_to_local_score_matched_high_confidence():
@@ -381,6 +391,58 @@ def test_zhibo8_matched_but_qiumibao_unlinked_status_is_reported():
     assert row["next_step"] == "EXTRACT_QIUMIBAO_ID_FROM_ZHIBO8_LINKS"
 
 
+def test_qiumibao_time_mapping_matches_unique_candidate():
+    local = _local("\u7f8e \u56fd", "\u5df4 \u62c9 \u572d", "2026-06-13T01:00:00+00:00")
+    qreport = _qiumibao_report([_qrow("q1", "2026-06-13T01:05:00+00:00")])
+
+    report = build_qiumibao_time_mapping_report(qreport, [local])
+
+    row = report["mappings"][0]
+    assert report["writes_db"] is False
+    assert row["mapping_status"] == "matched_by_time"
+    assert row["confidence"] == "high"
+    assert row["best_candidate"]["qiumibao_match_id"] == "q1"
+    assert row["best_candidate"]["time_diff_seconds"] == 300
+    assert row["local_match"]["normalized_home_team"] == "\u7f8e\u56fd"
+
+
+def test_qiumibao_time_mapping_reports_no_candidate():
+    local = _local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+    qreport = _qiumibao_report([_qrow("q1", "2026-06-13T02:00:00+00:00")])
+
+    report = build_qiumibao_time_mapping_report(qreport, [local])
+
+    assert report["mappings"][0]["mapping_status"] == "no_qiumibao_time_candidate"
+    assert report["no_qiumibao_time_candidate_count"] == 1
+
+
+def test_qiumibao_time_mapping_reports_ambiguous_qiumibao_candidates():
+    local = _local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+    qreport = _qiumibao_report([
+        _qrow("q1", "2026-06-13T01:00:00+00:00"),
+        _qrow("q2", "2026-06-13T01:10:00+00:00"),
+    ])
+
+    report = build_qiumibao_time_mapping_report(qreport, [local])
+
+    assert report["mappings"][0]["mapping_status"] == "ambiguous_qiumibao_candidates"
+    assert report["ambiguous_qiumibao_candidates_count"] == 1
+
+
+def test_qiumibao_time_mapping_reports_ambiguous_local_candidates():
+    first = _local("\u7f8e\u56fd", "\u5df4\u62c9\u572d", "2026-06-13T01:00:00+00:00")
+    second = {**_local("\u5361\u5854\u5c14", "\u745e\u58eb", "2026-06-13T01:05:00+00:00"), "match_id": "500-1359190"}
+    qreport = _qiumibao_report([_qrow("q1", "2026-06-13T01:00:00+00:00")])
+
+    report = build_qiumibao_time_mapping_report(qreport, [first, second])
+
+    assert [row["mapping_status"] for row in report["mappings"]] == [
+        "ambiguous_local_candidates",
+        "ambiguous_local_candidates",
+    ]
+    assert report["ambiguous_local_candidates_count"] == 2
+
+
 def _local(home: str, away: str, kickoff_at: str) -> dict:
     return {
         "match_id": "500-1359189",
@@ -410,4 +472,32 @@ def _live(home: str, away: str, kickoff_at: str, score: str | None = None, statu
         "result_away": result_away,
         "zhibo8_match_ref": ref,
         "qiumibao_match_id": ref,
+    }
+
+
+def _qiumibao_report(rows: list[dict]) -> dict:
+    return {
+        "source_fetch_ok": True,
+        "parser_error": None,
+        "matches": rows,
+    }
+
+
+def _qrow(external_id: str, kickoff_at: str) -> dict:
+    return {
+        "external_id": external_id,
+        "home_team": "\u7f8e\u56fd",
+        "away_team": "\u5df4\u62c9\u572d",
+        "kickoff_at": kickoff_at,
+        "start_time_raw": "1781312400",
+        "start_time_utc": kickoff_at,
+        "status": "scheduled",
+        "raw_status": "1",
+        "period_cn": "\u672a\u8d5b",
+        "result_home": None,
+        "result_away": None,
+        "ht_home": None,
+        "ht_away": None,
+        "left_id": "10",
+        "right_id": "20",
     }

@@ -234,3 +234,16 @@ possible_zhibo8_ids: ids from zhibo8 links such as match1869145v.htm
 possible_qiumibao_ids: ids from qiumibao/bifen4pc/dc4pc/match_event links only
 possible_external_ids: ids from other uncertain links
 ```
+
+061-D adds a qiumibao direct time-mapping diagnostic:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --upcoming
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --all-overdue
+PYTHONPATH=. python -m api.worldcup_live_probe --map-qiumibao-by-time --match-id <match_id>
+```
+
+This path uses qiumibao `start_time` converted from Unix seconds to UTC and
+matches it to local `matches.kickoff_at` within 15 minutes. It prints
+`writes_db: false` and is only a diagnostic. It does not write scores and does
+not require zhibo8 to expose a qiumibao id.
