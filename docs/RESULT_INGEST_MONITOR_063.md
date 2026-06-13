@@ -67,6 +67,8 @@ Failures are caught and logged; monitor failure must not stop the API process.
 
 ## Summary Status
 
+- `RESULT_INGEST_BASELINE_ONLY`: scored matches were already scored before the
+  monitor first observed them, so no real ingest-delay sample exists yet.
 - `RESULT_INGEST_HEALTHY`: observed finished results appeared within 60 minutes and no consistency issue exists.
 - `RESULT_INGEST_SLOW_OBSERVE`: a match is 60-120 minutes past estimated full time without a result, or ingest delay is over 60 minutes.
 - `RESULT_INGEST_SLOW_NEEDS_ACTION`: a match is more than 120 minutes past estimated full time without a result, or ingest delay is over 120 minutes.
@@ -90,6 +92,44 @@ audit_status
 
 `estimated_fulltime_at = kickoff_at + 120 minutes` is only an observation
 estimate. It must not be used to write scores or settle bets.
+
+## Baseline Versus Measured Delay
+
+When the monitor is enabled for the first time, historical matches may already
+have `result_home/result_away`. Those matches are classified as
+`baseline_result_present`.
+
+Baseline matches:
+
+- do not prove the real ingest time
+- do not participate in median/max delay
+- must not trigger `RESULT_INGEST_SLOW_NEEDS_ACTION`
+
+Only this transition creates a true delay sample:
+
+```text
+result_missing -> result_present
+```
+
+If `matches.updated_at` is later than `kickoff_at` and a missing-to-present
+transition was observed, the monitor may use `updated_at` as the best available
+first-result time. Otherwise, it uses the first monitor observation time, whose
+precision is approximately the monitor interval.
+
+Summary fields:
+
+```text
+baseline_result_present_matches
+true_delay_measured_matches
+delay_unknown_matches
+delay_precision_note
+delay_precision_minutes
+```
+
+`result_ingest_delay_minutes` is estimated relative to `kickoff_at + 120min`.
+It includes stoppage time, final-score confirmation, 500 source update timing,
+`results_sync` interval, and monitor observation precision. It is not pure
+"time spent fetching after the score appeared on 500".
 
 ## Frequency Policy
 

@@ -101,6 +101,17 @@ Current production posture:
   `ENABLE_RESULT_INGEST_MONITOR=false`,
   `RESULT_INGEST_MONITOR_INTERVAL_MINUTES=30`,
   `RESULT_INGEST_MONITOR_WINDOW_HOURS=36`.
+- 063-hotfix: first-observed historical scored matches are
+  `baseline_result_present`. They do not represent real ingest delay, do not
+  participate in median/max delay, and must not trigger
+  `RESULT_INGEST_SLOW_NEEDS_ACTION`. Only observed `result_missing ->
+  result_present` transitions are true delay samples.
+- `result_ingest_delay_minutes` is relative to `kickoff_at + 120min` and may
+  include stoppage time, final-score confirmation, 500 source update timing,
+  `results_sync` interval, and monitor observation precision. It is not pure
+  post-score fetch latency.
+- Do not adjust `results_sync` frequency until true measured delay samples
+  exist.
 - 063 abnormal status probe is non-production/test-only. Confirm mode is refused
   in production unless `ALLOW_TEST_PROBES=true`, uses only fixed `test-` match
   ids, and cleans up probe-created data.

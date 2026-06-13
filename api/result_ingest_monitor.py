@@ -54,6 +54,7 @@ def run_once(*, source: str = "500", window_hours: int = DEFAULT_WINDOW_HOURS) -
                 consistency=consistency,
                 scheduler=scheduler,
                 first_seen_lookup=lambda match_id: _first_result_seen_at(conn, match_id),
+                has_missing_before_lookup=lambda match_id: _has_missing_before_result(conn, match_id),
             )
             inserted = _insert_observations(conn, records)
         summary = {
@@ -81,17 +82,24 @@ def build_observation_records(
     consistency: dict[str, Any],
     scheduler: dict[str, Any],
     first_seen_lookup,
+    has_missing_before_lookup=None,
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
+    has_missing_before_lookup = has_missing_before_lookup or (lambda match_id: False)
     for row in rows:
         audit = classify_match(row, now=now)
         kickoff_at = _ensure_aware(row["kickoff_at"])
         estimated_fulltime_at = kickoff_at + timedelta(minutes=120)
         first_seen = None
         delay = None
+        notes = None
         if audit["result_state"] == "result_present":
-            first_seen = first_seen_lookup(str(row["match_id"])) or now
-            delay = int((first_seen - estimated_fulltime_at).total_seconds() // 60)
+            match_id = str(row["match_id"])
+            if has_missing_before_lookup(match_id):
+                first_seen = _result_seen_time_from_row(row, kickoff_at) or first_seen_lookup(match_id) or now
+                delay = int((first_seen - estimated_fulltime_at).total_seconds() // 60)
+            else:
+                notes = "baseline_result_present"
         records.append(
             {
                 "observed_at": now,
@@ -124,26 +132,25 @@ def build_observation_records(
                 "source_fetch_ok": results_sync.get("source_fetch_ok"),
                 "parser_error": results_sync.get("parser_error"),
                 "is_test_match": str(row["match_id"]).startswith("test-"),
-                "notes": None,
+                "notes": notes,
             }
         )
     return records
 
 
 def summarize_observations(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    latest_by_match: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        match_id = str(row["match_id"])
-        current = latest_by_match.get(match_id)
-        if current is None or _ensure_aware(row["observed_at"]) > _ensure_aware(current["observed_at"]):
-            latest_by_match[match_id] = row
-    latest_rows = list(latest_by_match.values())
+    histories = _group_observations_by_match(rows)
+    match_summaries = [_summarize_match_history(history) for history in histories.values()]
+    latest_rows = [item["latest"] for item in match_summaries]
     result_present = [row for row in latest_rows if row.get("result_state") == "result_present"]
     missing = [row for row in latest_rows if row.get("result_state") != "result_present"]
+    true_delay_rows = [item for item in match_summaries if item["true_delay_measured"]]
+    baseline_rows = [item for item in match_summaries if item["baseline_result_present"]]
+    delay_unknown_rows = [item for item in match_summaries if item["delay_unknown"]]
     delays = [
-        int(row["result_ingest_delay_minutes"])
-        for row in result_present
-        if row.get("result_ingest_delay_minutes") is not None
+        int(item["delay_minutes"])
+        for item in true_delay_rows
+        if item.get("delay_minutes") is not None
     ]
     over_60_missing = [
         row
@@ -161,7 +168,7 @@ def summarize_observations(rows: list[dict[str, Any]]) -> dict[str, Any]:
         if row.get("audit_status") in {"FINISHED_NULL_ERROR", "NON_FINISHED_HAS_RESULT_ERROR"}
         or row.get("result_consistency_pass") is False
     ]
-    status = conclude_ingest_health(latest_rows)
+    status = conclude_ingest_health(match_summaries)
     return {
         "mode": "dry-run/read-only-summary",
         "writes_business_tables": False,
@@ -170,20 +177,29 @@ def summarize_observations(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "observed_matches": len(latest_rows),
             "result_present_matches": len(result_present),
             "missing_result_matches": len(missing),
+            "baseline_result_present_matches": len(baseline_rows),
+            "true_delay_measured_matches": len(true_delay_rows),
+            "delay_unknown_matches": len(delay_unknown_rows),
             "over_60min_missing_count": len(over_60_missing),
             "over_120min_missing_count": len(over_120_missing),
             "median_ingest_delay_minutes": int(statistics.median(delays)) if delays else None,
             "max_ingest_delay_minutes": max(delays) if delays else None,
+            "delay_precision_note": _delay_precision_note(),
+            "delay_precision_minutes": monitor_interval_minutes(),
             "scheduler_stale_seen_count": len([row for row in rows if row.get("scheduler_stale") is True]),
             "result_consistency_failed_count": len([row for row in rows if row.get("result_consistency_pass") is False]),
         },
-        "matches": [_summary_match(row) for row in sorted(latest_rows, key=lambda item: str(item.get("kickoff_at")))],
+        "matches": [
+            _summary_match(item["latest"], item)
+            for item in sorted(match_summaries, key=lambda item: str(item["latest"].get("kickoff_at")))
+        ],
         "result": status,
         "inconsistent_count": len(inconsistent),
     }
 
 
-def conclude_ingest_health(latest_rows: list[dict[str, Any]]) -> str:
+def conclude_ingest_health(match_summaries: list[dict[str, Any]]) -> str:
+    latest_rows = [item["latest"] for item in match_summaries]
     if any(
         row.get("audit_status") in {"FINISHED_NULL_ERROR", "NON_FINISHED_HAS_RESULT_ERROR"}
         or row.get("result_consistency_pass") is False
@@ -195,15 +211,17 @@ def conclude_ingest_health(latest_rows: list[dict[str, Any]]) -> str:
         return "RESULT_INGEST_SLOW_NEEDS_ACTION"
     if any(int(row.get("minutes_since_kickoff") or 0) >= 180 for row in missing_rows):
         return "RESULT_INGEST_SLOW_OBSERVE"
-    result_delays = [
-        int(row["result_ingest_delay_minutes"])
-        for row in latest_rows
-        if row.get("result_state") == "result_present" and row.get("result_ingest_delay_minutes") is not None
+    true_delays = [
+        int(item["delay_minutes"])
+        for item in match_summaries
+        if item["true_delay_measured"] and item.get("delay_minutes") is not None
     ]
-    if any(delay > 120 for delay in result_delays):
+    if any(delay > 120 for delay in true_delays):
         return "RESULT_INGEST_SLOW_NEEDS_ACTION"
-    if any(delay > 60 for delay in result_delays):
+    if any(delay > 60 for delay in true_delays):
         return "RESULT_INGEST_SLOW_OBSERVE"
+    if match_summaries and all(item["baseline_result_present"] or item["latest"].get("result_state") == "result_present" for item in match_summaries) and not true_delays:
+        return "RESULT_INGEST_BASELINE_ONLY"
     return "RESULT_INGEST_HEALTHY"
 
 
@@ -328,6 +346,23 @@ def _first_result_seen_at(conn, match_id: str) -> datetime | None:
         return _ensure_aware(row[0]) if row and row[0] else None
 
 
+def _has_missing_before_result(conn, match_id: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM result_ingest_observations
+              WHERE match_id = %s
+                AND result_state = 'result_missing'
+            )
+            """,
+            (match_id,),
+        )
+        row = cur.fetchone()
+        return bool(row[0]) if row else False
+
+
 def _insert_observations(conn, records: list[dict[str, Any]]) -> int:
     if not records:
         return 0
@@ -379,17 +414,64 @@ def _load_observations(conn, *, since_hours: int, match_id: str | None = None) -
         return [dict(row) for row in cur.fetchall()]
 
 
-def _summary_match(row: dict[str, Any]) -> dict[str, Any]:
+def _group_observations_by_match(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(str(row["match_id"]), []).append(row)
+    for history in grouped.values():
+        history.sort(key=lambda item: _ensure_aware(item["observed_at"]))
+    return grouped
+
+
+def _summarize_match_history(history: list[dict[str, Any]]) -> dict[str, Any]:
+    first = history[0]
+    latest = history[-1]
+    baseline_result_present = first.get("result_state") == "result_present"
+    first_present_index = next((index for index, row in enumerate(history) if row.get("result_state") == "result_present"), None)
+    true_delay_measured = (
+        first_present_index is not None
+        and any(row.get("result_state") != "result_present" for row in history[:first_present_index])
+    )
+    delay_minutes = None
+    if true_delay_measured and first_present_index is not None:
+        present_row = history[first_present_index]
+        delay_minutes = _delay_from_observation(present_row)
+    delay_unknown = latest.get("result_state") == "result_present" and not true_delay_measured
+    return {
+        "first": first,
+        "latest": latest,
+        "baseline_result_present": baseline_result_present,
+        "true_delay_measured": true_delay_measured,
+        "delay_unknown": delay_unknown,
+        "delay_minutes": delay_minutes,
+    }
+
+
+def _delay_from_observation(row: dict[str, Any]) -> int | None:
+    if row.get("result_ingest_delay_minutes") is not None:
+        return int(row["result_ingest_delay_minutes"])
+    seen_at = row.get("first_result_seen_at") or row.get("observed_at")
+    estimated = row.get("estimated_fulltime_at")
+    if seen_at is None or estimated is None:
+        return None
+    return int((_ensure_aware(seen_at) - _ensure_aware(estimated)).total_seconds() // 60)
+
+
+def _summary_match(row: dict[str, Any], history_summary: dict[str, Any] | None = None) -> dict[str, Any]:
     latest_result = None
     if row.get("result_home") is not None and row.get("result_away") is not None:
         latest_result = f"{row['result_home']}-{row['result_away']}"
+    history_summary = history_summary or {}
     return {
         "match_id": row.get("match_id"),
         "home_team": row.get("home_team"),
         "away_team": row.get("away_team"),
         "kickoff_at": _iso(row.get("kickoff_at")),
-        "first_result_seen_at": _iso(row.get("first_result_seen_at")),
-        "result_ingest_delay_minutes": row.get("result_ingest_delay_minutes"),
+        "first_result_seen_at": None if history_summary.get("delay_unknown") else _iso(row.get("first_result_seen_at")),
+        "result_ingest_delay_minutes": history_summary.get("delay_minutes"),
+        "baseline_result_present": history_summary.get("baseline_result_present"),
+        "true_delay_measured": history_summary.get("true_delay_measured"),
+        "delay_unknown": history_summary.get("delay_unknown"),
         "latest_status": row.get("status"),
         "latest_result": latest_result,
         "latest_audit_status": row.get("audit_status"),
@@ -397,9 +479,18 @@ def _summary_match(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _ensure_aware(value: datetime) -> datetime:
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _result_seen_time_from_row(row: dict[str, Any], kickoff_at: datetime) -> datetime | None:
+    updated_at = _parse_datetime(row.get("updated_at"))
+    if updated_at is None:
+        return None
+    return updated_at if updated_at > kickoff_at else None
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -423,6 +514,15 @@ def _iso(value: Any) -> str | None:
 
 def _enabled(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _delay_precision_note() -> str:
+    return (
+        "result_ingest_delay_minutes is estimated relative to kickoff_at + 120min; "
+        "it may include stoppage time, final-score confirmation, 500 source update time, "
+        "results_sync interval, and monitor observation precision. Observation-derived "
+        f"samples have precision +/-{monitor_interval_minutes()} minutes."
+    )
 
 
 def _env_int(name: str, default: int) -> int:

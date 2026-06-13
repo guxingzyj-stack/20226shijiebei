@@ -383,6 +383,26 @@ result_consistency_report remains PASS
 ops_health_check does not get worse
 ```
 
+On the first production runs, already-scored historical matches are expected to
+show as baseline:
+
+```text
+baseline_result_present_matches: 4
+true_delay_measured_matches: 0
+delay_unknown_matches: 4
+result: RESULT_INGEST_BASELINE_ONLY
+```
+
+This is not a slow-ingest alarm. Baseline rows existed before the monitor began,
+so they do not prove the real result-ingest time and must not be included in
+median/max delay. Only an observed `result_missing -> result_present`
+transition is a true measured delay sample.
+
+`result_ingest_delay_minutes` is estimated relative to `kickoff_at + 120min`.
+It can include stoppage time, final-score confirmation, 500 source update time,
+`results_sync` interval, and monitor observation precision. If monitor
+observation time is used, precision is approximately the monitor interval.
+
 Only after repeated manual success should the API scheduler enable:
 
 ```text
@@ -390,6 +410,7 @@ ENABLE_RESULT_INGEST_MONITOR=true
 ```
 
 Do not increase `results_sync` frequency preemptively.
+Do not change `results_sync` frequency before true measured delay samples exist.
 
 Abnormal-state pressure testing is not a production workflow. Dry-run is safe:
 
