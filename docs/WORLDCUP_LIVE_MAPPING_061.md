@@ -189,3 +189,36 @@ confirm NEEDS_VERIFIED_FALLBACK rows are manually verified
 keep writes_db=false
 require explicit approval before any writer is added
 ```
+
+## 061-B Hardening Notes
+
+061-B hardens diagnostics in three ways:
+
+```text
+1. zhibo8 dump now prints raw links and possible qiumibao id candidates.
+2. zhibo8 rows and local mapping rows print raw and normalized team names.
+3. a zhibo8/local match without a qiumibao id reports:
+   qiumibao_link_status: zhibo8_matched_but_qiumibao_unlinked
+   next_step: EXTRACT_QIUMIBAO_ID_FROM_ZHIBO8_LINKS
+```
+
+`zhibo8_matched_but_qiumibao_unlinked` means the schedule layer can identify the
+local match, but the score/event layer is not yet bound. It is not score
+evidence and must not trigger result writes.
+
+Additional normalization examples covered by tests:
+
+```text
+Qatar -> 卡塔尔
+Switzerland -> 瑞士
+Australia -> 澳大利亚
+```
+
+Expected production dry-run behavior:
+
+```text
+writes_db=false
+dump-zhibo8 exposes zhibo8_raw_links and possible_qiumibao_ids
+map-local exposes qiumibao_link_status and next_step
+if qiumibao_match_id is null, the report must say unlinked explicitly
+```

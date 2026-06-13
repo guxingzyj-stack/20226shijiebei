@@ -49,6 +49,9 @@ Current production posture:
 - 061 local mapping scores live rows against local `matches.match_id` with
   normalized team names, kickoff windows, external refs, confidence, and
   ambiguity protection. It is still dry-run only.
+- 061-B adds zhibo8 raw link diagnostics, possible qiumibao ids, and explicit
+  `zhibo8_matched_but_qiumibao_unlinked` status when schedule mapping works but
+  the qiumibao score/event id is still missing.
 
 ### 042 Watchdog
 

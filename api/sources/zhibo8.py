@@ -8,6 +8,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from api.ops_log import sanitize_error
+from api.result_source_mapping import normalize_team_name
 
 
 ZHIBO8_URL = "https://www.zhibo8.cc/"
@@ -21,9 +22,16 @@ class Zhibo8Match:
     source_name: str
     zhibo8_match_ref: str | None
     zhibo8_url: str | None
-    home_team: str | None
-    away_team: str | None
-    kickoff_at: str | None
+    zhibo8_text_url: str | None = None
+    zhibo8_score_url: str | None = None
+    zhibo8_animation_url: str | None = None
+    zhibo8_raw_links: list[str] | None = None
+    possible_qiumibao_ids: list[str] | None = None
+    home_team: str | None = None
+    away_team: str | None = None
+    normalized_home_team: str = ""
+    normalized_away_team: str = ""
+    kickoff_at: str | None = None
     league: str | None = None
     status_text: str | None = None
     score: str | None = None
@@ -93,19 +101,61 @@ def normalize_schedule_item(li_html: str) -> Zhibo8Match | None:
     teams_html = _first_match(li_html, r'<span class="_teams">([\s\S]*?)</span></b>') or ""
     parts = re.split(r"<img\b[^>]*>", teams_html, flags=re.I)
     if len(parts) < 3:
-        return Zhibo8Match("zhibo8", match_ref, _detail_url(li_html), None, None, _parse_beijing_time(data_time), league, parser_error="parser_missing_team_fields")
+        links = _raw_links(li_html)
+        return Zhibo8Match(
+            "zhibo8",
+            match_ref,
+            _detail_url(li_html),
+            _typed_link(links, "text"),
+            _typed_link(links, "score"),
+            _typed_link(links, "animation"),
+            links,
+            _possible_ids(links, match_ref),
+            None,
+            None,
+            "",
+            "",
+            _parse_beijing_time(data_time),
+            league,
+            parser_error="parser_missing_team_fields",
+        )
     home = _strip_tags(parts[0])
     away = _strip_tags(parts[-1])
     if not home or not away:
-        return Zhibo8Match("zhibo8", match_ref, _detail_url(li_html), home or None, away or None, _parse_beijing_time(data_time), league, parser_error="parser_missing_team_fields")
+        links = _raw_links(li_html)
+        return Zhibo8Match(
+            "zhibo8",
+            match_ref,
+            _detail_url(li_html),
+            _typed_link(links, "text"),
+            _typed_link(links, "score"),
+            _typed_link(links, "animation"),
+            links,
+            _possible_ids(links, match_ref),
+            home or None,
+            away or None,
+            normalize_team_name(home),
+            normalize_team_name(away),
+            _parse_beijing_time(data_time),
+            league,
+            parser_error="parser_missing_team_fields",
+        )
     middle = _strip_tags(" ".join(parts[1:-1]))
     score = _score_from_text(middle)
+    links = _raw_links(li_html)
     return Zhibo8Match(
         source_name="zhibo8",
         zhibo8_match_ref=match_ref,
         zhibo8_url=_detail_url(li_html),
+        zhibo8_text_url=_typed_link(links, "text"),
+        zhibo8_score_url=_typed_link(links, "score"),
+        zhibo8_animation_url=_typed_link(links, "animation"),
+        zhibo8_raw_links=links,
+        possible_qiumibao_ids=_possible_ids(links, match_ref),
         home_team=home,
         away_team=away,
+        normalized_home_team=normalize_team_name(home),
+        normalized_away_team=normalize_team_name(away),
         kickoff_at=_parse_beijing_time(data_time),
         league=league,
         status_text=middle or None,
@@ -151,6 +201,55 @@ def _detail_url(text: str) -> str | None:
     if path.startswith("http"):
         return path
     return "https://www.zhibo8.com" + (path if path.startswith("/") else "/" + path)
+
+
+def _raw_links(text: str) -> list[str]:
+    values = [_absolute_url(html.unescape(item).strip()) for item in re.findall(r'href="([^"]+)"', text, flags=re.I)]
+    seen: set[str] = set()
+    links: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            links.append(value)
+    return links
+
+
+def _absolute_url(path: str) -> str | None:
+    if not path:
+        return None
+    if path.startswith("//"):
+        return "https:" + path
+    if path.startswith("http"):
+        return path
+    return "https://www.zhibo8.com" + (path if path.startswith("/") else "/" + path)
+
+
+def _typed_link(links: list[str], kind: str) -> str | None:
+    patterns = {
+        "text": ("zhibo", "live", "text"),
+        "score": ("bifen", "score"),
+        "animation": ("donghua", "animation", "flash", "dc"),
+    }
+    for link in links:
+        lowered = link.lower()
+        if any(pattern in lowered for pattern in patterns[kind]):
+            return link
+    return None
+
+
+def _possible_ids(links: list[str], match_ref: str | None) -> list[str]:
+    ids: list[str] = []
+    if match_ref:
+        ids.append(str(match_ref))
+    for link in links:
+        ids.extend(re.findall(r"(?<!\d)(\d{5,})(?!\d)", link))
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in ids:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 def _score_from_text(value: str) -> str | None:

@@ -233,6 +233,14 @@ live-source dry-runs. The `--map-local` variants score candidate mappings to
 local `matches.match_id`. They print `writes_db: false` and must not be used as
 a score writer without explicit approval.
 
+For 061-B diagnostics, confirm:
+
+```text
+--dump-zhibo8 shows zhibo8_raw_links and possible_qiumibao_ids
+--map-local shows qiumibao_link_status and next_step
+zhibo8_matched_but_qiumibao_unlinked is WAIT_SOURCE, not score evidence
+```
+
 Normal daily operation no longer requires running the full 041 SQL bundle. Use
 `/api/health` first. If it shows `FAIL`, run the Python daily runner and
 `python -m api.ops_health_check` inside the API container, then inspect `ops_log`.

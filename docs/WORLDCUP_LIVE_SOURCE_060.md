@@ -218,3 +218,11 @@ PYTHONPATH=. python -m api.worldcup_live_probe --map-local --all-overdue
 
 See `docs/WORLDCUP_LIVE_MAPPING_061.md`. The 061 mapping layer is still dry-run
 and does not write results.
+
+061-B hardens the diagnostic output:
+
+```text
+dump-zhibo8 prints zhibo8_raw_links and possible_qiumibao_ids
+map-local prints qiumibao_link_status and next_step
+zhibo8 matched but no qiumibao id becomes zhibo8_matched_but_qiumibao_unlinked
+```

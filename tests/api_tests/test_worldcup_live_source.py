@@ -206,9 +206,13 @@ def test_normalize_team_name_removes_chinese_inner_spaces_and_aliases():
     assert normalize_team_name("\u7f8e \u56fd") == "\u7f8e\u56fd"
     assert normalize_team_name("\u5df4 \u62c9 \u572d") == "\u5df4\u62c9\u572d"
     assert normalize_team_name("\u52a0 \u62ff \u5927") == "\u52a0\u62ff\u5927"
+    assert normalize_team_name("\u5361 \u5854 \u5c14") == "\u5361\u5854\u5c14"
+    assert normalize_team_name("\u6fb3 \u5927 \u5229 \u4e9a") == "\u6fb3\u5927\u5229\u4e9a"
     assert normalize_team_name("\u58a8 \u897f \u54e5") == "\u58a8\u897f\u54e5"
     assert normalize_team_name("USA") == "\u7f8e\u56fd"
     assert normalize_team_name("Brazil") == "\u5df4\u897f"
+    assert normalize_team_name("Qatar") == "\u5361\u5854\u5c14"
+    assert normalize_team_name("Switzerland") == "\u745e\u58eb"
 
 
 def test_live_to_local_score_matched_high_confidence():
@@ -271,6 +275,75 @@ def test_map_one_local_is_dry_run_shape():
 
     assert row["mapping_status"] == "source_window_missing"
     assert row["local_match"]["normalized_home_team"] == "\u7f8e\u56fd"
+
+
+def test_zhibo8_parser_outputs_raw_links_and_possible_qiumibao_ids():
+    html = """
+    <li label="\u4e16\u754c\u676f" data-type="football" data-time="2026-06-13 03:00">
+      <a href="/zhibo/zuqiu/1869145.html"><b id="saishi1869145">
+        <span class="_league">\u4e16\u754c\u676f</span>
+        <span class="_teams">Qatar <img src="x.png"> VS <img src="y.png"> Switzerland</span></b>
+      </a>
+      <a href="https://dc4pc.qiumibao.com/dc/matchs/data/2026-06-13/match_event_999001.htm">event</a>
+    </li>
+    """
+
+    match = zhibo8.parse_worldcup_matches(html)[0]
+
+    assert match.zhibo8_raw_links
+    assert "1869145" in match.possible_qiumibao_ids
+    assert "999001" in match.possible_qiumibao_ids
+    assert match.normalized_home_team == "\u5361\u5854\u5c14"
+    assert match.normalized_away_team == "\u745e\u58eb"
+
+
+def test_zhibo8_link_id_can_bind_to_qiumibao_score_id():
+    zhibo8_rows = [
+        {
+            "zhibo8_match_ref": "111",
+            "zhibo8_url": "https://example.test/111",
+            "possible_qiumibao_ids": ["999001"],
+            "home_team": "\u5361\u5854\u5c14",
+            "away_team": "\u745e\u58eb",
+            "kickoff_at": "2026-06-13T19:00:00+00:00",
+        }
+    ]
+    qiumibao_rows = [
+        {
+            "external_id": "999001",
+            "home_team": "\u5361\u5854\u5c14",
+            "away_team": "\u745e\u58eb",
+            "kickoff_at": "2026-06-13T19:00:00+00:00",
+            "status": "scheduled",
+        }
+    ]
+
+    merged = build_worldcup_live_matches(zhibo8_rows, qiumibao_rows)
+
+    assert merged[0].qiumibao_match_id == "999001"
+    assert merged[0].qiumibao_link_status == "qiumibao_linked"
+
+
+def test_zhibo8_matched_but_qiumibao_unlinked_status_is_reported():
+    local = _local("\u5361 \u5854 \u5c14", "\u745e \u58eb", "2026-06-13T19:00:00+00:00")
+    live = {
+        "home_team": "\u5361\u5854\u5c14",
+        "away_team": "\u745e\u58eb",
+        "kickoff_at": "2026-06-13T19:00:00+00:00",
+        "status": "scheduled",
+        "score": None,
+        "half_score": None,
+        "zhibo8_match_ref": "1869145",
+        "qiumibao_match_id": None,
+        "possible_qiumibao_ids": ["1869145"],
+    }
+
+    row = _map_one_local(local, [live])
+
+    assert row["mapping_status"] == "matched"
+    assert row["comparison_status"] == "WAIT_SOURCE"
+    assert row["qiumibao_link_status"] == "zhibo8_matched_but_qiumibao_unlinked"
+    assert row["next_step"] == "EXTRACT_QIUMIBAO_ID_FROM_ZHIBO8_LINKS"
 
 
 def _local(home: str, away: str, kickoff_at: str) -> dict:

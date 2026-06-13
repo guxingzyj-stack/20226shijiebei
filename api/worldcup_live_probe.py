@@ -93,12 +93,16 @@ def _print_live_report(report: dict[str, Any], limit: int) -> None:
         for key in (
             "home_team",
             "away_team",
+            "normalized_home_team",
+            "normalized_away_team",
             "kickoff_at",
             "status",
             "score",
             "half_score",
             "zhibo8_match_ref",
+            "possible_qiumibao_ids",
             "qiumibao_match_id",
+            "qiumibao_link_status",
             "qiumibao_left_id",
             "qiumibao_right_id",
             "mapping_status",
@@ -162,16 +166,21 @@ def _print_mapping_report(report: dict[str, Any], limit: int) -> None:
             for key in (
                 "live_home_team",
                 "live_away_team",
+                "normalized_live_home_team",
+                "normalized_live_away_team",
                 "live_kickoff_at",
                 "live_status",
                 "live_score",
                 "live_half_score",
                 "zhibo8_match_ref",
                 "qiumibao_match_id",
+                "possible_qiumibao_ids",
+                "qiumibao_link_status",
                 "match_score",
                 "confidence",
                 "mapping_status",
                 "mapping_reason",
+                "next_step",
             ):
                 print(f"    - {key}: {_compact(best.get(key))}")
         else:
@@ -179,6 +188,8 @@ def _print_mapping_report(report: dict[str, Any], limit: int) -> None:
         print(f"  - mapping_status: {_compact(row.get('mapping_status'))}")
         print(f"  - confidence: {_compact(row.get('confidence'))}")
         print(f"  - comparison_status: {_compact(row.get('comparison_status'))}")
+        print(f"  - qiumibao_link_status: {_compact(row.get('qiumibao_link_status'))}")
+        print(f"  - next_step: {_compact(row.get('next_step'))}")
         print(f"  - reason: {_compact(row.get('reason'))}")
         print(f"  - candidates_count: {len(row.get('candidates') or [])}")
 
@@ -197,7 +208,23 @@ def _print_common(report: dict[str, Any]) -> None:
 
 def _source_keys(row: dict[str, Any]) -> tuple[str, ...]:
     if "zhibo8_match_ref" in row:
-        return ("zhibo8_match_ref", "home_team", "away_team", "kickoff_at", "league", "status_text", "score", "parser_error")
+        return (
+            "zhibo8_match_ref",
+            "home_team",
+            "away_team",
+            "normalized_home_team",
+            "normalized_away_team",
+            "kickoff_at",
+            "league",
+            "status_text",
+            "score",
+            "zhibo8_text_url",
+            "zhibo8_score_url",
+            "zhibo8_animation_url",
+            "zhibo8_raw_links",
+            "possible_qiumibao_ids",
+            "parser_error",
+        )
     return (
         "external_id",
         "home_team",

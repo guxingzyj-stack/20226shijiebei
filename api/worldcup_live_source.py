@@ -23,6 +23,11 @@ class WorldCupLiveMatch:
     source_fetch_ok: bool
     zhibo8_match_ref: str | None = None
     zhibo8_url: str | None = None
+    zhibo8_text_url: str | None = None
+    zhibo8_score_url: str | None = None
+    zhibo8_animation_url: str | None = None
+    zhibo8_raw_links: list[str] | None = None
+    possible_qiumibao_ids: list[str] | None = None
     zhibo8_home_team: str | None = None
     zhibo8_away_team: str | None = None
     zhibo8_kickoff_at: str | None = None
@@ -35,6 +40,7 @@ class WorldCupLiveMatch:
     qiumibao_score_away: int | None = None
     qiumibao_half_score_home: int | None = None
     qiumibao_half_score_away: int | None = None
+    qiumibao_link_status: str = "qiumibao_unlinked"
     home_team: str | None = None
     away_team: str | None = None
     normalized_home_team: str = ""
@@ -66,6 +72,9 @@ class LocalLiveCandidate:
     qiumibao_match_id: str | None
     qiumibao_left_id: str | None
     qiumibao_right_id: str | None
+    possible_qiumibao_ids: list[str] | None
+    qiumibao_link_status: str
+    next_step: str | None
     normalized_live_home_team: str
     normalized_live_away_team: str
     home_team_match: bool
@@ -237,6 +246,9 @@ def score_live_to_local_match(live_match: dict[str, Any] | WorldCupLiveMatch, lo
         qiumibao_match_id=live.get("qiumibao_match_id"),
         qiumibao_left_id=live.get("qiumibao_left_id"),
         qiumibao_right_id=live.get("qiumibao_right_id"),
+        possible_qiumibao_ids=live.get("possible_qiumibao_ids"),
+        qiumibao_link_status=_qiumibao_link_status(live),
+        next_step=_next_step(live),
         normalized_live_home_team=live_home,
         normalized_live_away_team=live_away,
         home_team_match=home_match,
@@ -262,6 +274,11 @@ def _merge_match(schedule: dict[str, Any] | None, qrow: dict[str, Any] | None, m
         source_fetch_ok=True,
         zhibo8_match_ref=(schedule or {}).get("zhibo8_match_ref"),
         zhibo8_url=(schedule or {}).get("zhibo8_url"),
+        zhibo8_text_url=(schedule or {}).get("zhibo8_text_url"),
+        zhibo8_score_url=(schedule or {}).get("zhibo8_score_url"),
+        zhibo8_animation_url=(schedule or {}).get("zhibo8_animation_url"),
+        zhibo8_raw_links=(schedule or {}).get("zhibo8_raw_links"),
+        possible_qiumibao_ids=(schedule or {}).get("possible_qiumibao_ids"),
         zhibo8_home_team=(schedule or {}).get("home_team"),
         zhibo8_away_team=(schedule or {}).get("away_team"),
         zhibo8_kickoff_at=(schedule or {}).get("kickoff_at"),
@@ -274,6 +291,13 @@ def _merge_match(schedule: dict[str, Any] | None, qrow: dict[str, Any] | None, m
         qiumibao_score_away=q_away,
         qiumibao_half_score_home=(qrow or {}).get("ht_home"),
         qiumibao_half_score_away=(qrow or {}).get("ht_away"),
+        qiumibao_link_status=_qiumibao_link_status(
+            {
+                "zhibo8_match_ref": (schedule or {}).get("zhibo8_match_ref"),
+                "qiumibao_match_id": (qrow or {}).get("external_id"),
+                "possible_qiumibao_ids": (schedule or {}).get("possible_qiumibao_ids"),
+            }
+        ),
         home_team=home,
         away_team=away,
         normalized_home_team=normalize_team_name(home),
@@ -294,6 +318,10 @@ def _match_qiumibao(schedule: dict[str, Any], qrows: list[dict[str, Any]], by_ex
     ref = str(schedule.get("zhibo8_match_ref") or "")
     if ref and ref in by_external_id:
         return by_external_id[ref], "matched", "zhibo8 saishi id matched qiumibao score id"
+    for candidate_id in schedule.get("possible_qiumibao_ids") or []:
+        candidate_id = str(candidate_id)
+        if candidate_id in by_external_id:
+            return by_external_id[candidate_id], "matched", "zhibo8 link id matched qiumibao score id"
     kickoff = _as_datetime(schedule.get("kickoff_at"))
     if kickoff is None:
         return None, "mapping_missing", "zhibo8 kickoff missing"
@@ -391,6 +419,8 @@ def _mapping_row(
         "confidence": best.confidence if best else "none",
         "reason": reason,
         "comparison_status": comparison_status or ("AMBIGUOUS_CANDIDATES" if status == "ambiguous_candidates" else "MAPPING_MISSING"),
+        "qiumibao_link_status": best.qiumibao_link_status if best else "qiumibao_unlinked",
+        "next_step": best.next_step if best else None,
     }
 
 
@@ -608,6 +638,25 @@ def _confidence(score: float, status: str) -> str:
     if score >= 0.50:
         return "low"
     return "none"
+
+
+def _qiumibao_link_status(live: dict[str, Any]) -> str:
+    if live.get("qiumibao_match_id"):
+        return "qiumibao_linked"
+    if live.get("zhibo8_match_ref"):
+        return "zhibo8_matched_but_qiumibao_unlinked"
+    if live.get("possible_qiumibao_ids"):
+        return "possible_qiumibao_ids_unresolved"
+    return "qiumibao_unlinked"
+
+
+def _next_step(live: dict[str, Any]) -> str | None:
+    status = _qiumibao_link_status(live)
+    if status == "zhibo8_matched_but_qiumibao_unlinked":
+        return "EXTRACT_QIUMIBAO_ID_FROM_ZHIBO8_LINKS"
+    if status == "possible_qiumibao_ids_unresolved":
+        return "COMPARE_ZHIBO8_LINK_IDS_WITH_QIUMIBAO_SCORE_IDS"
+    return None
 
 
 def _date_for_live(schedule: dict[str, Any] | None, qrow: dict[str, Any]) -> str | None:
