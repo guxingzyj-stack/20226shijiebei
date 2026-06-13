@@ -226,3 +226,11 @@ dump-zhibo8 prints zhibo8_raw_links and possible_qiumibao_ids
 map-local prints qiumibao_link_status and next_step
 zhibo8 matched but no qiumibao id becomes zhibo8_matched_but_qiumibao_unlinked
 ```
+
+061-C splits ID diagnostics:
+
+```text
+possible_zhibo8_ids: ids from zhibo8 links such as match1869145v.htm
+possible_qiumibao_ids: ids from qiumibao/bifen4pc/dc4pc/match_event links only
+possible_external_ids: ids from other uncertain links
+```

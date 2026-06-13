@@ -26,7 +26,9 @@ class Zhibo8Match:
     zhibo8_score_url: str | None = None
     zhibo8_animation_url: str | None = None
     zhibo8_raw_links: list[str] | None = None
+    possible_zhibo8_ids: list[str] | None = None
     possible_qiumibao_ids: list[str] | None = None
+    possible_external_ids: list[str] | None = None
     home_team: str | None = None
     away_team: str | None = None
     normalized_home_team: str = ""
@@ -102,6 +104,7 @@ def normalize_schedule_item(li_html: str) -> Zhibo8Match | None:
     parts = re.split(r"<img\b[^>]*>", teams_html, flags=re.I)
     if len(parts) < 3:
         links = _raw_links(li_html)
+        id_groups = _possible_id_groups(links, match_ref)
         return Zhibo8Match(
             "zhibo8",
             match_ref,
@@ -110,7 +113,9 @@ def normalize_schedule_item(li_html: str) -> Zhibo8Match | None:
             _typed_link(links, "score"),
             _typed_link(links, "animation"),
             links,
-            _possible_ids(links, match_ref),
+            id_groups["possible_zhibo8_ids"],
+            id_groups["possible_qiumibao_ids"],
+            id_groups["possible_external_ids"],
             None,
             None,
             "",
@@ -123,6 +128,7 @@ def normalize_schedule_item(li_html: str) -> Zhibo8Match | None:
     away = _strip_tags(parts[-1])
     if not home or not away:
         links = _raw_links(li_html)
+        id_groups = _possible_id_groups(links, match_ref)
         return Zhibo8Match(
             "zhibo8",
             match_ref,
@@ -131,7 +137,9 @@ def normalize_schedule_item(li_html: str) -> Zhibo8Match | None:
             _typed_link(links, "score"),
             _typed_link(links, "animation"),
             links,
-            _possible_ids(links, match_ref),
+            id_groups["possible_zhibo8_ids"],
+            id_groups["possible_qiumibao_ids"],
+            id_groups["possible_external_ids"],
             home or None,
             away or None,
             normalize_team_name(home),
@@ -143,6 +151,7 @@ def normalize_schedule_item(li_html: str) -> Zhibo8Match | None:
     middle = _strip_tags(" ".join(parts[1:-1]))
     score = _score_from_text(middle)
     links = _raw_links(li_html)
+    id_groups = _possible_id_groups(links, match_ref)
     return Zhibo8Match(
         source_name="zhibo8",
         zhibo8_match_ref=match_ref,
@@ -151,7 +160,9 @@ def normalize_schedule_item(li_html: str) -> Zhibo8Match | None:
         zhibo8_score_url=_typed_link(links, "score"),
         zhibo8_animation_url=_typed_link(links, "animation"),
         zhibo8_raw_links=links,
-        possible_qiumibao_ids=_possible_ids(links, match_ref),
+        possible_zhibo8_ids=id_groups["possible_zhibo8_ids"],
+        possible_qiumibao_ids=id_groups["possible_qiumibao_ids"],
+        possible_external_ids=id_groups["possible_external_ids"],
         home_team=home,
         away_team=away,
         normalized_home_team=normalize_team_name(home),
@@ -237,15 +248,32 @@ def _typed_link(links: list[str], kind: str) -> str | None:
     return None
 
 
-def _possible_ids(links: list[str], match_ref: str | None) -> list[str]:
-    ids: list[str] = []
+def _possible_id_groups(links: list[str], match_ref: str | None) -> dict[str, list[str]]:
+    zhibo8_ids: list[str] = []
+    qiumibao_ids: list[str] = []
+    external_ids: list[str] = []
     if match_ref:
-        ids.append(str(match_ref))
+        zhibo8_ids.append(str(match_ref))
     for link in links:
-        ids.extend(re.findall(r"(?<!\d)(\d{5,})(?!\d)", link))
+        lowered = link.lower()
+        ids = re.findall(r"(?<!\d)(\d{5,})(?!\d)", link)
+        if "qiumibao.com" in lowered or "bifen4pc" in lowered or "dc4pc" in lowered or "match_event" in lowered:
+            qiumibao_ids.extend(ids)
+        elif "zhibo8.com" in lowered or "zhibo8.cc" in lowered or re.search(r"match\d+v?", lowered):
+            zhibo8_ids.extend(ids)
+        else:
+            external_ids.extend(ids)
+    return {
+        "possible_zhibo8_ids": _dedupe(zhibo8_ids),
+        "possible_qiumibao_ids": _dedupe(qiumibao_ids),
+        "possible_external_ids": _dedupe(external_ids),
+    }
+
+
+def _dedupe(values: list[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
-    for value in ids:
+    for value in values:
         if value not in seen:
             seen.add(value)
             result.append(value)

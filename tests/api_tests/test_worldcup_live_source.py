@@ -213,6 +213,16 @@ def test_normalize_team_name_removes_chinese_inner_spaces_and_aliases():
     assert normalize_team_name("Brazil") == "\u5df4\u897f"
     assert normalize_team_name("Qatar") == "\u5361\u5854\u5c14"
     assert normalize_team_name("Switzerland") == "\u745e\u58eb"
+    assert normalize_team_name("\u5df4\u3000\u897f") == "\u5df4\u897f"
+    assert normalize_team_name("\u6469\u200b\u6d1b\u2060\u54e5") == "\u6469\u6d1b\u54e5"
+    assert normalize_team_name("\u6d77\u00a0\u5730") == "\u6d77\u5730"
+    assert normalize_team_name("\u82cf\u2009\u683c\u3000\u5170") == "\u82cf\u683c\u5170"
+    assert normalize_team_name("\u571f\u202f\u8033\u5176") == "\u571f\u8033\u5176"
+    assert normalize_team_name("\u5fb7 \u56fd") == "\u5fb7\u56fd"
+    assert normalize_team_name("\u5e93\u200d\u62c9\u7d22") == "\u5e93\u62c9\u7d22"
+    assert normalize_team_name("\u97e9 \u56fd") == "\u97e9\u56fd"
+    assert normalize_team_name("\u6377 \u514b") == "\u6377\u514b"
+    assert normalize_team_name("\u5357 \u975e") == "\u5357\u975e"
 
 
 def test_live_to_local_score_matched_high_confidence():
@@ -291,8 +301,29 @@ def test_zhibo8_parser_outputs_raw_links_and_possible_qiumibao_ids():
     match = zhibo8.parse_worldcup_matches(html)[0]
 
     assert match.zhibo8_raw_links
-    assert "1869145" in match.possible_qiumibao_ids
+    assert "1869145" in match.possible_zhibo8_ids
+    assert "1869145" not in match.possible_qiumibao_ids
     assert "999001" in match.possible_qiumibao_ids
+    assert match.normalized_home_team == "\u5361\u5854\u5c14"
+    assert match.normalized_away_team == "\u745e\u58eb"
+
+
+def test_zhibo8_external_ids_are_separate_from_qiumibao_ids():
+    html = """
+    <li label="\u4e16\u754c\u676f" data-type="football" data-time="2026-06-13 03:00">
+      <a href="/zhibo/zuqiu/2026/match1869145v.htm"><b id="saishi1869145">
+        <span class="_league">\u4e16\u754c\u676f</span>
+        <span class="_teams">\u5361 \u5854 \u5c14 <img src="x.png"> VS <img src="y.png"> \u745e \u58eb</span></b>
+      </a>
+      <a href="https://example.com/external/777777">external</a>
+    </li>
+    """
+
+    match = zhibo8.parse_worldcup_matches(html)[0]
+
+    assert match.possible_zhibo8_ids == ["1869145"]
+    assert match.possible_qiumibao_ids == []
+    assert match.possible_external_ids == ["777777"]
     assert match.normalized_home_team == "\u5361\u5854\u5c14"
     assert match.normalized_away_team == "\u745e\u58eb"
 
@@ -302,7 +333,9 @@ def test_zhibo8_link_id_can_bind_to_qiumibao_score_id():
         {
             "zhibo8_match_ref": "111",
             "zhibo8_url": "https://example.test/111",
+            "possible_zhibo8_ids": ["111"],
             "possible_qiumibao_ids": ["999001"],
+            "possible_external_ids": [],
             "home_team": "\u5361\u5854\u5c14",
             "away_team": "\u745e\u58eb",
             "kickoff_at": "2026-06-13T19:00:00+00:00",
@@ -335,7 +368,9 @@ def test_zhibo8_matched_but_qiumibao_unlinked_status_is_reported():
         "half_score": None,
         "zhibo8_match_ref": "1869145",
         "qiumibao_match_id": None,
-        "possible_qiumibao_ids": ["1869145"],
+        "possible_zhibo8_ids": ["1869145"],
+        "possible_qiumibao_ids": [],
+        "possible_external_ids": [],
     }
 
     row = _map_one_local(local, [live])

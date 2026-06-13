@@ -239,6 +239,7 @@ For 061-B diagnostics, confirm:
 --dump-zhibo8 shows zhibo8_raw_links and possible_qiumibao_ids
 --map-local shows qiumibao_link_status and next_step
 zhibo8_matched_but_qiumibao_unlinked is WAIT_SOURCE, not score evidence
+possible_zhibo8_ids and possible_qiumibao_ids are separate
 ```
 
 Normal daily operation no longer requires running the full 041 SQL bundle. Use

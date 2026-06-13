@@ -222,3 +222,29 @@ dump-zhibo8 exposes zhibo8_raw_links and possible_qiumibao_ids
 map-local exposes qiumibao_link_status and next_step
 if qiumibao_match_id is null, the report must say unlinked explicitly
 ```
+
+## 061-C ID Split And Normalization Fix
+
+061-C corrects two production diagnostic issues:
+
+```text
+1. normalized_* output must use the shared api.result_source_mapping.normalize_team_name path.
+2. zhibo8 match ids such as match1869145v.htm are not qiumibao ids.
+```
+
+ID fields are now split:
+
+```text
+possible_zhibo8_ids:
+  ids from zhibo8 URLs or zhibo8 match refs, for example match1869145v.htm.
+
+possible_qiumibao_ids:
+  ids from qiumibao / bifen4pc / dc4pc / match_event links only.
+
+possible_external_ids:
+  numeric ids from other third-party links where the source is uncertain.
+```
+
+If `possible_qiumibao_ids` is empty but `possible_zhibo8_ids` is present, the
+chain has schedule-level evidence only. It must still report qiumibao as
+unlinked and must not infer a score/event binding.

@@ -27,7 +27,9 @@ class WorldCupLiveMatch:
     zhibo8_score_url: str | None = None
     zhibo8_animation_url: str | None = None
     zhibo8_raw_links: list[str] | None = None
+    possible_zhibo8_ids: list[str] | None = None
     possible_qiumibao_ids: list[str] | None = None
+    possible_external_ids: list[str] | None = None
     zhibo8_home_team: str | None = None
     zhibo8_away_team: str | None = None
     zhibo8_kickoff_at: str | None = None
@@ -72,7 +74,9 @@ class LocalLiveCandidate:
     qiumibao_match_id: str | None
     qiumibao_left_id: str | None
     qiumibao_right_id: str | None
+    possible_zhibo8_ids: list[str] | None
     possible_qiumibao_ids: list[str] | None
+    possible_external_ids: list[str] | None
     qiumibao_link_status: str
     next_step: str | None
     normalized_live_home_team: str
@@ -246,7 +250,9 @@ def score_live_to_local_match(live_match: dict[str, Any] | WorldCupLiveMatch, lo
         qiumibao_match_id=live.get("qiumibao_match_id"),
         qiumibao_left_id=live.get("qiumibao_left_id"),
         qiumibao_right_id=live.get("qiumibao_right_id"),
+        possible_zhibo8_ids=live.get("possible_zhibo8_ids"),
         possible_qiumibao_ids=live.get("possible_qiumibao_ids"),
+        possible_external_ids=live.get("possible_external_ids"),
         qiumibao_link_status=_qiumibao_link_status(live),
         next_step=_next_step(live),
         normalized_live_home_team=live_home,
@@ -278,7 +284,9 @@ def _merge_match(schedule: dict[str, Any] | None, qrow: dict[str, Any] | None, m
         zhibo8_score_url=(schedule or {}).get("zhibo8_score_url"),
         zhibo8_animation_url=(schedule or {}).get("zhibo8_animation_url"),
         zhibo8_raw_links=(schedule or {}).get("zhibo8_raw_links"),
+        possible_zhibo8_ids=(schedule or {}).get("possible_zhibo8_ids"),
         possible_qiumibao_ids=(schedule or {}).get("possible_qiumibao_ids"),
+        possible_external_ids=(schedule or {}).get("possible_external_ids"),
         zhibo8_home_team=(schedule or {}).get("home_team"),
         zhibo8_away_team=(schedule or {}).get("away_team"),
         zhibo8_kickoff_at=(schedule or {}).get("kickoff_at"),
@@ -295,7 +303,9 @@ def _merge_match(schedule: dict[str, Any] | None, qrow: dict[str, Any] | None, m
             {
                 "zhibo8_match_ref": (schedule or {}).get("zhibo8_match_ref"),
                 "qiumibao_match_id": (qrow or {}).get("external_id"),
+                "possible_zhibo8_ids": (schedule or {}).get("possible_zhibo8_ids"),
                 "possible_qiumibao_ids": (schedule or {}).get("possible_qiumibao_ids"),
+                "possible_external_ids": (schedule or {}).get("possible_external_ids"),
             }
         ),
         home_team=home,

@@ -52,6 +52,9 @@ Current production posture:
 - 061-B adds zhibo8 raw link diagnostics, possible qiumibao ids, and explicit
   `zhibo8_matched_but_qiumibao_unlinked` status when schedule mapping works but
   the qiumibao score/event id is still missing.
+- 061-C splits id diagnostics into `possible_zhibo8_ids`,
+  `possible_qiumibao_ids`, and `possible_external_ids`; zhibo8 links such as
+  `match1869145v.htm` must not be treated as qiumibao score ids.
 
 ### 042 Watchdog
 
