@@ -75,9 +75,41 @@ def health() -> dict:
         if "scheduler_startup_error" not in blockers:
             blockers.append("scheduler_startup_error")
         payload["ops_health_blockers"] = blockers
+    result_sync = _result_sync_health_summary()
+    payload.update(result_sync)
+    if result_sync.get("latest_results_sync_status") == "error":
+        blockers = list(payload.get("ops_health_blockers") or [])
+        if "results_sync_error" not in blockers:
+            blockers.append("results_sync_error")
+        payload["ops_health_blockers"] = blockers
+        if payload.get("ops_health_status") not in {"FAIL"}:
+            payload["ops_health_status"] = "WARN"
+    if result_sync.get("result_overdue_closed_count"):
+        blockers = list(payload.get("ops_health_blockers") or [])
+        if "result_overdue_closed_matches" not in blockers:
+            blockers.append("result_overdue_closed_matches")
+        payload["ops_health_blockers"] = blockers
     payload.update(_p3_fifa_health_summary())
     payload.update(_betting_open_gate_health_summary())
     return payload
+
+
+def _result_sync_health_summary() -> dict:
+    try:
+        from api.result_overdue_report import health_summary
+
+        return health_summary()
+    except Exception:
+        return {
+            "latest_results_sync_at": None,
+            "latest_results_sync_status": None,
+            "latest_results_sync_source": None,
+            "latest_results_sync_finished_updated": None,
+            "latest_results_sync_skipped": None,
+            "latest_results_sync_skipped_reasons": {},
+            "result_overdue_closed_count": None,
+            "result_overdue_closed_matches": [],
+        }
 
 
 def _p3_fifa_health_summary() -> dict:

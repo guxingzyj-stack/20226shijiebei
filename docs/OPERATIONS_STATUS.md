@@ -18,7 +18,9 @@ Current production posture:
 - required production env: `ENABLE_API_SCHEDULER=true`, `RUN_SCHEDULER_ON_STARTUP=true`, `BETTING_ENABLED=false`
 - API startup now explicitly runs `results_sync`, `settlement_runner`, and `ops_health_check` once before waiting for the next interval
 - startup errors are exposed through `/api/health.scheduler_startup_error` and force `scheduler_stale=true`
-- `/api/health` exposes `scheduler_last_seen`, `scheduler_last_seen_age_minutes`, `scheduler_stale`, `scheduler_startup_error`, `latest_ops_health_check_at`, `ops_health_status`, and `ops_health_blockers`
+- `/api/health` exposes `scheduler_last_seen`, `scheduler_last_seen_age_minutes`, `scheduler_stale`, `scheduler_startup_error`, `latest_ops_health_check_at`, `ops_health_status`, `ops_health_blockers`, latest `results_sync` summary, and overdue closed-result counts
+- current main result source: `500_trade_jczq` HTML page, not an official structured source
+- result-overdue CLI: `python -m api.result_overdue_report`
 
 ### 042 Watchdog
 
@@ -119,6 +121,7 @@ python -m api.health_report
 python -m api.ops_health_check
 python scripts/run_daily_ops_check.py
 python -m api.result_consistency_report
+python -m api.result_overdue_report
 python -m api.scheduler_observe
 python -m api.betting_open_gate
 python -m api.cleanup_test_data dry-run

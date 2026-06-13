@@ -56,6 +56,7 @@ rescue.
 curl -sS https://fifa2026.zeabur.app/api/health
 PYTHONPATH=. python -m api.results_sync once
 PYTHONPATH=. python -m api.result_consistency_report
+PYTHONPATH=. python -m api.result_overdue_report
 PYTHONPATH=. python -m api.ops_health_check
 ```
 
@@ -98,6 +99,20 @@ SELECT MAX(fetched_at) AS latest_odds_snapshot FROM odds_snapshots;
 
 If `results_sync` cannot obtain verified results, use the documented official
 fallback CSV process. Do not manually update scores with ad hoc SQL.
+
+`results_sync` now prints and records `skipped_reasons`. If the command reports
+`matches_seen > 0` and `finished_updated = 0`, inspect:
+
+```text
+not_finished_status
+missing_result_score
+match_id_not_found
+already_finished_with_result
+row_error
+```
+
+If `result_overdue_report` suggests `NEEDS_VERIFIED_FALLBACK`, use the verified
+fallback CSV flow with `source_url`, `verified_by`, and `retrieved_at`.
 
 ## Deployment Acceptance
 

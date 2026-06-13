@@ -138,6 +138,7 @@ The startup run is part of deployment acceptance. Within one minute after every
 curl -sS https://fifa2026.zeabur.app/api/health
 PYTHONPATH=. python -m api.acceptance_report
 PYTHONPATH=. python -m api.result_consistency_report
+PYTHONPATH=. python -m api.result_overdue_report
 PYTHONPATH=. python -m api.ops_health_check
 ```
 
@@ -154,6 +155,8 @@ scheduler_startup_error=null
 latest_ops_health_check_at is within 5 minutes
 ops_log has recent results_sync ok
 ops_log has recent settlement_runner ok
+/api/health exposes latest_results_sync_skipped_reasons
+/api/health exposes result_overdue_closed_count
 ```
 
 If `scheduler_last_seen` is older than 5 minutes, `scheduler_stale=true`, or
@@ -211,6 +214,7 @@ python -m api.health_report
 python -m api.ops_health_check
 python scripts/run_daily_ops_check.py
 python -m api.result_consistency_report
+python -m api.result_overdue_report
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
 ```
@@ -223,6 +227,16 @@ python -m api.cleanup_test_data dry-run
 Normal daily operation no longer requires running the full 041 SQL bundle. Use
 `/api/health` first. If it shows `FAIL`, run the Python daily runner and
 `python -m api.ops_health_check` inside the API container, then inspect `ops_log`.
+
+If `/api/health.result_overdue_closed_count > 0`, run:
+
+```bash
+PYTHONPATH=. python -m api.results_sync once
+PYTHONPATH=. python -m api.result_overdue_report
+```
+
+If `result_overdue_report` still returns `NEEDS_VERIFIED_FALLBACK`, use the
+official verified fallback CSV process. Do not manually update scores with SQL.
 
 Sale closed / stop selling is not a match result. The crawler may write `closed`,
 but only `results_sync` may mark a real match `finished` after full-time scores are

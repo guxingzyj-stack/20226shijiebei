@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from api.results_sync import ParsedResult, parse_results_html, sync_results
+import pytest
+
+from api import results_sync
+from api.results_sync import ParsedResult, parse_results_html, run_results_sync_job, sync_results
 
 
 class FakeResultsRepository:
@@ -12,6 +15,8 @@ class FakeResultsRepository:
         }
 
     def update_finished(self, result: ParsedResult):
+        if result.match_id not in self.matches:
+            return False
         row = self.matches[result.match_id]
         row.update(
             {
@@ -24,7 +29,10 @@ class FakeResultsRepository:
         )
 
     def update_postponed(self, result: ParsedResult):
+        if result.match_id not in self.matches:
+            return False
         self.matches[result.match_id]["status"] = "postponed"
+        return True
 
 
 def test_parse_500_results_fixture_covers_finished_half_time_and_postponed():
@@ -63,3 +71,57 @@ def test_sync_results_updates_result_fields_without_destroying_match_metadata():
     assert finished["ht_away"] == 0
     assert repo.matches["500-1003"]["status"] == "postponed"
     assert repo.matches["500-1004"]["status"] == "postponed"
+
+
+def test_sync_results_reports_skipped_reasons():
+    repo = FakeResultsRepository()
+    results = [
+        ParsedResult("500-1001", "scheduled"),
+        ParsedResult("500-1002", "finished"),
+        ParsedResult("500-9999", "finished", 1, 0),
+    ]
+
+    stats = sync_results(results, repo)
+
+    assert stats.skipped == 3
+    assert stats.skipped_reasons == {
+        "not_finished_status": 1,
+        "missing_result_score": 1,
+        "match_id_not_found": 1,
+    }
+
+
+def test_half_time_missing_is_not_inferred_from_full_time_score():
+    html = """
+    <table>
+      <tr data-match-id="500-2001" data-status="finished" data-score="3-2">
+        <td>A</td><td>B</td><td>3-2</td>
+      </tr>
+    </table>
+    """
+
+    result = parse_results_html(html)[0]
+
+    assert result.result_home == 3
+    assert result.result_away == 2
+    assert result.ht_home is None
+    assert result.ht_away is None
+
+
+def test_source_fetch_error_records_diagnostic_summary(monkeypatch):
+    recorded = []
+
+    def fail_fetch():
+        raise RuntimeError("source unavailable")
+
+    monkeypatch.setattr(results_sync, "fetch_results_html", fail_fetch)
+    monkeypatch.setattr(results_sync, "record_ops_log", lambda *args: recorded.append(args))
+
+    with pytest.raises(RuntimeError):
+        run_results_sync_job(record_log=True)
+
+    assert recorded
+    assert recorded[0][0] == "results_sync"
+    assert recorded[0][1] == "error"
+    assert recorded[0][3]["source_name"] == "500_trade_jczq"
+    assert recorded[0][3]["source_fetch_ok"] is False
