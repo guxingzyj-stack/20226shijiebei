@@ -110,7 +110,7 @@ OPS_HEALTH_STALE_THRESHOLD_MINUTES=90
 ODDS_STALE_THRESHOLD_MINUTES=30
 OPS_ALERT_ENABLED=false
 OPS_ALERT_WEBHOOK_URL=
-RUN_SCHEDULER_ON_STARTUP=false
+RUN_SCHEDULER_ON_STARTUP=true
 BETTING_ENABLED=false
 ```
 
@@ -130,6 +130,35 @@ results_sync
 settlement_runner
 ops_health_check
 ```
+
+The startup run is part of deployment acceptance. Within one minute after every
+`wc-p2-api` deployment or restart, verify all of these:
+
+```bash
+curl -sS https://fifa2026.zeabur.app/api/health
+PYTHONPATH=. python -m api.acceptance_report
+PYTHONPATH=. python -m api.result_consistency_report
+PYTHONPATH=. python -m api.ops_health_check
+```
+
+Required evidence:
+
+```text
+api logs contain event=api_scheduler_started
+api logs contain scheduler_job_finished for results_sync
+api logs contain scheduler_job_finished for settlement_runner
+api logs contain scheduler_job_finished for ops_health_check
+scheduler_last_seen is within 5 minutes
+scheduler_stale=false
+scheduler_startup_error=null
+latest_ops_health_check_at is within 5 minutes
+ops_log has recent results_sync ok
+ops_log has recent settlement_runner ok
+```
+
+If `scheduler_last_seen` is older than 5 minutes, `scheduler_stale=true`, or
+`scheduler_startup_error` is non-empty, the deployment is not complete. Do not
+wait and observe passively; fix the API scheduler before relying on result sync.
 
 The watchdog can also be run manually:
 

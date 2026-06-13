@@ -1,7 +1,19 @@
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
-from api import acceptance_report, ops_log, scheduler
+import pytest
+
+from api import acceptance_report, main, ops_log, scheduler
 from api.ops_log import sanitize_error
+
+
+@pytest.fixture(autouse=True)
+def reset_scheduler_state():
+    scheduler._scheduler = None
+    scheduler._scheduler_startup_error = None
+    yield
+    scheduler._scheduler = None
+    scheduler._scheduler_startup_error = None
 
 
 def test_scheduler_default_disabled(monkeypatch):
@@ -25,7 +37,7 @@ def test_scheduler_enabled_creates_jobs(monkeypatch):
     assert all(job.coalesce is True for job in jobs.values())
 
 
-def test_run_on_startup_schedules_ops_health_immediately(monkeypatch):
+def test_run_on_startup_schedules_first_interval(monkeypatch):
     monkeypatch.setenv("ENABLE_API_SCHEDULER", "true")
     monkeypatch.setenv("RUN_SCHEDULER_ON_STARTUP", "true")
     before = datetime.now(timezone.utc)
@@ -34,7 +46,59 @@ def test_run_on_startup_schedules_ops_health_immediately(monkeypatch):
     jobs = {job.id: job for job in created.get_jobs()}
 
     assert "ops_health_check_job" in jobs
-    assert jobs["ops_health_check_job"].next_run_time <= before + timedelta(seconds=5)
+    assert jobs["ops_health_check_job"].next_run_time > before + timedelta(minutes=20)
+
+
+def test_start_api_scheduler_run_on_startup_runs_all_jobs(monkeypatch):
+    calls = []
+
+    class FakeScheduler:
+        running = False
+
+        def start(self):
+            self.running = True
+
+        def get_jobs(self):
+            return [SimpleNamespace(id="results_sync_job"), SimpleNamespace(id="settlement_runner_job"), SimpleNamespace(id="ops_health_check_job")]
+
+    monkeypatch.setenv("ENABLE_API_SCHEDULER", "true")
+    monkeypatch.setenv("RUN_SCHEDULER_ON_STARTUP", "true")
+    monkeypatch.setattr(scheduler, "_scheduler", None)
+    monkeypatch.setattr(scheduler, "_scheduler_startup_error", None)
+    monkeypatch.setattr(scheduler, "create_scheduler", lambda: FakeScheduler())
+    monkeypatch.setattr(scheduler, "run_results_sync_job", lambda dry_run, record_log: calls.append(("results_sync", dry_run, record_log)) or SimpleNamespace(matches_seen=1, errors=0))
+    monkeypatch.setattr(scheduler, "run_settlement_job", lambda dry_run, record_log: calls.append(("settlement_runner", dry_run, record_log)) or SimpleNamespace(open_bets_seen=0, errors=0))
+    monkeypatch.setattr(
+        scheduler,
+        "run_ops_health_check",
+        lambda record_log: calls.append(("ops_health_check", record_log)) or {"overall": {"status": "WARN"}, "summary": {"overall_status": "WARN"}},
+    )
+
+    scheduler.start_api_scheduler()
+
+    assert calls == [
+        ("results_sync", False, True),
+        ("settlement_runner", False, True),
+        ("ops_health_check", True),
+    ]
+    assert scheduler.scheduler_startup_error() is None
+
+
+def test_startup_job_error_is_recorded_for_health(monkeypatch):
+    def fail(*args, **kwargs):
+        raise RuntimeError("DATABASE_URL=secret")
+
+    monkeypatch.setattr(scheduler, "_scheduler_startup_error", None)
+    monkeypatch.setattr(scheduler, "run_results_sync_job", fail)
+    monkeypatch.setattr(scheduler, "run_settlement_job", lambda dry_run, record_log: SimpleNamespace(open_bets_seen=0, errors=0))
+    monkeypatch.setattr(scheduler, "run_ops_health_check", lambda record_log: {"overall": {"status": "OK"}, "summary": {"overall_status": "OK"}})
+
+    scheduler._run_startup_jobs()
+
+    error = scheduler.scheduler_startup_error()
+    assert error is not None
+    assert "results_sync startup failed" in error
+    assert "DATABASE_URL" not in error
 
 
 def test_scheduler_jobs_catch_exceptions(monkeypatch):
@@ -58,6 +122,22 @@ def test_scheduler_start_error_is_logged(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "api_scheduler_start_error" in output
+
+
+def test_api_health_exposes_scheduler_startup_error(monkeypatch):
+    monkeypatch.setattr(main, "scheduler_freshness", lambda: {"scheduler_last_seen": None, "scheduler_last_seen_age_minutes": None, "scheduler_stale": None})
+    monkeypatch.setattr(main, "latest_ops_health_status", lambda: {"latest_ops_health_check_at": None, "ops_health_status": None, "ops_health_blockers": []})
+    monkeypatch.setattr(main, "scheduler_startup_error", lambda: "results_sync startup failed: RuntimeError")
+    monkeypatch.setattr(main, "_p3_fifa_health_summary", lambda: {})
+    monkeypatch.setattr(main, "_betting_open_gate_health_summary", lambda: {})
+
+    payload = main.health()
+
+    assert payload["ok"] is False
+    assert payload["scheduler_stale"] is True
+    assert payload["scheduler_startup_error"] == "results_sync startup failed: RuntimeError"
+    assert payload["ops_health_status"] == "FAIL"
+    assert "scheduler_startup_error" in payload["ops_health_blockers"]
 
 
 def test_error_sanitizer_redacts_secret_markers():

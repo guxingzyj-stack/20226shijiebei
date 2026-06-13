@@ -13,6 +13,7 @@ from api.settlement_runner import run_settlement_job
 
 
 _scheduler: BackgroundScheduler | None = None
+_scheduler_startup_error: str | None = None
 
 
 def scheduler_enabled() -> bool:
@@ -29,9 +30,9 @@ def create_scheduler() -> BackgroundScheduler:
     settlement_interval = _env_int("SETTLEMENT_RUNNER_INTERVAL_MINUTES", 30)
     ops_health_interval = _env_int("OPS_HEALTH_CHECK_INTERVAL_MINUTES", 30)
     now = datetime.now(timezone.utc)
-    results_next_run_time: Any = now if run_on_startup_enabled() else now + timedelta(minutes=results_interval)
-    settlement_next_run_time: Any = now if run_on_startup_enabled() else now + timedelta(minutes=settlement_interval)
-    ops_health_next_run_time: Any = now if run_on_startup_enabled() else now + timedelta(minutes=ops_health_interval)
+    results_next_run_time: Any = now + timedelta(minutes=results_interval)
+    settlement_next_run_time: Any = now + timedelta(minutes=settlement_interval)
+    ops_health_next_run_time: Any = now + timedelta(minutes=ops_health_interval)
     scheduler.add_job(
         results_sync_job,
         "interval",
@@ -63,7 +64,8 @@ def create_scheduler() -> BackgroundScheduler:
 
 
 def start_api_scheduler() -> None:
-    global _scheduler
+    global _scheduler, _scheduler_startup_error
+    _scheduler_startup_error = None
     if not scheduler_enabled():
         print({"event": "api_scheduler_skipped", "scheduler_enabled": False})
         return
@@ -73,8 +75,11 @@ def start_api_scheduler() -> None:
         _scheduler = create_scheduler()
         _scheduler.start()
         print({"event": "api_scheduler_started", "jobs": [job.id for job in _scheduler.get_jobs()]})
+        if run_on_startup_enabled():
+            _run_startup_jobs()
     except Exception as exc:
-        print({"event": "api_scheduler_start_error", "error": sanitize_error(exc)})
+        _scheduler_startup_error = sanitize_error(exc)
+        print({"event": "api_scheduler_start_error", "error": _scheduler_startup_error})
         _scheduler = None
 
 
@@ -108,6 +113,43 @@ def ops_health_check_job() -> None:
         print({"event": "scheduler_job_finished", "job_name": "ops_health_check", "status": report["overall"]["status"].lower(), "summary": report["summary"]})
     except Exception as exc:
         print({"event": "scheduler_job_finished", "job_name": "ops_health_check", "status": "error", "error": sanitize_error(exc)})
+
+
+def scheduler_startup_error() -> str | None:
+    return _scheduler_startup_error
+
+
+def _run_startup_jobs() -> None:
+    global _scheduler_startup_error
+    errors: list[str] = []
+    for job_name, runner in (
+        ("results_sync", _run_results_sync_startup),
+        ("settlement_runner", _run_settlement_runner_startup),
+        ("ops_health_check", _run_ops_health_check_startup),
+    ):
+        try:
+            runner()
+        except Exception as exc:
+            error = sanitize_error(exc)
+            errors.append(f"{job_name} startup failed: {error}")
+            print({"event": "scheduler_startup_job_error", "job_name": job_name, "error": error})
+    if errors:
+        _scheduler_startup_error = "; ".join(errors)[:500]
+
+
+def _run_results_sync_startup() -> None:
+    stats = run_results_sync_job(dry_run=False, record_log=True)
+    print({"event": "scheduler_job_finished", "job_name": "results_sync", "status": "ok", "startup": True, "summary": stats.__dict__})
+
+
+def _run_settlement_runner_startup() -> None:
+    stats = run_settlement_job(dry_run=False, record_log=True)
+    print({"event": "scheduler_job_finished", "job_name": "settlement_runner", "status": "ok", "startup": True, "summary": stats.__dict__})
+
+
+def _run_ops_health_check_startup() -> None:
+    report = run_ops_health_check(record_log=True)
+    print({"event": "scheduler_job_finished", "job_name": "ops_health_check", "status": report["overall"]["status"].lower(), "startup": True, "summary": report["summary"]})
 
 
 def _env_int(name: str, default: int) -> int:

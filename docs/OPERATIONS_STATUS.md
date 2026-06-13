@@ -15,7 +15,10 @@ Current production posture:
 - `results_sync`: `PASS`
 - `ops_health_check`: code ready; enable through API scheduler after deployment
 - stale threshold: latest `ops_log` older than 90 minutes is `FAIL` in `api.health_report`
-- `/api/health` exposes `scheduler_last_seen`, `scheduler_last_seen_age_minutes`, `scheduler_stale`, `latest_ops_health_check_at`, `ops_health_status`, and `ops_health_blockers`
+- required production env: `ENABLE_API_SCHEDULER=true`, `RUN_SCHEDULER_ON_STARTUP=true`, `BETTING_ENABLED=false`
+- API startup now explicitly runs `results_sync`, `settlement_runner`, and `ops_health_check` once before waiting for the next interval
+- startup errors are exposed through `/api/health.scheduler_startup_error` and force `scheduler_stale=true`
+- `/api/health` exposes `scheduler_last_seen`, `scheduler_last_seen_age_minutes`, `scheduler_stale`, `scheduler_startup_error`, `latest_ops_health_check_at`, `ops_health_status`, and `ops_health_blockers`
 
 ### 042 Watchdog
 

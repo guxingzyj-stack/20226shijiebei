@@ -17,7 +17,7 @@ from api.db import Database, get_db
 from api.ops_health_check import latest_ops_health_status
 from api import recap
 from api.recap_service import build_match_recap, recent_recaps, recap_summary as build_recap_summary
-from api.scheduler import start_api_scheduler, stop_api_scheduler
+from api.scheduler import scheduler_startup_error, start_api_scheduler, stop_api_scheduler
 from api.scheduler_health import scheduler_freshness
 from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenResponse, UserCreate, UserLogin
 
@@ -60,13 +60,21 @@ def get_current_user(
 @app.get("/api/health")
 def health() -> dict:
     freshness = scheduler_freshness()
+    startup_error = scheduler_startup_error()
     payload = {
-        "ok": True,
+        "ok": startup_error is None,
         "scheduler_last_seen": freshness["scheduler_last_seen"],
         "scheduler_last_seen_age_minutes": freshness["scheduler_last_seen_age_minutes"],
-        "scheduler_stale": freshness["scheduler_stale"],
+        "scheduler_stale": True if startup_error else freshness["scheduler_stale"],
+        "scheduler_startup_error": startup_error,
     }
     payload.update(latest_ops_health_status())
+    if startup_error:
+        payload["ops_health_status"] = "FAIL"
+        blockers = list(payload.get("ops_health_blockers") or [])
+        if "scheduler_startup_error" not in blockers:
+            blockers.append("scheduler_startup_error")
+        payload["ops_health_blockers"] = blockers
     payload.update(_p3_fifa_health_summary())
     payload.update(_betting_open_gate_health_summary())
     return payload
