@@ -293,6 +293,34 @@ The qiumibao feed is a mixed rolling feed unless raw fields prove otherwise.
 only an investigation aid and must not create automatic mappings or write
 scores.
 
+Before starting any external result-source project, audit the existing 500 chain:
+
+```bash
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --recent
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --all-started
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --closed-missing
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --half-time-fields
+```
+
+Expected:
+
+```text
+500 Result Coverage Audit
+mode: dry-run
+writes_db: false
+started_result_coverage_rate is visible
+closed_missing_count is visible
+finished_missing_count is visible
+non_finished_with_result_count is visible
+latest results_sync evidence is visible
+half-time coverage conclusion is visible
+```
+
+062-A does not connect a new source. The current 500/m500 role is odds capture,
+sale-closed status, and candidate full-time result capture. Half-time scores are
+separate: if `ht_home` / `ht_away` are missing, hafu cannot be settled, and the
+full-time score must not be used to infer half-time.
+
 Normal daily operation no longer requires running the full 041 SQL bundle. Use
 `/api/health` first. If it shows `FAIL`, run the Python daily runner and
 `python -m api.ops_health_check` inside the API container, then inspect `ops_log`.

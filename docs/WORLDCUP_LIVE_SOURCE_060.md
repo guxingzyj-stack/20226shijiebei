@@ -261,3 +261,21 @@ The current qiumibao score feed should be treated as a mixed-event rolling feed
 unless raw fields prove otherwise. If explicit sport/category fields are absent,
 the football-like filter is only a coarse diagnostic. It is not a permission to
 write results.
+# 062-A Result Source Coverage Note
+
+060/061 live-source tools remain dry-run diagnostics. qiumibao is not promoted
+to the current World Cup result writer because its feed is mixed and stable
+World Cup filtering is still unproven.
+
+Run the current 500 coverage audit first:
+
+```bash
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --recent
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --closed-missing
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --half-time-fields
+```
+
+This audit does not write DB rows or add a new source. It answers whether the
+existing 500/m500 chain is sufficient, partial, or insufficient for full-time
+result coverage, and separately reports whether half-time scores are available
+for hafu settlement.

@@ -67,6 +67,17 @@ Current production posture:
   candidate detail output, and known-result team-id discovery. qiumibao remains
   a mixed rolling feed until raw fields prove a football/world-cup-only filter.
   Time matching and team-id discovery are dry-run diagnostics only.
+- 062-A adds a read-only 500 result coverage audit:
+  `python -m api.result_source_coverage_audit --source 500 --recent`.
+  It reports started result coverage, overdue missing results, latest
+  `results_sync` evidence, and optional half-time score field capability.
+  Every mode prints `writes_db=false`.
+- 062-A does not add a new external result source. It audits the current
+  500/m500 chain first. 500 currently acts as odds source, sale-closed source,
+  and candidate result source.
+- Half-time scores are audited separately. Missing `ht_home` / `ht_away` means
+  hafu cannot be settled; full-time scores must not be used to infer half-time
+  scores.
 
 ### 042 Watchdog
 
@@ -170,6 +181,10 @@ python -m api.result_consistency_report
 python -m api.result_overdue_report
 python -m api.result_source_mapping_probe --source qiumibao --recent
 python -m api.result_source_compare --all-overdue
+python -m api.result_source_coverage_audit --source 500 --recent
+python -m api.result_source_coverage_audit --source 500 --all-started
+python -m api.result_source_coverage_audit --source 500 --closed-missing
+python -m api.result_source_coverage_audit --source 500 --half-time-fields
 python -m api.worldcup_live_probe --recent
 python -m api.worldcup_live_probe --compare-local --all-overdue
 python -m api.worldcup_live_probe --map-local --recent

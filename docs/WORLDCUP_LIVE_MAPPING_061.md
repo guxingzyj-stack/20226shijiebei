@@ -374,3 +374,19 @@ This is only an investigation aid. It compares local finished scores to
 qiumibao candidates within 30 minutes and prints possible `left_id/right_id`
 directions (`same_order`, `reversed_order`, `no_score_match`). It does not build
 a team-id mapping table and does not confirm any result automatically.
+# 062-A Result Source Coverage Note
+
+qiumibao remains a diagnostic source only. The feed is mixed and does not yet
+provide a reliable World Cup-only result channel. Before adding any external
+structured source, use the 500 coverage audit:
+
+```bash
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --recent
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --all-started
+PYTHONPATH=. python -m api.result_source_coverage_audit --source 500 --half-time-fields
+```
+
+The audit is read-only and prints `writes_db=false`. It treats 500/m500 as the
+current odds, sale-closed, and candidate result source. Missing half-time fields
+mean hafu cannot be settled; full-time scores must not be used to infer
+half-time scores.
