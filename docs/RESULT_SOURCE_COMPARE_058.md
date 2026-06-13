@@ -38,6 +38,17 @@ PYTHONPATH=. python -m api.result_source_mapping_probe --source qiumibao --recen
 PYTHONPATH=. python -m api.result_source_mapping_probe --source fifa --recent
 ```
 
+For the 060 BaiLongma-style live chain dry-run, use:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --recent
+PYTHONPATH=. python -m api.worldcup_live_probe --compare-local --recent-finished
+PYTHONPATH=. python -m api.worldcup_live_probe --compare-local --all-overdue
+```
+
+This adds zhibo8 schedule context around qiumibao score/event rows. It is still a
+comparison source only and returns `writes_db: false`.
+
 ## Source Roles
 
 ### 500_trade_jczq

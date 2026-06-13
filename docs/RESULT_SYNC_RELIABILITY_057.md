@@ -110,10 +110,16 @@ PYTHONPATH=. python -m api.result_source_mapping_probe --source qiumibao --match
 PYTHONPATH=. python -m api.result_source_compare --match-id 500-1359182
 PYTHONPATH=. python -m api.result_source_compare --all-overdue
 PYTHONPATH=. python -m api.result_source_compare --recent-finished
+PYTHONPATH=. python -m api.worldcup_live_probe --recent
+PYTHONPATH=. python -m api.worldcup_live_probe --compare-local --all-overdue
 ```
 
 This compares local DB, 500_trade_jczq, qiumibao score JSON, qiumibao events,
 and FIFA mapping status without writing the database.
+
+The 060 live probe additionally mirrors BaiLongma's `/worldcup` approach by
+using zhibo8 homepage schedule rows to contextualize qiumibao score/event rows.
+It is still dry-run only and does not replace `results_sync`.
 
 058-B tightened the comparison rules:
 

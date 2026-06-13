@@ -215,6 +215,8 @@ python -m api.ops_health_check
 python scripts/run_daily_ops_check.py
 python -m api.result_consistency_report
 python -m api.result_overdue_report
+python -m api.worldcup_live_probe --recent
+python -m api.worldcup_live_probe --compare-local --all-overdue
 python -m api.scheduler_observe
 python -m api.cleanup_test_data dry-run
 ```
@@ -223,6 +225,10 @@ python -m api.cleanup_test_data dry-run
 `scheduler_stale`, `latest_ops_health_check_at`, `ops_health_status`, and
 `ops_health_blockers`. If latest `ops_log` is older than 90 minutes,
 `api.health_report` must return `FAIL`.
+
+The `api.worldcup_live_probe` commands are BaiLongma-style zhibo8/qiumibao
+live-source dry-runs. They print `writes_db: false` and must not be used as a
+score writer without explicit approval.
 
 Normal daily operation no longer requires running the full 041 SQL bundle. Use
 `/api/health` first. If it shows `FAIL`, run the Python daily runner and

@@ -23,6 +23,8 @@ Current production posture:
 - result-overdue CLI: `python -m api.result_overdue_report`
 - multi-source dry-run compare CLI: `python -m api.result_source_compare --all-overdue`
 - source mapping probe CLI: `python -m api.result_source_mapping_probe --source qiumibao --recent`
+- BaiLongma-style live source dry-run CLI: `python -m api.worldcup_live_probe --recent`
+- live source overdue compare CLI: `python -m api.worldcup_live_probe --compare-local --all-overdue`
 - multi-source compare 058-B rule: `OK_MATCH` requires at least one external
   score source to confirm the local DB score; local-only scores now report
   `LOCAL_DB_ONLY`
@@ -40,6 +42,8 @@ Current production posture:
   names are present, the correct status is `parser_missing_team_fields`
 - FIFA Match Centre remains `fifa_mapping_missing` until a durable local
   match_id to FIFA id/url mapping is built
+- 060 live-source chain combines zhibo8 homepage schedule context with qiumibao
+  score/event JSON. It is dry-run only and must not auto-write scores.
 
 ### 042 Watchdog
 
@@ -143,6 +147,8 @@ python -m api.result_consistency_report
 python -m api.result_overdue_report
 python -m api.result_source_mapping_probe --source qiumibao --recent
 python -m api.result_source_compare --all-overdue
+python -m api.worldcup_live_probe --recent
+python -m api.worldcup_live_probe --compare-local --all-overdue
 python -m api.scheduler_observe
 python -m api.betting_open_gate
 python -m api.cleanup_test_data dry-run

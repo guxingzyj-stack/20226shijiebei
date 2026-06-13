@@ -27,6 +27,12 @@ class SourceMatch:
     ht_home: int | None = None
     ht_away: int | None = None
     raw_status: str | None = None
+    code: str | None = None
+    left_id: str | None = None
+    right_id: str | None = None
+    period_cn: str | None = None
+    score_msg_full: str | None = None
+    score_msg_list: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +117,9 @@ def normalize_match(row: dict[str, Any]) -> SourceMatch | None:
     external_id = _first(row, "id", "match_id", "saishi_id")
     left = row.get("left") if isinstance(row.get("left"), dict) else {}
     right = row.get("right") if isinstance(row.get("right"), dict) else {}
+    period_cn = _first(row, "period_cn", "period", "status_cn")
+    score_msg_list = _score_messages(row)
+    score_msg_full = " ".join(score_msg_list) if score_msg_list else None
     home_team = _first_path(
         row,
         "home_team",
@@ -152,6 +161,11 @@ def normalize_match(row: dict[str, Any]) -> SourceMatch | None:
     status = normalize_status(_first(row, "state", "status", "status_cn", "period_cn") or "")
     home_score = _parse_int(_first(row, "home_score", "score1", "left_score") or _first(left, "score"))
     away_score = _parse_int(_first(row, "away_score", "score2", "right_score") or _first(right, "score"))
+    half_score = _parse_half_score(score_msg_full or "")
+    ht_home = _parse_int(_first(row, "ht_home", "half_home", "half_score1"))
+    ht_away = _parse_int(_first(row, "ht_away", "half_away", "half_score2"))
+    if half_score and ht_home is None and ht_away is None:
+        ht_home, ht_away = half_score
     if status not in {"live", "finished"}:
         home_score = None
         away_score = None
@@ -166,9 +180,15 @@ def normalize_match(row: dict[str, Any]) -> SourceMatch | None:
         status=status,
         result_home=home_score,
         result_away=away_score,
-        ht_home=_parse_int(_first(row, "ht_home", "half_home", "half_score1")),
-        ht_away=_parse_int(_first(row, "ht_away", "half_away", "half_score2")),
-        raw_status=str(_first(row, "state", "status", "status_cn") or ""),
+        ht_home=ht_home,
+        ht_away=ht_away,
+        raw_status=str(_first(row, "state", "status", "status_cn", "period_cn") or ""),
+        code=str(_first(row, "code", "league_code") or "") or None,
+        left_id=str(_first(left, "id", "team_id", "tid") or "") or None,
+        right_id=str(_first(right, "id", "team_id", "tid") or "") or None,
+        period_cn=str(period_cn) if period_cn else None,
+        score_msg_full=score_msg_full,
+        score_msg_list=score_msg_list or None,
     )
 
 
@@ -275,6 +295,30 @@ def _team_value(value: Any) -> Any:
     if isinstance(value, dict):
         return _first(value, "name", "team_name", "name_cn", "short_name")
     return value
+
+
+def _score_messages(row: dict[str, Any]) -> list[str]:
+    value = row.get("score_msg")
+    if isinstance(value, list):
+        return [str(item) for item in value if item is not None and str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    values: list[str] = []
+    for name in ("score_msg_1", "score_msg_2", "score_msg_3", "score_msg_4"):
+        item = row.get(name)
+        if item is not None and str(item).strip():
+            values.append(str(item).strip())
+    return values
+
+
+def _parse_half_score(value: str) -> tuple[int, int] | None:
+    import re
+
+    text = str(value or "")
+    found = re.search(r"(?:半场|半|HT|ht)[^\d]*(\d+)\s*[-:：]\s*(\d+)", text)
+    if not found:
+        return None
+    return int(found.group(1)), int(found.group(2))
 
 
 def _parse_int(value: Any) -> int | None:

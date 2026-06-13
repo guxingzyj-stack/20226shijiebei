@@ -183,6 +183,28 @@ parser_error
 `score_from_events` is report-only evidence derived from event scores. It is not
 allowed to write results automatically.
 
+## 060 Live Source Chain
+
+Task 060 adds a BaiLongma-style live source dry-run chain:
+
+```bash
+PYTHONPATH=. python -m api.worldcup_live_probe --recent
+PYTHONPATH=. python -m api.worldcup_live_probe --dump-zhibo8 --limit 5
+PYTHONPATH=. python -m api.worldcup_live_probe --dump-qiumibao --limit 5
+PYTHONPATH=. python -m api.worldcup_live_probe --compare-local --all-overdue
+```
+
+It combines:
+
+```text
+zhibo8 homepage schedule context
+qiumibao score JSON
+qiumibao event JSON after a qiumibao match id is known
+```
+
+See `docs/WORLDCUP_LIVE_SOURCE_060.md`. The chain is still dry-run and must not
+write scores automatically.
+
 ## FIFA Match Centre
 
 Current status:
