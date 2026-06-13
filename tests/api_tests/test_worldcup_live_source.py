@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from api.sources import qiumibao, zhibo8
-from api.result_source_mapping import normalize_team_name
+from api.result_source_mapping import TEAM_ALIASES, _team_value, normalize_team_name
 from api.worldcup_live_source import (
     _compare_local_to_live,
     _map_one_local,
@@ -233,6 +233,22 @@ def test_normalize_team_name_removes_chinese_inner_spaces_and_aliases():
     assert normalize_team_name("South Korea") == "\u97e9\u56fd"
     assert normalize_team_name("South Africa") == "\u5357\u975e"
     assert normalize_team_name("Czech Republic") == "\u6377\u514b"
+
+
+def test_normalize_team_name_removes_internal_spaces_without_alias():
+    assert normalize_team_name("\u5361 \u5854 \u5c14") == "\u5361\u5854\u5c14"
+    assert normalize_team_name("\u745e \u58eb") == "\u745e\u58eb"
+    assert normalize_team_name("\u6fb3 \u5927 \u5229 \u4e9a") == "\u6fb3\u5927\u5229\u4e9a"
+
+
+def test_normalize_team_name_alias_values_are_clean():
+    assert normalize_team_name("United States") == "\u7f8e\u56fd"
+    assert normalize_team_name("South Korea") == "\u97e9\u56fd"
+    assert normalize_team_name("Czech Republic") == "\u6377\u514b"
+
+
+def test_team_alias_values_are_normalized():
+    assert all(value == _team_value(value) for value in TEAM_ALIASES.values())
 
 
 def test_live_to_local_score_matched_high_confidence():

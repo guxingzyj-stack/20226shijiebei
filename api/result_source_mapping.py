@@ -106,7 +106,18 @@ def _team_key(value: Any) -> str:
     return text
 
 
-TEAM_ALIASES = {_team_key(key): value for key, value in TEAM_ALIASES_RAW.items()}
+def _team_value(value: Any) -> str:
+    text = unicodedata.normalize("NFKC", str(value or ""))
+    text = INVISIBLE_SPACE_RE.sub("", text)
+    text = "".join(text.split())
+    text = text.replace("（", "(").replace("）", ")")
+    return text
+
+
+TEAM_ALIASES = {
+    _team_key(key): _team_value(value)
+    for key, value in TEAM_ALIASES_RAW.items()
+}
 
 
 @dataclass(frozen=True)
@@ -129,7 +140,7 @@ class MappingCandidate:
 
 def normalize_team_name(value: Any) -> str:
     compact = _team_key(value)
-    return TEAM_ALIASES.get(compact, compact)
+    return TEAM_ALIASES.get(compact, _team_value(value))
 
 
 def analyze_external_mapping(local: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
