@@ -33,7 +33,11 @@ Current production posture:
   `韩 国`, and full-width/invisible whitespace
 - 059 qiumibao mapping probe can distinguish `matched`, `source_fetch_error`,
   `source_empty`, `source_available_but_match_not_in_window`,
-  `team_name_mismatch`, `kickoff_time_mismatch`, and `ambiguous_candidates`
+  `parser_missing_team_fields`, `team_name_mismatch`,
+  `kickoff_time_mismatch`, and `ambiguous_candidates`
+- 059-B qiumibao schema dump shows some score rows expose scores as
+  `left.score/right.score` but only team ids as `left.id/right.id`; if no team
+  names are present, the correct status is `parser_missing_team_fields`
 - FIFA Match Centre remains `fifa_mapping_missing` until a durable local
   match_id to FIFA id/url mapping is built
 

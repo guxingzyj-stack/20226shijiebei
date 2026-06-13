@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 from typing import Any
 from urllib.request import Request, urlopen
@@ -110,9 +111,45 @@ def normalize_match(row: dict[str, Any]) -> SourceMatch | None:
     external_id = _first(row, "id", "match_id", "saishi_id")
     left = row.get("left") if isinstance(row.get("left"), dict) else {}
     right = row.get("right") if isinstance(row.get("right"), dict) else {}
-    home_team = _first(row, "home_team", "home", "team1", "left_name") or _first(left, "name", "team_name", "name_cn")
-    away_team = _first(row, "away_team", "away", "team2", "right_name") or _first(right, "name", "team_name", "name_cn")
-    status = normalize_status(_first(row, "state", "status", "status_cn") or "")
+    home_team = _first_path(
+        row,
+        "home_team",
+        "home",
+        "h",
+        "homeName",
+        "home_name",
+        "home_team_name",
+        "hteam",
+        "hn",
+        "team1",
+        "left_name",
+        "left.name",
+        "left.team_name",
+        "left.name_cn",
+        "home.name",
+        "teams.home.name",
+    ) or _first(left, "name", "team_name", "name_cn", "short_name")
+    away_team = _first_path(
+        row,
+        "away_team",
+        "away",
+        "a",
+        "awayName",
+        "away_name",
+        "away_team_name",
+        "ateam",
+        "an",
+        "team2",
+        "right_name",
+        "right.name",
+        "right.team_name",
+        "right.name_cn",
+        "away.name",
+        "teams.away.name",
+    ) or _first(right, "name", "team_name", "name_cn", "short_name")
+    home_team = _team_value(home_team)
+    away_team = _team_value(away_team)
+    status = normalize_status(_first(row, "state", "status", "status_cn", "period_cn") or "")
     home_score = _parse_int(_first(row, "home_score", "score1", "left_score") or _first(left, "score"))
     away_score = _parse_int(_first(row, "away_score", "score2", "right_score") or _first(right, "score"))
     if status not in {"live", "finished"}:
@@ -125,7 +162,7 @@ def normalize_match(row: dict[str, Any]) -> SourceMatch | None:
         external_id=str(external_id) if external_id is not None else None,
         home_team=str(home_team).strip() if home_team else None,
         away_team=str(away_team).strip() if away_team else None,
-        kickoff_at=str(_first(row, "time", "match_time", "start_time", "date") or "").strip() or None,
+        kickoff_at=_normalize_kickoff(_first(row, "time", "match_time", "start_time", "date")),
         status=status,
         result_home=home_score,
         result_away=away_score,
@@ -203,6 +240,41 @@ def _first(row: dict[str, Any], *names: str) -> Any:
         if value is not None and value != "":
             return value
     return None
+
+
+def _first_path(row: dict[str, Any], *paths: str) -> Any:
+    for path in paths:
+        value = _path(row, path)
+        if value is not None and value != "":
+            return value
+    return None
+
+
+def _path(row: dict[str, Any], path: str) -> Any:
+    value: Any = row
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def _normalize_kickoff(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    text = str(value).strip()
+    if text.isdigit():
+        number = int(text)
+        if number > 10_000_000_000:
+            number = number // 1000
+        return datetime.fromtimestamp(number, tz=timezone.utc).isoformat()
+    return text
+
+
+def _team_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _first(value, "name", "team_name", "name_cn", "short_name")
+    return value
 
 
 def _parse_int(value: Any) -> int | None:

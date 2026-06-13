@@ -140,6 +140,11 @@ and specific mapping statuses such as `team_name_mismatch`,
 `kickoff_time_mismatch`, `ambiguous_candidates`, and
 `source_available_but_match_not_in_window`.
 
+059-B adds `parser_missing_team_fields` for qiumibao rows that are reachable and
+parsed but do not expose home/away team names, for example rows containing only
+`left.id`, `left.score`, `right.id`, and `right.score`. Those rows must not be
+classified as `source_available_but_match_not_in_window`.
+
 ## Decision Rules
 
 ```text

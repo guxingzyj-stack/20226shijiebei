@@ -14,6 +14,7 @@ MATCHED = "matched"
 SOURCE_FETCH_ERROR = "source_fetch_error"
 SOURCE_EMPTY = "source_empty"
 SOURCE_AVAILABLE_BUT_MATCH_NOT_IN_WINDOW = "source_available_but_match_not_in_window"
+PARSER_MISSING_TEAM_FIELDS = "parser_missing_team_fields"
 TEAM_NAME_MISMATCH = "team_name_mismatch"
 KICKOFF_TIME_MISMATCH = "kickoff_time_mismatch"
 AMBIGUOUS_CANDIDATES = "ambiguous_candidates"
@@ -48,6 +49,17 @@ TEAM_ALIASES = {
     "unitedstatesofamerica": "美国",
     "巴拉圭": "巴拉圭",
     "paraguay": "巴拉圭",
+    "沙特阿拉伯": "沙特阿拉伯",
+    "沙特": "沙特阿拉伯",
+    "saudiarabia": "沙特阿拉伯",
+    "科特迪瓦": "科特迪瓦",
+    "ivorycoast": "科特迪瓦",
+    "cotedivoire": "科特迪瓦",
+    "刚果金": "刚果(金)",
+    "刚果(金)": "刚果(金)",
+    "drcongo": "刚果(金)",
+    "congodr": "刚果(金)",
+    "democraticrepublicofcongo": "刚果(金)",
 }
 
 
@@ -86,6 +98,16 @@ def analyze_external_mapping(local: dict[str, Any], rows: list[dict[str, Any]]) 
             "candidate_count": 0,
             "local_match": local_summary,
             "candidates": [],
+        }
+    if _all_rows_missing_team_fields(rows):
+        return {
+            "mapping_status": PARSER_MISSING_TEAM_FIELDS,
+            "reason": "external rows were parsed, but no home/away team fields were found",
+            "external_id": None,
+            "confidence": "none",
+            "candidate_count": len(rows),
+            "local_match": local_summary,
+            "candidates": [_candidate(local, row).as_dict() for row in rows[:10]],
         }
 
     candidates = [_candidate(local, row) for row in rows]
@@ -177,6 +199,10 @@ def _candidate(local: dict[str, Any], row: dict[str, Any]) -> MappingCandidate:
         mapping_status=status,
         time_delta_minutes=delta_minutes,
     )
+
+
+def _all_rows_missing_team_fields(rows: list[dict[str, Any]]) -> bool:
+    return all(not row.get("home_team") and not row.get("away_team") for row in rows)
 
 
 def _unmatched_result(status: str, reason: str, local_summary: dict[str, Any], candidates: list[MappingCandidate]) -> dict[str, Any]:

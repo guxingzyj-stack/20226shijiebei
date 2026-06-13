@@ -11,6 +11,7 @@ from api.ops_log import sanitize_error
 from api.result_overdue_report import overdue_matches
 from api.result_source_mapping import (
     MATCHED,
+    PARSER_MISSING_TEAM_FIELDS,
     SOURCE_AVAILABLE_BUT_MATCH_NOT_IN_WINDOW,
     analyze_external_mapping,
     fifa_mapping_placeholder,
@@ -332,6 +333,8 @@ def _next_step(suggested_action: str, mapping_status: dict[str, str]) -> str:
         return "PREPARE_VERIFIED_FALLBACK"
     if mapping_status.get("qiumibao_score") == SOURCE_AVAILABLE_BUT_MATCH_NOT_IN_WINDOW:
         return "SOURCE_AVAILABLE_BUT_MATCH_NOT_IN_WINDOW"
+    if mapping_status.get("qiumibao_score") == PARSER_MISSING_TEAM_FIELDS:
+        return "FIX_QIUMIBAO_TEAM_FIELD_PARSER"
     if mapping_status.get("qiumibao_score") in {"mapping_missing", "source_empty", "team_name_mismatch", "kickoff_time_mismatch", "ambiguous_candidates"}:
         return "BUILD_QIUMIBAO_MAPPING"
     if mapping_status.get("fifa_match_centre") == "fifa_mapping_missing":

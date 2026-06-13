@@ -22,6 +22,31 @@ events match_id: qiumibao score JSON id, not local 500-... match_id
 referer: https://www.zhibo8.cc/
 ```
 
+059-B production/local schema dump showed qiumibao score rows like:
+
+```text
+id
+code
+state
+start_time
+period_cn
+left.id
+left.score
+left.player_data
+right.id
+right.score
+right.player_data
+score_msg_list
+score_msg_full
+period_state
+score_higher_priority
+half_score
+```
+
+Important: some qiumibao score rows do not include team-name fields at all.
+When `left/right` only contain team ids and scores, the parser preserves the row
+for diagnostics but returns `raw_home_team=None` / `raw_away_team=None`.
+
 The qiumibao score feed may only expose a current/recent window. If the target
 match is not in that window, the probe reports
 `source_available_but_match_not_in_window` instead of pretending the source is
@@ -58,6 +83,12 @@ source_empty:
 source_available_but_match_not_in_window:
   external source is reachable, but the target match is absent from its returned
   current/recent window.
+
+parser_missing_team_fields:
+  external source returned match rows, but all candidate rows are missing
+  home/away team-name fields. This is a parser/schema problem or an incomplete
+  qiumibao feed shape, not proof that the target match is outside the source
+  window.
 
 team_name_mismatch:
   kickoff time is close but team names do not match.
@@ -101,7 +132,35 @@ Covered examples:
 捷 克 / Czechia / Czech Republic -> 捷克
 美 国 / United States / USA -> 美国
 巴拉圭 / Paraguay -> 巴拉圭
+沙 特 阿 拉 伯 / Saudi Arabia -> 沙特阿拉伯
+科 特 迪 瓦 / Ivory Coast -> 科特迪瓦
+刚 果（金） / DR Congo -> 刚果(金)
 ```
+
+## qiumibao Team Field Paths
+
+The parser supports these top-level and nested team-name paths:
+
+```text
+home_team / away_team
+home / away
+h / a
+homeName / awayName
+home_name / away_name
+home_team_name / away_team_name
+hteam / ateam
+hn / an
+team1 / team2
+left_name / right_name
+left.name / right.name
+left.team_name / right.team_name
+left.name_cn / right.name_cn
+home.name / away.name
+teams.home.name / teams.away.name
+```
+
+If a path resolves to an object, the parser tries `name`, `team_name`,
+`name_cn`, and `short_name` inside it.
 
 ## qiumibao Events
 
