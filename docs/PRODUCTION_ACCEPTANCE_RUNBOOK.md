@@ -321,6 +321,43 @@ sale-closed status, and candidate full-time result capture. Half-time scores are
 separate: if `ht_home` / `ht_away` are missing, hafu cannot be settled, and the
 full-time score must not be used to infer half-time.
 
+Current production conclusion:
+
+```text
+500_RESULT_SOURCE_SUFFICIENT
+HT_SOURCE_UNAVAILABLE
+qiumibao remains a generic diagnostic source
+do not add an external structured result source yet
+BETTING_ENABLED=false remains required
+```
+
+If `--closed-missing` returns an empty set, expected output is:
+
+```text
+total_matches: 0
+closed_missing_count: 0
+overdue_count: 0
+conclusion: NO_CLOSED_MISSING_MATCHES
+```
+
+This means there are no current `closed` / `scheduled` matches past kickoff
+with missing scores. It is not a 500 source insufficiency signal.
+
+Operational watch points:
+
+```text
+1. Observe 500 result ingest delay for the next match batch.
+2. Record match_id, teams, kickoff_at, estimated_fulltime_at,
+   first_result_seen_at, result_ingest_delay_minutes, and results_sync_run_at.
+3. If multiple matches remain missing more than 1 hour after full time,
+   evaluate a temporary 15 minute results_sync interval during peak windows.
+4. Do not change results_sync frequency preemptively.
+5. Postponed / abandoned / cancelled / rescheduled matches are still an
+   untested blind spot. They must not auto-settle, must not write scores without
+   clear evidence, and must not be marked finished unless a real full-time score
+   exists.
+```
+
 Normal daily operation no longer requires running the full 041 SQL bundle. Use
 `/api/health` first. If it shows `FAIL`, run the Python daily runner and
 `python -m api.ops_health_check` inside the API container, then inspect `ops_log`.

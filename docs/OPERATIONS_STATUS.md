@@ -75,9 +75,25 @@ Current production posture:
 - 062-A does not add a new external result source. It audits the current
   500/m500 chain first. 500 currently acts as odds source, sale-closed source,
   and candidate result source.
+- 062-A production finding: `500_RESULT_SOURCE_SUFFICIENT` is currently valid
+  for the first four started matches; `HT_SOURCE_UNAVAILABLE` is currently
+  valid; qiumibao remains a generic diagnostic source.
+- `--closed-missing` may legitimately return no rows. In that case the
+  conclusion is `NO_CLOSED_MISSING_MATCHES`, meaning there is no current
+  closed/scheduled started match missing a score. It is not a source gap.
 - Half-time scores are audited separately. Missing `ht_home` / `ht_away` means
   hafu cannot be settled; full-time scores must not be used to infer half-time
   scores.
+- Watch point: record 500 result ingest delay for the next match batch
+  (`match_id`, teams, `kickoff_at`, estimated full time, first result seen time,
+  delay minutes, and `results_sync` run time). If multiple matches remain
+  missing more than one hour after full time, evaluate a temporary 15 minute
+  `results_sync` interval during peak finished-match windows. Do not change the
+  frequency preemptively.
+- Watch point: postponed, abandoned, cancelled, and rescheduled matches remain
+  an untested blind spot. They must not auto-settle, must not write full-time
+  scores without clear source evidence, and must not be misclassified as
+  `finished`.
 
 ### 042 Watchdog
 

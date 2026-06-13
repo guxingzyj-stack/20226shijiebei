@@ -75,6 +75,36 @@ def test_build_coverage_report_counts_started_and_missing_results() -> None:
     assert report["conclusion"] == "500_RESULT_SOURCE_PARTIAL"
 
 
+def test_closed_missing_empty_scope_reports_no_closed_missing_matches() -> None:
+    report = build_coverage_report([], now=NOW, ops_rows=[], scope="closed-missing")
+
+    assert report["writes_db"] is False
+    assert report["summary"]["total_matches"] == 0
+    assert report["summary"]["closed_missing_count"] == 0
+    assert report["summary"]["overdue_count"] == 0
+    assert report["conclusion"] == "NO_CLOSED_MISSING_MATCHES"
+
+
+def test_closed_missing_scope_with_gap_still_reports_source_gap() -> None:
+    report = build_coverage_report([_row("overdue", -180, "closed")], now=NOW, ops_rows=[], scope="closed-missing")
+
+    assert report["writes_db"] is False
+    assert report["summary"]["total_matches"] == 1
+    assert report["summary"]["closed_missing_count"] == 1
+    assert report["summary"]["overdue_count"] == 1
+    assert report["conclusion"] == "500_RESULT_SOURCE_INSUFFICIENT"
+
+
+def test_other_empty_scopes_keep_existing_conclusion() -> None:
+    recent = build_coverage_report([], now=NOW, ops_rows=[], scope="recent")
+    all_started = build_coverage_report([], now=NOW, ops_rows=[], scope="all-started")
+    finished = build_coverage_report([], now=NOW, ops_rows=[], scope="finished")
+
+    assert recent["conclusion"] == "500_RESULT_SOURCE_PARTIAL"
+    assert all_started["conclusion"] == "500_RESULT_SOURCE_PARTIAL"
+    assert finished["conclusion"] == "500_RESULT_SOURCE_PARTIAL"
+
+
 def test_results_sync_ops_summary_keeps_parser_error() -> None:
     rows = [
         {

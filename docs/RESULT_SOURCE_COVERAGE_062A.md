@@ -57,6 +57,9 @@ Report conclusions:
 - `500_RESULT_SOURCE_SUFFICIENT`: current 500 path covers started results well.
 - `500_RESULT_SOURCE_PARTIAL`: 500 covers some results but has clear gaps or state issues.
 - `500_RESULT_SOURCE_INSUFFICIENT`: 500 is structurally insufficient for World Cup results.
+- `NO_CLOSED_MISSING_MATCHES`: the `--closed-missing` scope is empty. This
+  means there are currently no `closed` / `scheduled` matches past kickoff with
+  missing full-time scores. It is not a source-insufficiency signal.
 
 Half-time conclusions:
 
@@ -98,3 +101,75 @@ options:
 
 Do not start external source integration until the 500 coverage audit has a
 clear conclusion.
+
+## 062-A Production Finding
+
+Current production audit result:
+
+```text
+500_RESULT_SOURCE_SUFFICIENT
+HT_SOURCE_UNAVAILABLE
+qiumibao remains a generic diagnostic source
+no external structured result source is started
+BETTING_ENABLED=false remains required
+```
+
+Core production sample:
+
+```text
+started_matches: 4
+started_with_result: 4
+started_missing_result: 0
+started_result_coverage_rate: 1.0
+closed_missing_count: 0
+finished_missing_count: 0
+non_finished_with_result_count: 0
+ready_for_settlement_count: 4
+overdue_count: 0
+```
+
+## Operations Watch Points
+
+### 500 Result Ingest Delay
+
+The current `500_RESULT_SOURCE_SUFFICIENT` conclusion is based on the first four
+matches after they had already been finished for a while. For the next match
+batch, observe the actual delay between estimated full time and the first time
+`matches.result_home/result_away` appear.
+
+Recommended fields to record:
+
+```text
+match_id
+home_team
+away_team
+kickoff_at
+estimated_fulltime_at
+first_result_seen_at
+result_ingest_delay_minutes
+results_sync_run_at
+```
+
+If multiple matches remain missing more than one hour after full time, evaluate
+whether to temporarily increase `results_sync` frequency to 15 minutes during
+finished-match peak windows. Do not change frequency preemptively.
+
+### Postponed / Abandoned / Exceptional Matches
+
+No postponed, abandoned, cancelled, or rescheduled match has been observed yet.
+500's labels for these states and `results_sync` handling remain an untested
+blind spot.
+
+When the first exceptional match appears, observe:
+
+- whether it is incorrectly marked as `finished`
+- whether `result_home/result_away` are incorrectly written
+- whether `settlement_runner` skips it
+- whether it enters the verified fallback flow
+- whether it affects the betting open gate
+
+Safety rules:
+
+- exceptional matches must not auto-settle
+- no full-time score means no `result_home/result_away` write
+- postponed / abandoned matches must not be treated as `finished`

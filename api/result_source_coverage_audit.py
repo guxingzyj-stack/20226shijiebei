@@ -147,7 +147,7 @@ def build_coverage_report(
         "summary": summary,
         "results_sync": summarize_results_sync_ops(ops_rows or []),
         "matches": audited,
-        "conclusion": conclude_coverage(summary),
+        "conclusion": conclude_coverage(summary, scope=scope),
     }
     if include_half_time_probe:
         report["half_time_probe"] = build_half_time_probe(rows, html=html)
@@ -237,7 +237,14 @@ def summarize_results_sync_ops(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def conclude_coverage(summary: dict[str, Any]) -> str:
+def conclude_coverage(summary: dict[str, Any], *, scope: str = "recent") -> str:
+    if (
+        scope == "closed-missing"
+        and summary["total_matches"] == 0
+        and summary["closed_missing_count"] == 0
+        and summary["overdue_count"] == 0
+    ):
+        return "NO_CLOSED_MISSING_MATCHES"
     if summary["finished_missing_count"] or summary["non_finished_with_result_count"]:
         return "500_RESULT_SOURCE_PARTIAL"
     started = summary["started_matches"]
