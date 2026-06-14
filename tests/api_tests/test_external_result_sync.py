@@ -46,11 +46,13 @@ def _source_report(events):
         "events_seen": len(events),
         "events": events,
         "parser_error": None,
+        "scoreboard_dates": [],
     }
 
 
 def _patch_plan(monkeypatch, events, locals_=None, current_500=None):
     monkeypatch.setattr(sync, "fetch_source_events", lambda source, date: _source_report(events))
+    monkeypatch.setattr(sync, "fetch_espn_events_for_dates", lambda dates: {**_source_report(events), "scoreboard_dates": dates})
     monkeypatch.setattr(sync, "load_local_candidates", lambda date, now: list(locals_ if locals_ is not None else [LOCAL]))
     monkeypatch.setattr(sync, "current_500_match_ids", lambda: dict(current_500 or {}))
 
@@ -73,6 +75,32 @@ def test_espn_final_score_dry_run_matches(monkeypatch):
 
     assert report["would_update_count"] == 1
     assert report["matches"][0]["external_source"] == "espn"
+
+
+def test_espn_sync_matches_previous_et_bucket_when_cli_date_is_utc_date(monkeypatch):
+    captured = {}
+
+    def fake_fetch_espn(dates):
+        captured["dates"] = dates
+        return {
+            "source_fetch_ok": True,
+            "source_url": "https://site.api.espn.com",
+            "events_seen": 1,
+            "events": [_event(source="espn", external_id="760418", external_source_date="20260613")],
+            "parser_error": None,
+            "scoreboard_dates": dates,
+        }
+
+    monkeypatch.setattr(sync, "fetch_espn_events_for_dates", fake_fetch_espn)
+    monkeypatch.setattr(sync, "load_local_candidates", lambda date, now: [LOCAL])
+    monkeypatch.setattr(sync, "current_500_match_ids", lambda: {})
+
+    report = sync.dry_run("espn", "2026-06-14", now=NOW)
+
+    assert "20260613" in captured["dates"]
+    assert "20260614" in captured["dates"]
+    assert report["would_update_count"] == 1
+    assert report["matches"][0]["external_source_date"] == "20260613"
 
 
 def test_external_not_final_does_not_write(monkeypatch):

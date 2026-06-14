@@ -9,6 +9,7 @@ from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 from api.ops_log import sanitize_error
 from api.result_source_mapping import normalize_team_name
@@ -24,6 +25,7 @@ ESPN_SCOREBOARD_URL_TEMPLATES = (
     "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world_cup/scoreboard?dates={date}",
     "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldcup/scoreboard?dates={date}",
 )
+NEW_YORK_TZ = ZoneInfo("America/New_York")
 FINAL_STATUSES = {"finished", "complete", "completed", "full-time", "fulltime", "ft", "match finished"}
 TARGET_TEAMS = {
     "卡塔尔",
@@ -130,6 +132,56 @@ def fetch_espn_events(match_date: str) -> dict[str, Any]:
     report = _source_report("espn", fallback_url, [], parser_error, fetch_ok=not errors or bool(empty_urls))
     report["source_attempted_urls"] = list(ESPN_SCOREBOARD_URL_TEMPLATES)
     return report
+
+
+def fetch_espn_events_for_dates(scoreboard_dates: list[str]) -> dict[str, Any]:
+    events_by_id: dict[str, dict[str, Any]] = {}
+    attempted_dates: list[str] = []
+    source_urls: list[str] = []
+    parser_errors: list[str] = []
+    fetch_ok = False
+    for scoreboard_date in scoreboard_dates:
+        attempted_dates.append(scoreboard_date)
+        report = fetch_espn_events(_scoreboard_date_to_iso(scoreboard_date))
+        source_urls.append(str(report.get("source_url")))
+        if report.get("source_fetch_ok"):
+            fetch_ok = True
+        if report.get("parser_error"):
+            parser_errors.append(str(report.get("parser_error")))
+        for event in report.get("events", []):
+            key = str(event.get("external_id") or f"{event.get('normalized_home')}:{event.get('normalized_away')}:{event.get('kickoff_at')}")
+            event = dict(event)
+            event["external_source_date"] = scoreboard_date
+            events_by_id.setdefault(key, event)
+    return {
+        "source": "espn",
+        "source_fetch_ok": fetch_ok,
+        "source_url": ",".join(url for url in source_urls if url),
+        "events_seen": len(events_by_id),
+        "events": list(events_by_id.values()),
+        "parser_error": "; ".join(parser_errors) if parser_errors and not fetch_ok else None,
+        "scoreboard_dates": attempted_dates,
+    }
+
+
+def espn_scoreboard_dates_for_kickoff(kickoff_at: datetime) -> list[str]:
+    kickoff_utc = kickoff_at if kickoff_at.tzinfo else kickoff_at.replace(tzinfo=timezone.utc)
+    kickoff_utc = kickoff_utc.astimezone(timezone.utc)
+    candidates = [
+        kickoff_utc.astimezone(NEW_YORK_TZ).strftime("%Y%m%d"),
+        kickoff_utc.strftime("%Y%m%d"),
+        (kickoff_utc.date() - date.resolution).strftime("%Y%m%d"),
+        (kickoff_utc.date() + date.resolution).strftime("%Y%m%d"),
+    ]
+    deduped: list[str] = []
+    for item in candidates:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped
+
+
+def _scoreboard_date_to_iso(value: str) -> str:
+    return f"{value[:4]}-{value[4:6]}-{value[6:8]}"
 
 
 def parse_espn_event(item: dict[str, Any], source_url: str) -> ExternalResultEvent | None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from api import external_result_sources as sources
@@ -99,6 +100,47 @@ def test_espn_parser_keeps_in_progress_event_non_final():
 
     assert event is not None
     assert event.status == "live"
+
+
+def test_espn_scoreboard_dates_for_utc_early_kickoff_include_et_previous_day():
+    dates = sources.espn_scoreboard_dates_for_kickoff(datetime(2026, 6, 14, 1, 0, tzinfo=timezone.utc))
+
+    assert "20260613" in dates
+    assert "20260614" in dates
+    assert dates[0] == "20260613"
+
+
+def test_espn_multi_date_fetch_dedupes_external_id(monkeypatch):
+    def fake_fetch(match_date):
+        return {
+            "source": "espn",
+            "source_fetch_ok": True,
+            "source_url": f"https://espn.example/{match_date}",
+            "events_seen": 1,
+            "events": [
+                {
+                    "source": "espn",
+                    "source_url": f"https://espn.example/{match_date}",
+                    "external_id": "760418",
+                    "raw_home": "Haiti",
+                    "raw_away": "Scotland",
+                    "normalized_home": "海地",
+                    "normalized_away": "苏格兰",
+                    "kickoff_at": "2026-06-14T01:00:00+00:00",
+                    "status": "finished",
+                    "result_home": 0,
+                    "result_away": 1,
+                }
+            ],
+            "parser_error": None,
+        }
+
+    monkeypatch.setattr(sources, "fetch_espn_events", fake_fetch)
+
+    report = sources.fetch_espn_events_for_dates(["20260613", "20260614"])
+
+    assert report["events_seen"] == 1
+    assert report["events"][0]["external_source_date"] == "20260613"
 
 
 def test_thesportsdb_pair_marks_delayed_free_tier():

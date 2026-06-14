@@ -9,7 +9,7 @@ from typing import Any
 from psycopg.rows import dict_row
 
 from api.db import connect
-from api.external_result_sources import fetch_source_events
+from api.external_result_sources import espn_scoreboard_dates_for_kickoff, fetch_espn_events_for_dates, fetch_source_events
 from api.ops_log import record_ops_log, sanitize_error
 from api.result_source_mapping import normalize_team_name
 from api.results_sync import fetch_results_html, parse_results_html
@@ -43,6 +43,7 @@ class ExternalResultPlan:
             "time_delta_minutes": self.time_delta_minutes,
             "external_source": event.get("source"),
             "external_source_url": event.get("source_url"),
+            "external_source_date": event.get("external_source_date"),
             "external_event_id": event.get("external_id"),
             "raw_home": event.get("raw_home"),
             "raw_away": event.get("raw_away"),
@@ -101,8 +102,12 @@ def apply_results(source: str, match_date: str, confirm: str | None, now: dateti
 
 def plan_external_results(source: str, match_date: str, now: datetime | None = None, mode: str = "dry-run") -> dict[str, Any]:
     effective_now = now or datetime.now(timezone.utc)
-    source_report = fetch_source_events(source, match_date)
     local_matches = load_local_candidates(match_date, effective_now)
+    if source == "espn":
+        scoreboard_dates = _espn_scoreboard_dates_for_matches(local_matches, match_date)
+        source_report = fetch_espn_events_for_dates(scoreboard_dates)
+    else:
+        source_report = fetch_source_events(source, match_date)
     current_500 = current_500_match_ids()
     plans = [
         _plan_one(local, source_report["events"], current_500, effective_now)
@@ -118,6 +123,7 @@ def plan_external_results(source: str, match_date: str, now: datetime | None = N
         "source_url": source_report["source_url"],
         "events_seen": source_report["events_seen"],
         "parser_error": source_report.get("parser_error"),
+        "scoreboard_dates": source_report.get("scoreboard_dates", []),
         "local_candidates": len(local_matches),
         "would_update_count": update_count,
         "updated_count": 0,
@@ -132,10 +138,7 @@ def load_local_candidates(match_date: str, now: datetime) -> list[dict[str, Any]
             """
             SELECT match_id, match_num, home_team, away_team, kickoff_at, status, result_home, result_away
             FROM matches
-            WHERE status IN ('closed', 'scheduled')
-              AND result_home IS NULL
-              AND result_away IS NULL
-              AND kickoff_at::date = %s::date
+            WHERE kickoff_at::date = %s::date
               AND kickoff_at <= %s
             ORDER BY kickoff_at
             """,
@@ -154,7 +157,7 @@ def current_500_match_ids() -> dict[str, str]:
 
 def print_report(report: dict[str, Any]) -> None:
     print("External Result Sync Report")
-    for key in ("mode", "writes_db", "source", "date", "source_fetch_ok", "source_url", "events_seen", "parser_error", "local_candidates", "would_update_count", "updated_count", "ok"):
+    for key in ("mode", "writes_db", "source", "date", "source_fetch_ok", "source_url", "scoreboard_dates", "events_seen", "parser_error", "local_candidates", "would_update_count", "updated_count", "ok"):
         print(f"- {key}: {report.get(key)}")
     print("matches:")
     for item in report.get("matches", []):
@@ -167,6 +170,7 @@ def print_report(report: dict[str, Any]) -> None:
         print(f"  external: {item.get('raw_home')} vs {item.get('raw_away')}")
         print(f"  normalized_external: {item.get('normalized_external_home')} vs {item.get('normalized_external_away')}")
         print(f"  external_status: {item.get('external_status')}")
+        print(f"  external_source_date: {item.get('external_source_date')}")
         print(f"  score: {item.get('result_home')}-{item.get('result_away')}")
         print(f"  time_delta_minutes: {item.get('time_delta_minutes')}")
         print(f"  source_url: {item.get('external_source_url')}")
@@ -191,6 +195,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _plan_one(local: dict[str, Any], events: list[dict[str, Any]], current_500: dict[str, str], now: datetime) -> ExternalResultPlan:
+    if local.get("result_home") is not None or local.get("result_away") is not None:
+        return ExternalResultPlan(local, "skip", "skipped_existing_result")
+    if str(local.get("status")) not in {"closed", "scheduled"}:
+        return ExternalResultPlan(local, "skip", "local_status_not_eligible")
     if "__source_error__" in current_500:
         return ExternalResultPlan(local, "skip", "source_500_fetch_error")
     if str(local.get("match_id")) in current_500:
@@ -244,6 +252,7 @@ def _ops_summary(report: dict[str, Any]) -> dict[str, Any]:
         "source": report["source"],
         "date": report["date"],
         "source_type": "external_structured_result",
+        "scoreboard_dates": report.get("scoreboard_dates", []),
         "would_update_count": report["would_update_count"],
         "updated_count": report["updated_count"],
         "matched": [
@@ -256,6 +265,7 @@ def _ops_summary(report: dict[str, Any]) -> dict[str, Any]:
                 "external_source_name": item["external_source"],
                 "external_source_url": item["external_source_url"],
                 "external_event_id": item["external_event_id"],
+                "external_source_date": item.get("external_source_date"),
                 "matched_by": ["team_name", "kickoff_time", "final_status"],
                 "verified_mode": "structured_source",
             }
@@ -263,6 +273,21 @@ def _ops_summary(report: dict[str, Any]) -> dict[str, Any]:
             if item["action"] == "update"
         ],
     }
+
+
+def _espn_scoreboard_dates_for_matches(matches: list[dict[str, Any]], fallback_date: str) -> list[str]:
+    dates: list[str] = []
+    for match in matches:
+        kickoff = _as_datetime(match.get("kickoff_at"))
+        if kickoff is None:
+            continue
+        for item in espn_scoreboard_dates_for_kickoff(kickoff):
+            if item not in dates:
+                dates.append(item)
+    fallback = fallback_date.replace("-", "")
+    if fallback not in dates:
+        dates.append(fallback)
+    return dates
 
 
 def _time_delta_minutes(left: Any, right: Any) -> int | None:

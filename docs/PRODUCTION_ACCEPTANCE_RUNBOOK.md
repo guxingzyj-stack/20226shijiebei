@@ -327,9 +327,17 @@ Current production conclusion:
 500_RESULT_SOURCE_SUFFICIENT
 HT_SOURCE_UNAVAILABLE
 qiumibao remains a generic diagnostic source
-do not add an external structured result source yet
+ESPN scoreboard is a controlled structured fallback candidate, dry-run/confirm only
 BETTING_ENABLED=false remains required
 ```
+
+ESPN scoreboard date buckets use the US Eastern Time match day. Local
+`matches.kickoff_at` is stored in UTC, so a match such as
+`2026-06-14T01:00:00Z` may appear in ESPN `dates=20260613`, not only
+`dates=20260614`. For ESPN, `external_result_sync` queries ET date, UTC date,
+UTC date - 1, and UTC date + 1 candidates, then still requires same-order team
+match, kickoff time window, final status, non-empty score, and a unique
+candidate before any confirm write.
 
 If `--closed-missing` returns an empty set, expected output is:
 

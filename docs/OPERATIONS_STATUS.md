@@ -48,6 +48,12 @@ Current production posture:
   names are present, the correct status is `parser_missing_team_fields`
 - FIFA Match Centre remains `fifa_mapping_missing` until a durable local
   match_id to FIFA id/url mapping is built
+- ESPN scoreboard is now a controlled structured result fallback candidate.
+  It remains dry-run/explicit-confirm only and must not write scheduled/live
+  scores. ESPN `dates=YYYYMMDD` uses the US Eastern Time match day, while local
+  `kickoff_at` is UTC; for ESPN, `external_result_sync` checks ET date, UTC
+  date, UTC date - 1, and UTC date + 1 buckets before applying the normal
+  team/time/final/score/unique-candidate gate.
 - 060 live-source chain combines zhibo8 homepage schedule context with qiumibao
   score/event JSON. It is dry-run only and must not auto-write scores.
 - 061 local mapping scores live rows against local `matches.match_id` with
