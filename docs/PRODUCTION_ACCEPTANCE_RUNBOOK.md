@@ -339,6 +339,17 @@ UTC date - 1, and UTC date + 1 candidates, then still requires same-order team
 match, kickoff time window, final status, non-empty score, and a unique
 candidate before any confirm write.
 
+`results_sync once` automatically attempts ESPN fallback after the normal 500
+flow when `ENABLE_ESPN_RESULT_FALLBACK` is not explicitly disabled. The default
+is enabled; set `ENABLE_ESPN_RESULT_FALLBACK=false`, `0`, `no`, or `off` to turn
+it off. This does not change `BETTING_ENABLED`; betting remains controlled only
+by `BETTING_ENABLED`.
+
+ESPN automatic fallback candidates are based only on local DB state:
+`status IN ('closed','scheduled')`, null full-time result, and kickoff at least
+120 minutes old. 500 fetch success, source misses, or fetch errors are recorded
+as diagnostic context and must not block ESPN matching.
+
 If `--closed-missing` returns an empty set, expected output is:
 
 ```text

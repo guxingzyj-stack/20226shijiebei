@@ -80,6 +80,35 @@ PYTHONPATH=. python -m api.external_result_sync --confirm APPLY_EXTERNAL_RESULTS
 
 Do not run confirm unless dry-run shows exactly one safe update candidate.
 
+## Automatic results_sync integration
+
+`results_sync once` now runs the normal 500 flow first, then attempts ESPN fallback automatically for local overdue result-null matches.
+
+Environment switch:
+
+- `ENABLE_ESPN_RESULT_FALLBACK` defaults to enabled.
+- Set `ENABLE_ESPN_RESULT_FALLBACK=false`, `0`, `no`, or `off` to disable it.
+
+Trigger conditions for automatic ESPN fallback:
+
+- local match status is `closed` or `scheduled`
+- local `result_home/result_away` are both null
+- kickoff is at least 120 minutes old
+
+The fallback does not depend on the 500 fetch result. A 500 success, source miss, or fetch error is recorded as diagnostic context only.
+
+The `results_sync` ops_log summary includes:
+
+- `espn_fallback_enabled`
+- `espn_fallback_candidates`
+- `espn_fallback_would_update_count`
+- `espn_fallback_updated_count`
+- `espn_fallback_skipped_count`
+- `espn_fallback_errors`
+- `espn_fallback_updated_match_ids`
+
+The fallback also writes an `espn_result_fallback` ops_log row with structured provenance for matched updates.
+
 ## Write gate
 
 All conditions must pass:

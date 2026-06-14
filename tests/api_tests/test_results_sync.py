@@ -116,6 +116,7 @@ def test_source_fetch_error_records_diagnostic_summary(monkeypatch):
     def fail_fetch():
         raise RuntimeError("source unavailable")
 
+    monkeypatch.setenv("ENABLE_ESPN_RESULT_FALLBACK", "false")
     monkeypatch.setattr(results_sync, "fetch_results_html", fail_fetch)
     monkeypatch.setattr(results_sync, "record_ops_log", lambda *args: recorded.append(args))
 
@@ -162,6 +163,7 @@ def test_results_sync_record_log_tolerates_datetime_summary(monkeypatch):
         pass
 
     monkeypatch.setattr(results_sync, "fetch_results_html", lambda: html)
+    monkeypatch.setenv("ENABLE_ESPN_RESULT_FALLBACK", "false")
     monkeypatch.setattr(results_sync, "PostgresResultsRepository", FakeRepository)
     monkeypatch.setattr(
         results_sync,
@@ -175,3 +177,134 @@ def test_results_sync_record_log_tolerates_datetime_summary(monkeypatch):
 
     assert stats.finished_updated == 1
     assert recorded
+
+
+def test_espn_result_fallback_default_enabled(monkeypatch):
+    monkeypatch.delenv("ENABLE_ESPN_RESULT_FALLBACK", raising=False)
+
+    assert results_sync.espn_result_fallback_enabled() is True
+
+
+def test_espn_result_fallback_can_be_disabled(monkeypatch):
+    for value in ("false", "0", "no", "off"):
+        monkeypatch.setenv("ENABLE_ESPN_RESULT_FALLBACK", value)
+
+        assert results_sync.espn_result_fallback_enabled() is False
+
+
+def test_results_sync_calls_espn_fallback_after_500_main_flow(monkeypatch):
+    html = """
+    <table>
+      <tr data-match-id="500-1001" data-status="finished" data-score="2-1"></tr>
+    </table>
+    """
+    calls = []
+
+    def fake_fallback(stats, dry_run, now, record_log):
+        calls.append((dry_run, record_log))
+        stats.espn_fallback_candidates = 1
+        stats.espn_fallback_would_update_count = 1
+
+    monkeypatch.delenv("ENABLE_ESPN_RESULT_FALLBACK", raising=False)
+    monkeypatch.setattr(results_sync, "fetch_results_html", lambda: html)
+    monkeypatch.setattr(results_sync, "PostgresResultsRepository", FakeResultsRepository)
+    monkeypatch.setattr(results_sync, "_diagnose_overdue_closed_matches", lambda parsed: [])
+    monkeypatch.setattr(results_sync, "_run_espn_result_fallback", fake_fallback)
+
+    stats = run_results_sync_job(record_log=False)
+
+    assert calls == [(False, False)]
+    assert stats.espn_fallback_enabled is True
+    assert stats.espn_fallback_candidates == 1
+
+
+def test_500_fetch_error_does_not_block_enabled_espn_fallback(monkeypatch):
+    calls = []
+
+    def fail_fetch():
+        raise RuntimeError("500 unavailable")
+
+    def fake_fallback(stats, dry_run, now, record_log):
+        calls.append(True)
+        stats.espn_fallback_candidates = 1
+        stats.espn_fallback_would_update_count = 1
+        stats.espn_fallback_updated_count = 1
+        stats.espn_fallback_updated_match_ids = ["500-1359230"]
+
+    monkeypatch.delenv("ENABLE_ESPN_RESULT_FALLBACK", raising=False)
+    monkeypatch.setattr(results_sync, "fetch_results_html", fail_fetch)
+    monkeypatch.setattr(results_sync, "_run_espn_result_fallback", fake_fallback)
+
+    stats = run_results_sync_job(record_log=False)
+
+    assert calls == [True]
+    assert stats.source_status == "fetch_error"
+    assert stats.source_fetch_ok is False
+    assert stats.source_error is not None
+    assert stats.espn_fallback_updated_count == 1
+
+
+def test_results_sync_ops_log_summary_includes_espn_fallback_fields(monkeypatch):
+    recorded = []
+
+    def fake_fallback(stats, dry_run, now, record_log):
+        stats.espn_fallback_candidates = 1
+        stats.espn_fallback_would_update_count = 1
+        stats.espn_fallback_updated_count = 1
+        stats.espn_fallback_skipped_count = 0
+        stats.espn_fallback_updated_match_ids = ["500-1359230"]
+
+    monkeypatch.delenv("ENABLE_ESPN_RESULT_FALLBACK", raising=False)
+    monkeypatch.setattr(results_sync, "fetch_results_html", lambda: "<table></table>")
+    monkeypatch.setattr(results_sync, "PostgresResultsRepository", FakeResultsRepository)
+    monkeypatch.setattr(results_sync, "_diagnose_overdue_closed_matches", lambda parsed: [])
+    monkeypatch.setattr(results_sync, "_run_espn_result_fallback", fake_fallback)
+    monkeypatch.setattr(results_sync, "record_ops_log", lambda *args: recorded.append(args))
+
+    stats = run_results_sync_job(record_log=True)
+
+    assert stats.espn_fallback_updated_count == 1
+    summary = recorded[-1][3]
+    assert summary["espn_fallback_enabled"] is True
+    assert summary["espn_fallback_candidates"] == 1
+    assert summary["espn_fallback_updated_count"] == 1
+    assert summary["espn_fallback_updated_match_ids"] == ["500-1359230"]
+
+
+def test_espn_fallback_applies_unique_final_score(monkeypatch):
+    from api import external_result_sync
+
+    dry_report = {
+        "local_candidates": 1,
+        "would_update_count": 1,
+        "matches": [
+            {
+                "match_id": "500-1359230",
+                "action": "update",
+                "home_team": "海地",
+                "away_team": "苏格兰",
+                "result_home": 0,
+                "result_away": 1,
+                "external_source_url": "https://site.api.espn.com/scoreboard",
+                "external_event_id": "760418",
+                "external_source_date": "20260613",
+            }
+        ],
+    }
+    apply_report = {**dry_report, "updated_count": 1}
+    records = []
+
+    monkeypatch.setattr(results_sync, "_espn_fallback_candidate_dates", lambda now: ["2026-06-14"])
+    monkeypatch.setattr(external_result_sync, "dry_run", lambda source, match_date, now: dry_report)
+    monkeypatch.setattr(external_result_sync, "apply_results", lambda source, match_date, confirm, now: apply_report)
+    monkeypatch.setattr(results_sync, "record_ops_log", lambda *args: records.append(args))
+
+    stats = results_sync.ResultsSyncStats(espn_fallback_enabled=True, espn_fallback_updated_match_ids=[], espn_fallback_matches=[])
+    results_sync._run_espn_result_fallback(stats, dry_run=False, now=datetime.now(timezone.utc), record_log=True)
+
+    assert stats.espn_fallback_candidates == 1
+    assert stats.espn_fallback_would_update_count == 1
+    assert stats.espn_fallback_updated_count == 1
+    assert stats.espn_fallback_updated_match_ids == ["500-1359230"]
+    assert records[-1][0] == "espn_result_fallback"
+    assert records[-1][3]["matched"][0]["external_event_id"] == "760418"

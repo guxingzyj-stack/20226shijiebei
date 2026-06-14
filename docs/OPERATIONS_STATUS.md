@@ -49,11 +49,16 @@ Current production posture:
 - FIFA Match Centre remains `fifa_mapping_missing` until a durable local
   match_id to FIFA id/url mapping is built
 - ESPN scoreboard is now a controlled structured result fallback candidate.
-  It remains dry-run/explicit-confirm only and must not write scheduled/live
-  scores. ESPN `dates=YYYYMMDD` uses the US Eastern Time match day, while local
+  `results_sync once` automatically attempts ESPN fallback after the 500 flow
+  unless `ENABLE_ESPN_RESULT_FALLBACK` is explicitly set to `false`, `0`, `no`,
+  or `off`. It must not write scheduled/live scores. ESPN `dates=YYYYMMDD` uses
+  the US Eastern Time match day, while local
   `kickoff_at` is UTC; for ESPN, `external_result_sync` checks ET date, UTC
   date, UTC date - 1, and UTC date + 1 buckets before applying the normal
   team/time/final/score/unique-candidate gate.
+- 500 source success, miss, or fetch error is diagnostic for ESPN fallback and
+  must not block ESPN candidate matching. `BETTING_ENABLED=false` remains
+  required and is not changed by the fallback.
 - 060 live-source chain combines zhibo8 homepage schedule context with qiumibao
   score/event JSON. It is dry-run only and must not auto-write scores.
 - 061 local mapping scores live rows against local `matches.match_id` with

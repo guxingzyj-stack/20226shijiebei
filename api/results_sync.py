@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 import os
 import re
@@ -44,6 +44,16 @@ class ResultsSyncStats:
     errors: int = 0
     skipped_reasons: dict[str, int] | None = None
     overdue_closed_matches: list[dict[str, Any]] | None = None
+    source_error: str | None = None
+    espn_fallback_enabled: bool = False
+    espn_fallback_candidates: int = 0
+    espn_fallback_would_update_count: int = 0
+    espn_fallback_updated_count: int = 0
+    espn_fallback_skipped_count: int = 0
+    espn_fallback_errors: int = 0
+    espn_fallback_error: str | None = None
+    espn_fallback_updated_match_ids: list[str] | None = None
+    espn_fallback_matches: list[dict[str, Any]] | None = None
 
 
 class _RowsParser(HTMLParser):
@@ -192,9 +202,20 @@ def print_stats(stats: ResultsSyncStats) -> None:
     print(f"- postponed_updated: {stats.postponed_updated}")
     print(f"- skipped: {stats.skipped}")
     print(f"- errors: {stats.errors}")
+    if stats.source_error:
+        print(f"- source_error: {stats.source_error}")
     print("- skipped_reasons:")
     for reason, count in sorted((stats.skipped_reasons or {}).items()):
         print(f"  - {reason}: {count}")
+    print(f"- espn_fallback_enabled: {stats.espn_fallback_enabled}")
+    print(f"- espn_fallback_candidates: {stats.espn_fallback_candidates}")
+    print(f"- espn_fallback_would_update_count: {stats.espn_fallback_would_update_count}")
+    print(f"- espn_fallback_updated_count: {stats.espn_fallback_updated_count}")
+    print(f"- espn_fallback_skipped_count: {stats.espn_fallback_skipped_count}")
+    print(f"- espn_fallback_errors: {stats.espn_fallback_errors}")
+    if stats.espn_fallback_error:
+        print(f"- espn_fallback_error: {stats.espn_fallback_error}")
+    print(f"- espn_fallback_updated_match_ids: {stats.espn_fallback_updated_match_ids or []}")
     if stats.overdue_closed_matches is not None:
         print("- overdue_closed_matches:")
         for row in stats.overdue_closed_matches:
@@ -215,34 +236,54 @@ def run_results_sync_job(dry_run: bool = False, record_log: bool = False) -> Res
     started_at = datetime.now(timezone.utc)
     source_name = os.getenv("RESULTS_SYNC_SOURCE_NAME", DEFAULT_SOURCE_NAME).strip() or DEFAULT_SOURCE_NAME
     source_type = os.getenv("RESULTS_SYNC_SOURCE_TYPE", DEFAULT_SOURCE_TYPE).strip() or DEFAULT_SOURCE_TYPE
+    fallback_enabled = espn_result_fallback_enabled()
+    stats = ResultsSyncStats(
+        source_name=source_name,
+        source_type=source_type,
+        skipped_reasons={},
+        espn_fallback_enabled=fallback_enabled,
+        espn_fallback_updated_match_ids=[],
+        espn_fallback_matches=[],
+    )
+    source_exception: Exception | None = None
     try:
         html = fetch_results_html()
         results = parse_results_html(html)
         stats = sync_results(results, PostgresResultsRepository(), dry_run=dry_run)
         stats.source_name = source_name
         stats.source_type = source_type
+        stats.espn_fallback_enabled = fallback_enabled
+        stats.espn_fallback_updated_match_ids = []
+        stats.espn_fallback_matches = []
         stats.source_status = "ok"
         stats.source_fetch_ok = True
         stats.source_last_success_at = datetime.now(timezone.utc).isoformat()
         stats.overdue_closed_matches = _diagnose_overdue_closed_matches(results)
-        if record_log:
-            record_ops_log("results_sync", "ok" if stats.errors == 0 else "error", started_at, _stats_summary(stats), None if stats.errors == 0 else "results_sync row errors")
-        return stats
     except Exception as exc:
-        if record_log:
-            record_ops_log(
-                "results_sync",
-                "error",
-                started_at,
-                {
-                    "source_name": source_name,
-                    "source_type": source_type,
-                    "source_status": "fetch_error",
-                    "source_fetch_ok": False,
-                },
-                sanitize_error(exc),
-            )
+        source_exception = exc
+        stats.source_status = "fetch_error"
+        stats.source_fetch_ok = False
+        stats.source_error = sanitize_error(exc)
+        if not fallback_enabled:
+            if record_log:
+                record_ops_log("results_sync", "error", started_at, _stats_summary(stats), stats.source_error)
+            raise
+
+    if fallback_enabled:
+        _run_espn_result_fallback(stats, dry_run=dry_run, now=datetime.now(timezone.utc), record_log=record_log)
+
+    if record_log:
+        has_error = stats.errors != 0 or stats.espn_fallback_errors != 0
+        record_ops_log(
+            "results_sync",
+            "error" if has_error else "ok",
+            started_at,
+            _stats_summary(stats),
+            _results_sync_error(stats) if has_error else None,
+        )
+    if source_exception is not None and not fallback_enabled:
         raise
+    return stats
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -253,7 +294,62 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     stats = run_results_sync_job(dry_run=command == "dry-run", record_log=command == "once")
     print_stats(stats)
-    return 0 if stats.errors == 0 else 1
+    return 0 if stats.errors == 0 and stats.espn_fallback_errors == 0 else 1
+
+
+def espn_result_fallback_enabled() -> bool:
+    return os.getenv("ENABLE_ESPN_RESULT_FALLBACK", "true").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _run_espn_result_fallback(stats: ResultsSyncStats, dry_run: bool, now: datetime, record_log: bool) -> None:
+    started_at = datetime.now(timezone.utc)
+    try:
+        from api import external_result_sync
+
+        match_dates = _espn_fallback_candidate_dates(now)
+        updated_match_ids: list[str] = []
+        fallback_matches: list[dict[str, Any]] = []
+        for match_date in match_dates:
+            plan = external_result_sync.dry_run("espn", match_date, now=now)
+            stats.espn_fallback_candidates += int(plan.get("local_candidates") or 0)
+            stats.espn_fallback_would_update_count += int(plan.get("would_update_count") or 0)
+            fallback_matches.extend(plan.get("matches") or [])
+            if dry_run or int(plan.get("would_update_count") or 0) <= 0:
+                continue
+            applied = external_result_sync.apply_results("espn", match_date, confirm=external_result_sync.CONFIRM_CODE, now=now)
+            stats.espn_fallback_updated_count += int(applied.get("updated_count") or 0)
+            if int(applied.get("updated_count") or 0) > 0:
+                for item in applied.get("matches") or []:
+                    if item.get("action") == "update":
+                        updated_match_ids.append(str(item.get("match_id")))
+                        fallback_matches.append(item)
+        stats.espn_fallback_updated_match_ids = _dedupe(updated_match_ids)
+        stats.espn_fallback_matches = fallback_matches
+        stats.espn_fallback_skipped_count = sum(1 for item in fallback_matches if item.get("action") != "update")
+        if record_log:
+            record_ops_log("espn_result_fallback", "ok", started_at, _espn_fallback_summary(stats), None)
+    except Exception as exc:
+        stats.espn_fallback_errors += 1
+        stats.espn_fallback_error = sanitize_error(exc)
+        if record_log:
+            record_ops_log("espn_result_fallback", "error", started_at, _espn_fallback_summary(stats), stats.espn_fallback_error)
+
+
+def _espn_fallback_candidate_dates(now: datetime) -> list[str]:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT kickoff_at::date
+            FROM matches
+            WHERE status IN ('closed', 'scheduled')
+              AND result_home IS NULL
+              AND result_away IS NULL
+              AND kickoff_at <= %s
+            ORDER BY kickoff_at::date
+            """,
+            (now - _overdue_delta(),),
+        )
+        return [row[0].isoformat() if hasattr(row[0], "isoformat") else str(row[0]) for row in cur.fetchall()]
 
 
 def _stats_summary(stats: ResultsSyncStats) -> dict[str, Any]:
@@ -263,6 +359,7 @@ def _stats_summary(stats: ResultsSyncStats) -> dict[str, Any]:
         "source_status": stats.source_status,
         "source_fetch_ok": stats.source_fetch_ok,
         "source_last_success_at": stats.source_last_success_at,
+        "source_error": stats.source_error,
         "matches_seen": stats.matches_seen,
         "finished_updated": stats.finished_updated,
         "halftime_updated": stats.halftime_updated,
@@ -271,7 +368,71 @@ def _stats_summary(stats: ResultsSyncStats) -> dict[str, Any]:
         "errors": stats.errors,
         "skipped_reasons": stats.skipped_reasons or {},
         "overdue_closed_matches": stats.overdue_closed_matches or [],
+        "espn_fallback_enabled": stats.espn_fallback_enabled,
+        "espn_fallback_candidates": stats.espn_fallback_candidates,
+        "espn_fallback_would_update_count": stats.espn_fallback_would_update_count,
+        "espn_fallback_updated_count": stats.espn_fallback_updated_count,
+        "espn_fallback_skipped_count": stats.espn_fallback_skipped_count,
+        "espn_fallback_errors": stats.espn_fallback_errors,
+        "espn_fallback_error": stats.espn_fallback_error,
+        "espn_fallback_updated_match_ids": stats.espn_fallback_updated_match_ids or [],
+        "espn_fallback_matches": stats.espn_fallback_matches or [],
     }
+
+
+def _espn_fallback_summary(stats: ResultsSyncStats) -> dict[str, Any]:
+    return {
+        "source": "espn",
+        "source_type": "external_structured_result",
+        "espn_fallback_enabled": stats.espn_fallback_enabled,
+        "espn_fallback_candidates": stats.espn_fallback_candidates,
+        "espn_fallback_would_update_count": stats.espn_fallback_would_update_count,
+        "espn_fallback_updated_count": stats.espn_fallback_updated_count,
+        "espn_fallback_skipped_count": stats.espn_fallback_skipped_count,
+        "espn_fallback_errors": stats.espn_fallback_errors,
+        "espn_fallback_updated_match_ids": stats.espn_fallback_updated_match_ids or [],
+        "matched": [
+            {
+                "match_id": item.get("match_id"),
+                "home_team": item.get("home_team"),
+                "away_team": item.get("away_team"),
+                "result_home": item.get("result_home"),
+                "result_away": item.get("result_away"),
+                "external_source_name": "ESPN",
+                "external_source_url": item.get("external_source_url"),
+                "external_event_id": item.get("external_event_id"),
+                "external_source_date": item.get("external_source_date"),
+                "matched_by": ["team_name", "kickoff_time", "final_status", "unique_candidate"],
+                "verified_mode": "structured_source",
+            }
+            for item in stats.espn_fallback_matches or []
+            if item.get("action") == "update"
+        ],
+    }
+
+
+def _results_sync_error(stats: ResultsSyncStats) -> str:
+    errors: list[str] = []
+    if stats.errors:
+        errors.append("results_sync row errors")
+    if stats.espn_fallback_error:
+        errors.append(stats.espn_fallback_error)
+    return "; ".join(errors)[:500] if errors else "results_sync error"
+
+
+def _overdue_delta() -> timedelta:
+    return timedelta(minutes=120)
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 def _skip(stats: ResultsSyncStats, reason: str) -> None:
