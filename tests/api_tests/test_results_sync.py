@@ -1,7 +1,9 @@
 from pathlib import Path
+from datetime import datetime, timezone
 
 import pytest
 
+from api import ops_log
 from api import results_sync
 from api.results_sync import ParsedResult, parse_results_html, run_results_sync_job, sync_results
 
@@ -125,3 +127,51 @@ def test_source_fetch_error_records_diagnostic_summary(monkeypatch):
     assert recorded[0][1] == "error"
     assert recorded[0][3]["source_name"] == "500_trade_jczq"
     assert recorded[0][3]["source_fetch_ok"] is False
+
+
+def test_results_sync_record_log_tolerates_datetime_summary(monkeypatch):
+    html = """
+    <table>
+      <tr data-match-id="500-1001" data-status="finished" data-score="2-1"></tr>
+    </table>
+    """
+    recorded = []
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            recorded.append((sql, params))
+            assert params[4].obj["overdue_closed_matches"][0]["kickoff_at"] == "2026-06-14T12:00:00+00:00"
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return FakeCursor()
+
+    class FakeRepository(FakeResultsRepository):
+        pass
+
+    monkeypatch.setattr(results_sync, "fetch_results_html", lambda: html)
+    monkeypatch.setattr(results_sync, "PostgresResultsRepository", FakeRepository)
+    monkeypatch.setattr(
+        results_sync,
+        "_diagnose_overdue_closed_matches",
+        lambda parsed: [{"match_id": "500-1001", "kickoff_at": datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc)}],
+    )
+    monkeypatch.setattr(ops_log, "connect", lambda: FakeConn())
+    monkeypatch.setattr(results_sync, "record_ops_log", ops_log.record_ops_log)
+
+    stats = run_results_sync_job(record_log=True)
+
+    assert stats.finished_updated == 1
+    assert recorded

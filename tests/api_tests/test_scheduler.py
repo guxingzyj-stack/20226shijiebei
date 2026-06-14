@@ -1,10 +1,12 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
+import json
 from types import SimpleNamespace
 
 import pytest
 
 from api import acceptance_report, main, ops_log, scheduler
-from api.ops_log import sanitize_error
+from api.ops_log import make_json_safe, sanitize_error
 
 
 @pytest.fixture(autouse=True)
@@ -130,6 +132,28 @@ def test_scheduler_jobs_catch_exceptions(monkeypatch):
     scheduler.result_ingest_monitor_job()
 
 
+def test_result_ingest_monitor_failure_does_not_block_results_sync(monkeypatch, capsys):
+    calls = {"results_sync": 0}
+
+    def ok_results_sync(*args, **kwargs):
+        calls["results_sync"] += 1
+        return SimpleNamespace(updated=1)
+
+    def fail_monitor(*args, **kwargs):
+        raise RuntimeError("monitor boom")
+
+    monkeypatch.setattr(scheduler, "run_results_sync_job", ok_results_sync)
+    monkeypatch.setattr(scheduler, "run_result_ingest_monitor_once", fail_monitor)
+
+    scheduler.result_ingest_monitor_job()
+    scheduler.results_sync_job()
+
+    output = capsys.readouterr().out
+    assert "monitor boom" in output
+    assert "results_sync" in output
+    assert calls["results_sync"] == 1
+
+
 def test_scheduler_start_error_is_logged(monkeypatch, capsys):
     monkeypatch.setenv("ENABLE_API_SCHEDULER", "true")
     monkeypatch.setattr(scheduler, "create_scheduler", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
@@ -195,6 +219,80 @@ def test_ops_log_success_write(monkeypatch):
     assert "INSERT INTO ops_log" in calls[0][0]
     assert calls[0][1][0] == "results_sync"
     assert calls[0][1][1] == "ok"
+
+
+def test_make_json_safe_handles_datetime_date_decimal_nested_values():
+    value = {
+        "dt": datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+        "date": date(2026, 6, 14),
+        "decimal": Decimal("1.25"),
+        "items": [Decimal("2.5"), {1: datetime(2026, 6, 14, tzinfo=timezone.utc)}],
+    }
+
+    safe = make_json_safe(value)
+
+    assert safe["dt"] == "2026-06-14T12:00:00+00:00"
+    assert safe["date"] == "2026-06-14"
+    assert safe["decimal"] == 1.25
+    assert safe["items"][0] == 2.5
+    assert safe["items"][1]["1"] == "2026-06-14T00:00:00+00:00"
+    json.dumps(safe)
+
+
+def test_ops_log_payload_with_datetime_is_json_safe(monkeypatch):
+    calls = []
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            calls.append((sql, params))
+            json.dumps(params[4].obj)
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return FakeCursor()
+
+    monkeypatch.setattr(ops_log, "connect", lambda: FakeConn())
+
+    ops_log.record_ops_log(
+        "results_sync",
+        "ok",
+        datetime.now(timezone.utc),
+        {"source_last_success_at": datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc), "amount": Decimal("3.5")},
+        None,
+    )
+
+    payload = calls[0][1][4].obj
+    assert payload["source_last_success_at"] == "2026-06-14T12:00:00+00:00"
+    assert payload["amount"] == 3.5
+
+
+def test_ops_log_write_failure_is_isolated(monkeypatch, capsys):
+    class BrokenConn:
+        def __enter__(self):
+            raise TypeError("Object of type datetime is not JSON serializable")
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(ops_log, "connect", lambda: BrokenConn())
+
+    ops_log.record_ops_log("results_sync", "ok", datetime.now(timezone.utc), {"x": datetime.now(timezone.utc)}, None)
+
+    output = capsys.readouterr().out
+    assert "ops_log_write_failed" in output
+    assert "datetime is not JSON serializable" in output
 
 
 def test_acceptance_report_outputs_scheduler_status(monkeypatch):
