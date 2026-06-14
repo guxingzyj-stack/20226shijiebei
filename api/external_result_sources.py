@@ -19,6 +19,11 @@ FIFA_TARGETS_CSV = ROOT / "data" / "fifa_match_targets.csv"
 P3_FIFA_TARGETS_CSV = ROOT / "data" / "p3" / "fifa_match_targets.csv"
 FIFA_SCHEDULE_PAGE = "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/match-schedule-fixtures-results-teams-stadiums"
 THESPORTSDB_URL_TEMPLATE = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={date}&s=Soccer"
+ESPN_SCOREBOARD_URL_TEMPLATES = (
+    "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates={date}",
+    "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world_cup/scoreboard?dates={date}",
+    "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldcup/scoreboard?dates={date}",
+)
 FINAL_STATUSES = {"finished", "complete", "completed", "full-time", "fulltime", "ft", "match finished"}
 TARGET_TEAMS = {
     "卡塔尔",
@@ -83,7 +88,9 @@ def fetch_source_events(source: str, match_date: str) -> dict[str, Any]:
         return fetch_thesportsdb_events(match_date)
     if source == "fifa":
         return fetch_fifa_events(match_date)
-    raise ValueError("source must be thesportsdb or fifa")
+    if source == "espn":
+        return fetch_espn_events(match_date)
+    raise ValueError("source must be thesportsdb, fifa, or espn")
 
 
 def fetch_thesportsdb_events(match_date: str) -> dict[str, Any]:
@@ -96,6 +103,83 @@ def fetch_thesportsdb_events(match_date: str) -> dict[str, Any]:
         return _source_report("thesportsdb", url, events, None)
     except Exception as exc:
         return _source_report("thesportsdb", url, [], sanitize_error(exc), fetch_ok=False)
+
+
+def fetch_espn_events(match_date: str) -> dict[str, Any]:
+    compact_date = match_date.replace("-", "")
+    errors: list[str] = []
+    empty_urls: list[str] = []
+    for template in ESPN_SCOREBOARD_URL_TEMPLATES:
+        url = template.format(date=compact_date)
+        try:
+            payload = _fetch_json(url)
+        except Exception as exc:
+            errors.append(f"{url}: {type(exc).__name__}")
+            continue
+        raw_events = payload.get("events") or []
+        if not raw_events:
+            empty_urls.append(url)
+            continue
+        events = [parse_espn_event(item, source_url=url) for item in raw_events]
+        events = [event for event in events if event is not None]
+        report = _source_report("espn", url, events, None)
+        report["source_attempted_urls"] = list(ESPN_SCOREBOARD_URL_TEMPLATES)
+        return report
+    fallback_url = ESPN_SCOREBOARD_URL_TEMPLATES[0].format(date=compact_date)
+    parser_error = "; ".join(errors) if errors and not empty_urls else None
+    report = _source_report("espn", fallback_url, [], parser_error, fetch_ok=not errors or bool(empty_urls))
+    report["source_attempted_urls"] = list(ESPN_SCOREBOARD_URL_TEMPLATES)
+    return report
+
+
+def parse_espn_event(item: dict[str, Any], source_url: str) -> ExternalResultEvent | None:
+    competition = (item.get("competitions") or [{}])[0] or {}
+    competitors = competition.get("competitors") or []
+    home = next((row for row in competitors if row.get("homeAway") == "home"), None)
+    away = next((row for row in competitors if row.get("homeAway") == "away"), None)
+    if not home or not away:
+        return None
+    raw_home = _espn_team_name(home)
+    raw_away = _espn_team_name(away)
+    if not raw_home or not raw_away:
+        return None
+    status_type = ((item.get("status") or {}).get("type") or {})
+    completed = bool(status_type.get("completed"))
+    raw_status = _text(status_type.get("name") or status_type.get("state") or status_type.get("description"))
+    status = _normalize_espn_status(status_type)
+    if completed:
+        status = "finished"
+    return ExternalResultEvent(
+        source="espn",
+        source_url=source_url,
+        external_id=_text(item.get("id")),
+        raw_home=raw_home,
+        raw_away=raw_away,
+        home_team=normalize_team_name(raw_home),
+        away_team=normalize_team_name(raw_away),
+        kickoff_at=_parse_datetime(item.get("date")),
+        status=status,
+        raw_status=raw_status,
+        result_home=_optional_int(home.get("score")),
+        result_away=_optional_int(away.get("score")),
+    )
+
+
+def _espn_team_name(competitor: dict[str, Any]) -> str | None:
+    team = competitor.get("team") or {}
+    return _text(_first(team, "displayName", "shortDisplayName", "name", "abbreviation"))
+
+
+def _normalize_espn_status(status_type: dict[str, Any]) -> str:
+    name = str(status_type.get("name") or "").strip().lower()
+    state = str(status_type.get("state") or "").strip().lower()
+    description = str(status_type.get("description") or "").strip().lower()
+    joined = " ".join([name, state, description])
+    if bool(status_type.get("completed")) or any(token in joined for token in ("post", "final", "full time", "full-time", "ft")):
+        return "finished"
+    if any(token in joined for token in ("in", "live", "halftime", "half")):
+        return "live"
+    return "scheduled"
 
 
 def parse_thesportsdb_event(item: dict[str, Any], source_url: str) -> ExternalResultEvent | None:

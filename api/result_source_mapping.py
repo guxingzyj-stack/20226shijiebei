@@ -89,6 +89,8 @@ TEAM_ALIASES_RAW.update(
         "germany": "\u5fb7\u56fd",
         "scotland": "\u82cf\u683c\u5170",
         "turkey": "\u571f\u8033\u5176",
+        "turkiye": "\u571f\u8033\u5176",
+        "t\u00fcrkiye": "\u571f\u8033\u5176",
         "australia": "\u6fb3\u5927\u5229\u4e9a",
         "qatar": "\u5361\u5854\u5c14",
         "switzerland": "\u745e\u58eb",
@@ -116,6 +118,9 @@ TEAM_ALIASES_RAW.update(
         "saudiarabia": "\u6c99\u7279\u963f\u62c9\u4f2f",
         "newzealand": "\u65b0\u897f\u5170",
         "capeverde": "\u4f5b\u5f97\u89d2",
+        "ecuador": "\u5384\u74dc\u591a\u5c14",
+        "sweden": "\u745e\u5178",
+        "tunisia": "\u7a81\u5c3c\u65af",
     }
 )
 

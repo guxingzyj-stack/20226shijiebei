@@ -65,6 +65,16 @@ def test_external_finished_score_dry_run_matches(monkeypatch):
     assert report["matches"][0]["reason"] == "external_result_matched"
 
 
+def test_espn_final_score_dry_run_matches(monkeypatch):
+    espn_event = _event(source="espn", source_url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260614")
+    _patch_plan(monkeypatch, [espn_event])
+
+    report = sync.dry_run("espn", "2026-06-14", now=NOW)
+
+    assert report["would_update_count"] == 1
+    assert report["matches"][0]["external_source"] == "espn"
+
+
 def test_external_not_final_does_not_write(monkeypatch):
     _patch_plan(monkeypatch, [_event(status="scheduled")])
 

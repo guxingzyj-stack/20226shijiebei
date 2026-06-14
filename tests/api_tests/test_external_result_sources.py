@@ -29,6 +29,78 @@ def test_thesportsdb_parser_reads_finished_score_and_teams():
     assert event.away_team == "瑞士"
 
 
+def test_espn_parser_reads_final_event_and_score():
+    event = sources.parse_espn_event(
+        {
+            "id": "espn-1",
+            "date": "2026-06-14T01:00Z",
+            "status": {"type": {"name": "STATUS_FINAL", "state": "post", "completed": True}},
+            "competitions": [
+                {
+                    "competitors": [
+                        {"homeAway": "home", "team": {"displayName": "Haiti"}, "score": "0"},
+                        {"homeAway": "away", "team": {"displayName": "Scotland"}, "score": "1"},
+                    ]
+                }
+            ],
+        },
+        source_url="https://site.api.espn.com/test",
+    )
+
+    assert event is not None
+    assert event.status == "finished"
+    assert event.result_home == 0
+    assert event.result_away == 1
+    assert event.home_team == "海地"
+    assert event.away_team == "苏格兰"
+
+
+def test_espn_parser_keeps_scheduled_event_non_final():
+    event = sources.parse_espn_event(
+        {
+            "id": "espn-2",
+            "date": "2026-06-14T17:00Z",
+            "status": {"type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": False}},
+            "competitions": [
+                {
+                    "competitors": [
+                        {"homeAway": "home", "team": {"displayName": "Germany"}, "score": ""},
+                        {"homeAway": "away", "team": {"displayName": "Curaçao"}, "score": ""},
+                    ]
+                }
+            ],
+        },
+        source_url="https://site.api.espn.com/test",
+    )
+
+    assert event is not None
+    assert event.status == "scheduled"
+    assert event.result_home is None
+    assert event.away_team == "库拉索"
+
+
+def test_espn_parser_keeps_in_progress_event_non_final():
+    event = sources.parse_espn_event(
+        {
+            "id": "espn-3",
+            "date": "2026-06-14T17:00Z",
+            "status": {"type": {"name": "STATUS_IN_PROGRESS", "state": "in", "completed": False}},
+            "competitions": [
+                {
+                    "competitors": [
+                        {"homeAway": "home", "team": {"displayName": "Brazil"}, "score": "1"},
+                        {"homeAway": "away", "team": {"displayName": "Morocco"}, "score": "1"},
+                    ]
+                }
+            ],
+        },
+        source_url="https://site.api.espn.com/test",
+    )
+
+    assert event is not None
+    assert event.status == "live"
+
+
 def test_thesportsdb_pair_marks_delayed_free_tier():
     historical = {"source_fetch_ok": True, "events_seen": 10, "target_matches_seen": 1}
     current = {"source_fetch_ok": True, "events_seen": 0, "target_matches_seen": 0}
@@ -66,6 +138,10 @@ def test_english_team_aliases_normalize_to_local_names():
     assert normalize_team_name("Côte d'Ivoire") == "科特迪瓦"
     assert normalize_team_name("DR Congo") == "刚果(金)"
     assert normalize_team_name("Cape Verde") == "佛得角"
+    assert normalize_team_name("Ecuador") == "厄瓜多尔"
+    assert normalize_team_name("Sweden") == "瑞典"
+    assert normalize_team_name("Tunisia") == "突尼斯"
+    assert normalize_team_name("Türkiye") == "土耳其"
 
 
 def test_fifa_source_without_targets_reports_mapping_missing(tmp_path: Path):

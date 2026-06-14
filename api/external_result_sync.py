@@ -174,7 +174,7 @@ def print_report(report: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="dry-run or apply structured external result fallback")
-    parser.add_argument("--source", choices=("thesportsdb", "fifa"), required=True)
+    parser.add_argument("--source", choices=("thesportsdb", "fifa", "espn"), required=True)
     parser.add_argument("--date", required=True)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true")

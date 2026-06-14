@@ -34,6 +34,7 @@ REQUIRED_FIELDS = {
 }
 ALLOWED_STATUSES = {"finished", "completed"}
 UPDATABLE_STATUSES = {"scheduled", "closed", "finished", "completed"}
+FORBIDDEN_SOURCE_URL_MARKERS = ("<PASTE", "PLACEHOLDER", "TODO", "这里换成", "example.com")
 
 
 @dataclass(frozen=True)
@@ -232,11 +233,21 @@ def _parse_row(row: dict[str, str], line_no: int) -> OfficialResultRow:
         ht_away=_optional_nonnegative_int(row, "ht_away", line_no),
         status=status,
         source_name=required_text("source_name"),
-        source_url=required_text("source_url"),
+        source_url=_validated_source_url(required_text("source_url"), line_no),
         retrieved_at=required_text("retrieved_at"),
         verified_by=required_text("verified_by"),
         notes=(row.get("notes") or "").strip(),
     )
+
+
+def _validated_source_url(value: str, line_no: int) -> str:
+    lowered = value.lower()
+    if not (lowered.startswith("http://") or lowered.startswith("https://")):
+        raise ValueError(f"line {line_no}: source_url must start with http:// or https://")
+    for marker in FORBIDDEN_SOURCE_URL_MARKERS:
+        if marker.lower() in lowered:
+            raise ValueError(f"line {line_no}: source_url contains placeholder marker")
+    return value
 
 
 def _required_nonnegative_int(row: dict[str, str], name: str, line_no: int) -> int:

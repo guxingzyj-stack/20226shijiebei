@@ -149,6 +149,35 @@ def test_missing_verified_by_fails(tmp_path):
         official_result_fallback.load_csv(path)
 
 
+def test_placeholder_source_url_fails(tmp_path):
+    path = _csv(tmp_path, "500-closed,Mexico,South Africa,2,0,,,finished,FIFA,<PASTE_OFFICIAL_URL>,2026-06-12,operator,verified\n")
+
+    with pytest.raises(ValueError, match="source_url"):
+        official_result_fallback.load_csv(path)
+
+
+def test_chinese_placeholder_source_url_fails(tmp_path):
+    path = _csv(tmp_path, "500-closed,Mexico,South Africa,2,0,,,finished,FIFA,https://这里换成官方链接,2026-06-12,operator,verified\n")
+
+    with pytest.raises(ValueError, match="source_url"):
+        official_result_fallback.load_csv(path)
+
+
+def test_non_http_source_url_fails(tmp_path):
+    path = _csv(tmp_path, "500-closed,Mexico,South Africa,2,0,,,finished,FIFA,file:///tmp/result,2026-06-12,operator,verified\n")
+
+    with pytest.raises(ValueError, match="source_url"):
+        official_result_fallback.load_csv(path)
+
+
+def test_legal_http_source_url_passes(tmp_path):
+    path = _csv(tmp_path, "500-closed,Mexico,South Africa,2,0,,,finished,FIFA,https://www.fifa.com/match-centre/example,2026-06-12,operator,verified\n")
+
+    rows = official_result_fallback.load_csv(path)
+
+    assert rows[0].source_url == "https://www.fifa.com/match-centre/example"
+
+
 def test_match_id_not_found_reports_error(monkeypatch, tmp_path):
     conn = FakeConn()
     monkeypatch.setattr(official_result_fallback, "connect", fake_connect(conn))

@@ -8,7 +8,7 @@ from api.external_result_sources import discover_fifa_urls, print_probe_report, 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="probe structured external result sources")
-    parser.add_argument("--source", choices=("thesportsdb", "fifa"), required=True)
+    parser.add_argument("--source", choices=("thesportsdb", "fifa", "espn"), required=True)
     parser.add_argument("--date", required=True)
     parser.add_argument("--discover-url", action="store_true")
     parser.add_argument("--limit", type=int, default=5)
