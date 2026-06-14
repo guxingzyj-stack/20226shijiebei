@@ -4,7 +4,9 @@
 
 ESPN scoreboard is a structured result fallback candidate for World Cup full-time scores.
 
-It must not replace the normal 500 source. It is only allowed for closed/scheduled overdue matches when 500 current-window results do not contain the match and ESPN has a final score.
+It must not replace the normal 500 source. It is only attempted for local closed/scheduled matches that are overdue and still have null results, and it only writes when ESPN has one unique final score candidate.
+
+500 current-window status is diagnostic for ESPN fallback. A 500 fetch error or a 500 "still present" observation must not block ESPN candidate matching by itself.
 
 ## Probe commands
 
@@ -85,12 +87,13 @@ All conditions must pass:
 - local match status is `closed` or `scheduled`
 - local `result_home/result_away` are both null
 - kickoff is at least 120 minutes old
-- 500 current-window source does not contain the match
 - ESPN status is final
 - ESPN score fields are non-empty
 - team names match in the same order
 - kickoff time delta is within 120 minutes
 - candidate is unique
+
+The ESPN sync report includes `source_500_diagnostic` and `source_500_status` for troubleshooting only. These fields do not relax the ESPN write gate and do not decide whether ESPN is allowed to match a candidate.
 
 The first version does not write `ht_home` or `ht_away`.
 

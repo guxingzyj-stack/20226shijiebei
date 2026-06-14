@@ -28,6 +28,8 @@ class ExternalResultPlan:
     reason: str
     external_event: dict[str, Any] | None = None
     time_delta_minutes: int | None = None
+    source_500_diagnostic: str | None = None
+    source_500_status: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         event = self.external_event or {}
@@ -52,6 +54,8 @@ class ExternalResultPlan:
             "external_status": event.get("status"),
             "result_home": event.get("result_home"),
             "result_away": event.get("result_away"),
+            "source_500_diagnostic": self.source_500_diagnostic,
+            "source_500_status": self.source_500_status,
         }
 
 
@@ -110,7 +114,7 @@ def plan_external_results(source: str, match_date: str, now: datetime | None = N
         source_report = fetch_source_events(source, match_date)
     current_500 = current_500_match_ids()
     plans = [
-        _plan_one(local, source_report["events"], current_500, effective_now)
+        _plan_one(local, source_report["events"], current_500, effective_now, require_500_absence=source != "espn")
         for local in local_matches
     ]
     update_count = sum(1 for plan in plans if plan.action == "update")
@@ -173,6 +177,8 @@ def print_report(report: dict[str, Any]) -> None:
         print(f"  external_source_date: {item.get('external_source_date')}")
         print(f"  score: {item.get('result_home')}-{item.get('result_away')}")
         print(f"  time_delta_minutes: {item.get('time_delta_minutes')}")
+        print(f"  source_500_diagnostic: {item.get('source_500_diagnostic')}")
+        print(f"  source_500_status: {item.get('source_500_status')}")
         print(f"  source_url: {item.get('external_source_url')}")
 
 
@@ -194,17 +200,24 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if report["ok"] else 1
 
 
-def _plan_one(local: dict[str, Any], events: list[dict[str, Any]], current_500: dict[str, str], now: datetime) -> ExternalResultPlan:
+def _plan_one(
+    local: dict[str, Any],
+    events: list[dict[str, Any]],
+    current_500: dict[str, str],
+    now: datetime,
+    require_500_absence: bool = True,
+) -> ExternalResultPlan:
+    source_500_diagnostic, source_500_status = _source_500_diagnostic(local, current_500)
     if local.get("result_home") is not None or local.get("result_away") is not None:
-        return ExternalResultPlan(local, "skip", "skipped_existing_result")
+        return ExternalResultPlan(local, "skip", "skipped_existing_result", source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
     if str(local.get("status")) not in {"closed", "scheduled"}:
-        return ExternalResultPlan(local, "skip", "local_status_not_eligible")
-    if "__source_error__" in current_500:
-        return ExternalResultPlan(local, "skip", "source_500_fetch_error")
-    if str(local.get("match_id")) in current_500:
-        return ExternalResultPlan(local, "skip", "source_500_still_present")
+        return ExternalResultPlan(local, "skip", "local_status_not_eligible", source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
+    if require_500_absence and "__source_error__" in current_500:
+        return ExternalResultPlan(local, "skip", "source_500_fetch_error", source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
+    if require_500_absence and str(local.get("match_id")) in current_500:
+        return ExternalResultPlan(local, "skip", "source_500_still_present", source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
     if not _local_is_eligible(local, now):
-        return ExternalResultPlan(local, "skip", "local_not_eligible")
+        return ExternalResultPlan(local, "skip", "local_not_eligible", source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
 
     local_home = normalize_team_name(local.get("home_team"))
     local_away = normalize_team_name(local.get("away_team"))
@@ -217,23 +230,32 @@ def _plan_one(local: dict[str, Any], events: list[dict[str, Any]], current_500: 
         if event.get("normalized_home") == local_away and event.get("normalized_away") == local_home
     ]
     if reversed_order and not same_order:
-        return ExternalResultPlan(local, "skip", "external_result_reversed_team_order", reversed_order[0])
+        return ExternalResultPlan(local, "skip", "external_result_reversed_team_order", reversed_order[0], source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
     if not same_order:
-        return ExternalResultPlan(local, "skip", "external_result_no_candidate")
+        return ExternalResultPlan(local, "skip", "external_result_no_candidate", source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
 
     timed = [(event, _time_delta_minutes(local.get("kickoff_at"), event.get("kickoff_at"))) for event in same_order]
     timed = [(event, delta) for event, delta in timed if delta is not None and delta <= TIME_WINDOW_MINUTES]
     if not timed:
-        return ExternalResultPlan(local, "skip", "external_result_time_mismatch", same_order[0])
+        return ExternalResultPlan(local, "skip", "external_result_time_mismatch", same_order[0], source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
     if len(timed) > 1:
-        return ExternalResultPlan(local, "skip", "external_result_ambiguous", timed[0][0], timed[0][1])
+        return ExternalResultPlan(local, "skip", "external_result_ambiguous", timed[0][0], timed[0][1], source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
 
     event, delta = timed[0]
     if event.get("status") != "finished":
-        return ExternalResultPlan(local, "skip", "external_result_status_not_final", event, delta)
+        return ExternalResultPlan(local, "skip", "external_result_status_not_final", event, delta, source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
     if event.get("result_home") is None or event.get("result_away") is None:
-        return ExternalResultPlan(local, "skip", "external_result_score_missing", event, delta)
-    return ExternalResultPlan(local, "update", "external_result_matched", event, delta)
+        return ExternalResultPlan(local, "skip", "external_result_score_missing", event, delta, source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
+    return ExternalResultPlan(local, "update", "external_result_matched", event, delta, source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
+
+
+def _source_500_diagnostic(local: dict[str, Any], current_500: dict[str, str]) -> tuple[str, str | None]:
+    if "__source_error__" in current_500:
+        return str(current_500["__source_error__"]), None
+    status = current_500.get(str(local.get("match_id")))
+    if status is not None:
+        return "source_500_still_present", status
+    return "source_500_not_present", None
 
 
 def _local_is_eligible(local: dict[str, Any], now: datetime) -> bool:

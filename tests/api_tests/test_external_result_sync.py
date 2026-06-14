@@ -103,6 +103,39 @@ def test_espn_sync_matches_previous_et_bucket_when_cli_date_is_utc_date(monkeypa
     assert report["matches"][0]["external_source_date"] == "20260613"
 
 
+def test_espn_500_fetch_error_is_diagnostic_not_skip_reason(monkeypatch):
+    espn_event = _event(source="espn")
+    _patch_plan(monkeypatch, [espn_event], current_500={"__source_error__": "source_500_fetch_error"})
+
+    report = sync.dry_run("espn", "2026-06-14", now=NOW)
+
+    assert report["would_update_count"] == 1
+    assert report["matches"][0]["reason"] == "external_result_matched"
+    assert report["matches"][0]["source_500_diagnostic"] == "source_500_fetch_error"
+
+
+def test_espn_500_still_present_is_diagnostic_not_skip_reason(monkeypatch):
+    espn_event = _event(source="espn")
+    _patch_plan(monkeypatch, [espn_event], current_500={"500-1359227": "closed"})
+
+    report = sync.dry_run("espn", "2026-06-14", now=NOW)
+
+    assert report["would_update_count"] == 1
+    assert report["matches"][0]["reason"] == "external_result_matched"
+    assert report["matches"][0]["source_500_diagnostic"] == "source_500_still_present"
+    assert report["matches"][0]["source_500_status"] == "closed"
+
+
+def test_non_espn_500_fetch_error_still_blocks_external_fallback(monkeypatch):
+    _patch_plan(monkeypatch, [_event()], current_500={"__source_error__": "source_500_fetch_error"})
+
+    report = sync.dry_run("thesportsdb", "2026-06-14", now=NOW)
+
+    assert report["would_update_count"] == 0
+    assert report["matches"][0]["reason"] == "source_500_fetch_error"
+    assert report["matches"][0]["source_500_diagnostic"] == "source_500_fetch_error"
+
+
 def test_external_not_final_does_not_write(monkeypatch):
     _patch_plan(monkeypatch, [_event(status="scheduled")])
 
