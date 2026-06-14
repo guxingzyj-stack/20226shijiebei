@@ -15,7 +15,9 @@ from api.result_source_mapping import normalize_team_name
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FIFA_TARGETS_CSV = ROOT / "data" / "p3" / "fifa_match_targets.csv"
+FIFA_TARGETS_CSV = ROOT / "data" / "fifa_match_targets.csv"
+P3_FIFA_TARGETS_CSV = ROOT / "data" / "p3" / "fifa_match_targets.csv"
+FIFA_SCHEDULE_PAGE = "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/match-schedule-fixtures-results-teams-stadiums"
 THESPORTSDB_URL_TEMPLATE = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={date}&s=Soccer"
 FINAL_STATUSES = {"finished", "complete", "completed", "full-time", "fulltime", "ft", "match finished"}
 TARGET_TEAMS = {
@@ -121,23 +123,36 @@ def parse_thesportsdb_event(item: dict[str, Any], source_url: str) -> ExternalRe
     )
 
 
-def fetch_fifa_events(match_date: str, targets_csv: Path = FIFA_TARGETS_CSV) -> dict[str, Any]:
+def fetch_fifa_events(match_date: str, targets_csv: Path | None = None) -> dict[str, Any]:
+    targets_csv = targets_csv or _default_fifa_targets_csv()
     source_url = str(targets_csv)
     if not targets_csv.exists():
         return _source_report("fifa", source_url, [], "missing_fifa_match_url_mapping", fetch_ok=True)
     try:
         rows = _read_fifa_targets(targets_csv)
         events: list[ExternalResultEvent] = []
+        target_details: list[dict[str, Any]] = []
         for row in rows:
             kickoff = _parse_datetime(row.get("kickoff_at"))
             if not kickoff or kickoff.date().isoformat() != match_date:
                 continue
-            url = str(row.get("fifa_match_url") or "").strip()
+            url = str(row.get("fifa_match_url") or row.get("fifa_url") or "").strip()
             if not url:
+                target_details.append(_fifa_target_detail(row, fetch_ok=False, reason="missing_url_mapping"))
                 continue
-            fetched = _fetch_text(url)
-            events.append(parse_fifa_event(row, fetched, source_url=url))
-        return _source_report("fifa", source_url, events, None)
+            try:
+                fetched = _fetch_text(url)
+            except Exception as exc:
+                target_details.append(_fifa_target_detail(row, fetch_ok=False, reason=f"fetch_error:{type(exc).__name__}"))
+                continue
+            event = parse_fifa_event(row, fetched, source_url=url)
+            target_details.append(_fifa_target_detail(row, event=event, fetch_ok=True, reason=None))
+            events.append(event)
+        report = _source_report("fifa", source_url, events, None)
+        report["target_details"] = target_details
+        report["missing_url_mapping_count"] = sum(1 for item in target_details if item["reason"] == "missing_url_mapping")
+        report["verified_url_count"] = sum(1 for item in target_details if item["fetch_ok"])
+        return report
     except Exception as exc:
         return _source_report("fifa", source_url, [], sanitize_error(exc), fetch_ok=False)
 
@@ -150,7 +165,7 @@ def parse_fifa_event(row: dict[str, Any], text: str, source_url: str) -> Externa
     return ExternalResultEvent(
         source="fifa",
         source_url=source_url,
-        external_id=_text(row.get("project_match_id") or row.get("fifa_match_id") or source_url),
+        external_id=_text(row.get("fifa_match_id") or row.get("project_match_id") or row.get("local_match_id") or source_url),
         raw_home=_text(home),
         raw_away=_text(away),
         home_team=normalize_team_name(home),
@@ -181,11 +196,43 @@ def probe_source(source: str, match_date: str) -> dict[str, Any]:
             "target_matches_seen": len(target_events),
             "sample_events": events[:10],
             "target_samples": target_events[:10],
+            "missing_url_mapping_count": report.get("missing_url_mapping_count", 0),
+            "verified_url_count": report.get("verified_url_count", 0),
+            "target_details": report.get("target_details", []),
             "conclusion": _probe_conclusion(report["source_fetch_ok"], events, target_events, final_with_score, report.get("parser_error")),
             "writes_db": False,
         }
     )
     return report
+
+
+def discover_fifa_urls(match_date: str, limit: int = 5) -> dict[str, Any]:
+    try:
+        text = _fetch_text(FIFA_SCHEDULE_PAGE)
+    except Exception as exc:
+        return {
+            "source": "fifa",
+            "discover_url": True,
+            "source_fetch_ok": False,
+            "source_url": FIFA_SCHEDULE_PAGE,
+            "parser_error": sanitize_error(exc),
+            "discovered_urls": [],
+            "writes_db": False,
+        }
+    urls = _discover_urls_from_text(text, limit=limit)
+    return {
+        "source": "fifa",
+        "discover_url": True,
+        "source_fetch_ok": True,
+        "source_url": FIFA_SCHEDULE_PAGE,
+        "parser_error": None,
+        "date": match_date,
+        "discovered_urls": urls,
+        "discovered_count": len(urls),
+        "writes_db": False,
+        "result": "WAIT" if not urls else "PASS",
+        "reason": None if urls else "no_match_centre_urls_detected_on_schedule_page",
+    }
 
 
 def classify_thesportsdb_date_pair(historical_report: dict[str, Any], current_report: dict[str, Any]) -> str:
@@ -204,9 +251,39 @@ def classify_thesportsdb_date_pair(historical_report: dict[str, Any], current_re
 
 
 def print_probe_report(report: dict[str, Any]) -> None:
+    if report.get("discover_url"):
+        _safe_print("FIFA URL Discovery Report")
+        for key in ("source_fetch_ok", "source_url", "date", "discovered_count", "parser_error", "result", "reason", "writes_db"):
+            _safe_print(f"- {key}: {report.get(key)}")
+        _safe_print("discovered_urls:")
+        for item in report.get("discovered_urls", []):
+            _safe_print(f"  - url: {item.get('url')}")
+            _safe_print(f"    fifa_match_id: {item.get('fifa_match_id')}")
+            _safe_print(f"    slug: {item.get('slug')}")
+            _safe_print(f"    content_id: {item.get('content_id')}")
+            _safe_print(f"    fetch_ok: {item.get('fetch_ok')}")
+        return
     _safe_print("External Result Source Probe Report")
-    for key in ("source", "source_fetch_ok", "source_url", "events_seen", "target_matches_seen", "parser_error", "conclusion", "writes_db"):
+    for key in ("source", "source_fetch_ok", "source_url", "events_seen", "target_matches_seen", "missing_url_mapping_count", "verified_url_count", "parser_error", "conclusion", "writes_db"):
         _safe_print(f"- {key}: {report.get(key)}")
+    if report.get("target_details"):
+        _safe_print("target_details:")
+        for item in report.get("target_details", [])[:20]:
+            _safe_print(f"  - local_match_id: {item.get('local_match_id')}")
+            _safe_print(f"    local_home_team: {item.get('local_home_team')}")
+            _safe_print(f"    local_away_team: {item.get('local_away_team')}")
+            _safe_print(f"    fifa_url: {item.get('fifa_url')}")
+            _safe_print(f"    fetch_ok: {item.get('fetch_ok')}")
+            _safe_print(f"    raw_home: {item.get('raw_home')}")
+            _safe_print(f"    raw_away: {item.get('raw_away')}")
+            _safe_print(f"    normalized_home: {item.get('normalized_home')}")
+            _safe_print(f"    normalized_away: {item.get('normalized_away')}")
+            _safe_print(f"    status: {item.get('status')}")
+            _safe_print(f"    score: {item.get('result_home')}-{item.get('result_away')}")
+            _safe_print(f"    kickoff_at: {item.get('kickoff_at')}")
+            _safe_print(f"    team_match_status: {item.get('team_match_status')}")
+            _safe_print(f"    time_match_status: {item.get('time_match_status')}")
+            _safe_print(f"    reason: {item.get('reason')}")
     _safe_print("sample_events:")
     for item in report.get("sample_events", []):
         _safe_print(f"  - external_id: {item.get('external_id')}")
@@ -255,6 +332,8 @@ def _fetch_json(url: str) -> dict[str, Any]:
 
 
 def _fetch_text(url: str) -> str:
+    if not re.match(r"https?://", url, flags=re.I):
+        return Path(url).read_text(encoding="utf-8")
     request = Request(url, headers={"User-Agent": "worldcup-result-source-probe/1.0"})
     with urlopen(request, timeout=20) as response:
         body = response.read()
@@ -268,7 +347,80 @@ def _fetch_text(url: str) -> str:
 
 def _read_fifa_targets(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as fh:
-        return [dict(row) for row in csv.DictReader(fh)]
+        rows = []
+        for row in csv.DictReader(fh):
+            item = dict(row)
+            item["project_match_id"] = str(item.get("project_match_id") or item.get("local_match_id") or "").strip()
+            item["local_match_id"] = str(item.get("local_match_id") or item.get("project_match_id") or "").strip()
+            item["fifa_match_url"] = str(item.get("fifa_match_url") or item.get("fifa_url") or "").strip()
+            item["fifa_url"] = item["fifa_match_url"]
+            rows.append(item)
+        return rows
+
+
+def _default_fifa_targets_csv() -> Path:
+    return FIFA_TARGETS_CSV if FIFA_TARGETS_CSV.exists() else P3_FIFA_TARGETS_CSV
+
+
+def _fifa_target_detail(row: dict[str, Any], fetch_ok: bool, reason: str | None, event: ExternalResultEvent | None = None) -> dict[str, Any]:
+    event_dict = event.as_dict() if event else {}
+    local_home = normalize_team_name(row.get("home_team"))
+    local_away = normalize_team_name(row.get("away_team"))
+    team_match = (
+        event is not None
+        and event.home_team == local_home
+        and event.away_team == local_away
+    )
+    local_time = _parse_datetime(row.get("kickoff_at"))
+    event_time = event.kickoff_at if event else None
+    delta = abs((local_time - event_time).total_seconds()) / 60 if local_time and event_time else None
+    return {
+        "local_match_id": row.get("local_match_id") or row.get("project_match_id"),
+        "local_home_team": row.get("home_team"),
+        "local_away_team": row.get("away_team"),
+        "fifa_url": row.get("fifa_url") or row.get("fifa_match_url"),
+        "fetch_ok": fetch_ok,
+        "raw_home": event_dict.get("raw_home"),
+        "raw_away": event_dict.get("raw_away"),
+        "normalized_home": event_dict.get("normalized_home"),
+        "normalized_away": event_dict.get("normalized_away"),
+        "status": event_dict.get("status"),
+        "result_home": event_dict.get("result_home"),
+        "result_away": event_dict.get("result_away"),
+        "kickoff_at": event_dict.get("kickoff_at") or (local_time.isoformat() if local_time else None),
+        "team_match_status": "matched" if team_match else ("not_checked" if event is None else "team_mismatch"),
+        "time_match_status": "matched" if delta is not None and delta <= 120 else ("not_checked" if event is None else "time_mismatch"),
+        "reason": reason,
+    }
+
+
+def _discover_urls_from_text(text: str, limit: int) -> list[dict[str, Any]]:
+    candidates: list[str] = []
+    for match in re.finditer(r'https?://[^"\'<>\s]+', text):
+        url = match.group(0)
+        if any(token in url.lower() for token in ("match-centre", "matchcentre", "/match/", "matches")):
+            candidates.append(url)
+    for match in re.finditer(r'/(?:en/)?[^"\'<>\s]*(?:match-centre|matchcentre|match/)[^"\'<>\s]+', text, flags=re.I):
+        candidates.append("https://www.fifa.com" + match.group(0))
+    seen: set[str] = set()
+    rows = []
+    for url in candidates:
+        clean = url.rstrip(".,);")
+        if clean in seen:
+            continue
+        seen.add(clean)
+        rows.append(
+            {
+                "url": clean,
+                "fifa_match_id": _first_match(clean, r"(?:match|id)[-/=]?(\d{4,})"),
+                "slug": _first_match(clean, r"/([^/?#]+)(?:[?#].*)?$"),
+                "content_id": _first_match(clean, r"(?:contentId|content_id)=([A-Za-z0-9-]+)"),
+                "fetch_ok": None,
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
 
 
 def _parse_thesportsdb_datetime(item: dict[str, Any]) -> datetime | None:
@@ -344,6 +496,11 @@ def _optional_int(value: Any) -> int | None:
         return int(text)
     except ValueError:
         return None
+
+
+def _first_match(value: str, pattern: str) -> str | None:
+    match = re.search(pattern, value, flags=re.I)
+    return match.group(1) if match else None
 
 
 def _first(item: dict[str, Any], *names: str) -> Any:

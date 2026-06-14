@@ -76,3 +76,63 @@ def test_fifa_source_without_targets_reports_mapping_missing(tmp_path: Path):
     assert report["source_fetch_ok"] is True
     assert report["events_seen"] == 0
     assert report["parser_error"] == "missing_fifa_match_url_mapping"
+
+
+def test_fifa_mapping_missing_counts_target_rows(tmp_path: Path):
+    targets = tmp_path / "fifa_match_targets.csv"
+    targets.write_text(
+        "local_match_id,home_team,away_team,kickoff_at,fifa_url,fifa_match_id,source_status,notes\n"
+        "500-1359227,卡塔尔,瑞士,2026-06-14T12:00:00Z,,,missing_url_mapping,\n",
+        encoding="utf-8",
+    )
+
+    report = sources.fetch_fifa_events("2026-06-14", targets_csv=targets)
+
+    assert report["events_seen"] == 0
+    assert report["missing_url_mapping_count"] == 1
+    assert report["verified_url_count"] == 0
+    assert report["target_details"][0]["local_match_id"] == "500-1359227"
+
+
+def test_fifa_mapping_fetch_error_does_not_create_event(tmp_path: Path):
+    targets = tmp_path / "fifa_match_targets.csv"
+    targets.write_text(
+        "local_match_id,home_team,away_team,kickoff_at,fifa_url,fifa_match_id,source_status,notes\n"
+        "500-1359227,卡塔尔,瑞士,2026-06-14T12:00:00Z,missing-page.html,,candidate,\n",
+        encoding="utf-8",
+    )
+
+    report = sources.fetch_fifa_events("2026-06-14", targets_csv=targets)
+
+    assert report["events_seen"] == 0
+    assert report["verified_url_count"] == 0
+    assert report["target_details"][0]["reason"].startswith("fetch_error")
+
+
+def test_fifa_mapping_verified_url_can_emit_finished_event(tmp_path: Path):
+    page = tmp_path / "match.json"
+    page.write_text('{"homeScore":1,"awayScore":2,"status":"finished"}', encoding="utf-8")
+    targets = tmp_path / "fifa_match_targets.csv"
+    targets.write_text(
+        "local_match_id,home_team,away_team,kickoff_at,fifa_url,fifa_match_id,source_status,notes\n"
+        f"500-1359227,卡塔尔,瑞士,2026-06-14T12:00:00Z,{page},fifa-1,verified_url,\n",
+        encoding="utf-8",
+    )
+
+    report = sources.fetch_fifa_events("2026-06-14", targets_csv=targets)
+
+    assert report["events_seen"] == 1
+    assert report["verified_url_count"] == 1
+    assert report["events"][0]["result_home"] == 1
+    assert report["target_details"][0]["team_match_status"] == "matched"
+
+
+def test_fifa_discover_url_reports_wait_without_detected_links(monkeypatch):
+    monkeypatch.setattr(sources, "_fetch_text", lambda url: "<html><body>schedule only</body></html>")
+
+    report = sources.discover_fifa_urls("2026-06-14", limit=5)
+
+    assert report["source_fetch_ok"] is True
+    assert report["writes_db"] is False
+    assert report["discovered_urls"] == []
+    assert report["result"] == "WAIT"
