@@ -87,6 +87,14 @@ class FakeRecapRepo:
     def settlement_summary(self, match_id):
         return {"settled_bets": 2, "won_bets": 1, "lost_bets": 1, "void_bets": 0, "open_bets": 0}
 
+    def cumulative_vig_summary(self, match_id=None):
+        return {
+            "bet_count": 2,
+            "total_virtual_stake": 20.0,
+            "cumulative_vig": 0.12,
+            "cumulative_vig_points": 2.4,
+        }
+
     def finished_matches(self, limit):
         return [self.matches["finished"]][:limit]
 
@@ -119,6 +127,7 @@ def test_finished_result_generates_recap_with_market_model_ev_and_settlement():
     assert recap["ev"]["research_only_count"] == 1
     assert recap["ev"]["signals"][1]["recommendation_label"] == "research_signal"
     assert recap["settlement"]["settled_bets"] == 2
+    assert recap["settlement"]["cumulative_vig"]["cumulative_vig_points"] == 2.4
     assert "user_id" not in recap["settlement"]
 
 
@@ -154,3 +163,34 @@ def test_recent_and_summary_only_use_finished_matches():
     assert summary["model_correct_count"] == 1
     assert summary["ev_signal_count"] == 2
     assert summary["settled_bets"] == 2
+    assert summary["cumulative_vig"]["bet_count"] == 2
+
+
+def test_cumulative_vig_returns_zero_without_bets():
+    assert recap_service._cumulative_vig_from_bets([], {}) == {
+        "bet_count": 0,
+        "total_virtual_stake": 0.0,
+        "cumulative_vig": 0.0,
+        "cumulative_vig_points": 0.0,
+    }
+
+
+def test_cumulative_vig_uses_stake_times_snapshot_vig():
+    rows = [
+        {"stake": "10", "legs": [{"play_type": "had", "snapshot_id": 1}]},
+        {"stake": "20", "legs": [{"play_type": "had", "snapshot_id": 2}]},
+    ]
+    odds_by_snapshot = {
+        1: {"3": 2.0, "1": 3.0, "0": 4.0},
+        2: {"3": 1.8, "1": 3.2, "0": 5.0},
+    }
+
+    summary = recap_service._cumulative_vig_from_bets(rows, odds_by_snapshot)
+
+    expected_points = (
+        10 * recap_service.calculate_had_vig(odds_by_snapshot[1])["vig"]
+        + 20 * recap_service.calculate_had_vig(odds_by_snapshot[2])["vig"]
+    )
+    assert summary["bet_count"] == 2
+    assert summary["total_virtual_stake"] == 30.0
+    assert abs(summary["cumulative_vig_points"] - expected_points) < 1e-9

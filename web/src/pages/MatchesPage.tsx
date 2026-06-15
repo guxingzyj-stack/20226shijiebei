@@ -1,9 +1,8 @@
-import { Link, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, GitBranch } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ChevronRight, GitBranch, MessageCircle } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { Match } from "../api/types";
-import { EvBadge } from "../components/EvBadge";
 import { MetricHelp } from "../components/MetricHelp";
 import { ProbabilityBar } from "../components/ProbabilityBar";
 import { formatDateKey, formatDateTime, formatPercent } from "../utils/format";
@@ -58,11 +57,11 @@ export function MatchesPage() {
       <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-soft">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-medium text-gold">虚拟资金模拟游戏</p>
+            <p className="text-sm font-medium text-gold">清醒娱乐工具</p>
             <h1 className="mt-1 text-2xl font-semibold md:text-3xl">世界杯赛程总览</h1>
           </div>
-          <p className="max-w-xl text-sm leading-6 text-paper/68">
-            这里展示模型融合概率、最新竞彩赔率和 EV 研究信号。所有操作仅用于模拟娱乐，不涉及真实购彩。
+          <p className="max-w-xl text-sm leading-6 text-paper/72">
+            默认只看一句判断和一条朋友式提醒。想看概率、赔率和 EV，再展开数据详情。
           </p>
         </div>
       </section>
@@ -77,12 +76,10 @@ export function MatchesPage() {
           </div>
           <div className="min-w-0">
             <div className="font-semibold text-paper">世界杯预测晋级图</div>
-            <p className="mt-1 text-sm leading-5 text-paper/62">查看模型预测的冠军路径和真实晋级进展。</p>
+            <p className="mt-1 text-sm leading-5 text-paper/62">有真实淘汰赛数据后自动点亮胜者和国旗。</p>
           </div>
         </div>
-        <span className="inline-flex w-fit items-center rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-pitch">
-          查看晋级图
-        </span>
+        <span className="inline-flex w-fit items-center rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-pitch">查看晋级图</span>
       </Link>
 
       <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
@@ -101,7 +98,7 @@ export function MatchesPage() {
       </div>
 
       <MetricHelp title="这是什么？">
-        赛程页展示赛前模型概率、当前赔率和赛后复盘入口。已停售但未出赛果的比赛会显示为“赛果回填中”，不代表系统故障。
+        赛程页先给出人话判断。概率条默认收起，避免一打开就是数据面板。所有内容都只是看球娱乐和复盘研究，不是投注建议。
       </MetricHelp>
 
       {loading ? <div className="rounded-lg border border-white/10 p-5 text-paper/65">赛程加载中</div> : null}
@@ -121,7 +118,7 @@ export function MatchesPage() {
 }
 
 function MatchCard({ match }: { match: Match }) {
-  const topEv = match.ev_signals?.find((signal) => !signal.research_only);
+  const [showProbability, setShowProbability] = useState(false);
   const hasPrediction = Boolean(match.latest_prediction);
   const completeResult = hasCompleteResult(match);
   const linkTo = completeResult ? `/recaps/${encodeURIComponent(match.match_id)}` : `/matches/${encodeURIComponent(match.match_id)}`;
@@ -131,54 +128,70 @@ function MatchCard({ match }: { match: Match }) {
   const predictedProb = predicted && probs ? probs[predicted] : null;
 
   return (
-    <Link
-      to={linkTo}
-      className="rounded-lg border border-white/10 bg-white/[0.055] p-4 transition hover:border-gold/55 hover:bg-white/[0.08]"
-    >
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-                  <div className="text-xs text-paper/50">
-            {match.match_num || match.league} · {formatDateTime(match.kickoff_at)}
+    <article className="rounded-lg border border-white/10 bg-white/[0.055] p-4 transition hover:border-gold/55 hover:bg-white/[0.08]">
+      <Link to={linkTo} className="block">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs text-paper/50">
+              {match.match_num || match.league} · {formatDateTime(match.kickoff_at)}
+            </div>
+            <div className="mt-2 break-words text-lg font-semibold">
+              {match.home_team} <span className="text-paper/35">vs</span> {match.away_team}
+            </div>
           </div>
-          <div className="mt-2 break-words text-lg font-semibold">
-            {match.home_team} <span className="text-paper/35">vs</span> {match.away_team}
-          </div>
+          <ChevronRight className="shrink-0 text-paper/45" size={20} />
         </div>
-        <ChevronRight className="shrink-0 text-paper/45" size={20} />
-      </div>
 
-      {completeResult ? (
-        <div className="space-y-3">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg bg-black/15 px-3 py-4 text-center">
-            <span className="break-words text-sm font-semibold sm:text-lg">{match.home_team}</span>
-            <span className="whitespace-nowrap text-3xl font-bold text-gold">{match.result_home} - {match.result_away}</span>
-            <span className="break-words text-sm font-semibold sm:text-lg">{match.away_team}</span>
+        {completeResult ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg bg-black/15 px-3 py-4 text-center">
+              <span className="break-words text-sm font-semibold sm:text-lg">{match.home_team}</span>
+              <span className="whitespace-nowrap text-3xl font-bold text-gold">{match.result_home} - {match.result_away}</span>
+              <span className="break-words text-sm font-semibold sm:text-lg">{match.away_team}</span>
+            </div>
+            <div className="grid gap-2 text-sm text-paper/65 md:grid-cols-2">
+              <span>
+                赛前判断：{outcomeLabel(predicted)}
+                {predictedProb !== null ? ` ${formatPercent(predictedProb)}` : ""}
+              </span>
+              <span className={hit ? "text-emerald-200" : "text-gold"}>{hit === null ? "无预测" : hit ? "模型命中" : "复盘未命中"}</span>
+            </div>
           </div>
-          <div className="grid gap-2 text-sm text-paper/65 md:grid-cols-2">
-            <span>
-              赛前判断：{outcomeLabel(predicted)}
-              {predictedProb !== null ? ` ${formatPercent(predictedProb)}` : ""}
-            </span>
-            <span className={hit ? "text-emerald-200" : "text-gold"}>{hit === null ? "无预测" : hit ? "模型命中" : "模型未命中"}</span>
+        ) : ["finished", "completed"].includes(match.status) ? (
+          <div className="text-sm text-gold">赛果回填中</div>
+        ) : (
+          <div className="space-y-3">
+            <div className="rounded-lg bg-black/15 p-3">
+              <div className="text-base font-semibold text-paper">{match.verdict || "模型认为这场势均力敌"}</div>
+              <div className="mt-2 flex gap-2 text-sm leading-6 text-paper/68">
+                <MessageCircle size={16} className="mt-1 shrink-0 text-gold" />
+                <span>{match.banter || "看球图乐，赔率背后庄家早算好了账。"}</span>
+              </div>
+            </div>
+            {!hasPrediction ? (
+              <div className="text-sm text-paper/60">{match.prediction_status?.message || "预测生成中"}</div>
+            ) : null}
           </div>
+        )}
+      </Link>
+
+      {hasPrediction && !completeResult ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setShowProbability((value) => !value)}
+            className="rounded-lg border border-gold/35 px-3 py-2 text-sm font-medium text-gold transition hover:bg-gold/10"
+          >
+            {showProbability ? "收起概率" : "查看概率"}
+          </button>
+          {showProbability ? (
+            <div className="mt-3 rounded-lg border border-white/10 bg-pitch/45 p-3">
+              <ProbabilityBar prediction={match.latest_prediction} />
+            </div>
+          ) : null}
         </div>
-      ) : ["finished", "completed"].includes(match.status) ? (
-        <div className="text-sm text-gold">赛果回填中</div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
-          {hasPrediction ? (
-            <ProbabilityBar prediction={match.latest_prediction} />
-          ) : (
-            <div className="text-sm text-paper/60">{match.prediction_status?.message || "暂未开售，等待竞彩赔率"}</div>
-          )}
-          {hasPrediction ? (
-            <EvBadge ev={topEv?.ev} />
-          ) : (
-            <span className="rounded-full border border-white/12 px-3 py-1 text-xs font-medium text-paper/65">接近开赛</span>
-          )}
-        </div>
-      )}
-    </Link>
+      ) : null}
+    </article>
   );
 }
 

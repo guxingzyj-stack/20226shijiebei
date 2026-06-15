@@ -50,6 +50,23 @@ export type Match = {
   ht_away?: number | null;
   latest_odds?: OddsSnapshot[];
   latest_prediction?: Prediction | null;
+  verdict?: string;
+  verdict_type?: string;
+  banter?: string;
+  banter_type?: string;
+  vig?: {
+    had?: {
+      margin: number;
+      vig: number;
+    } | null;
+  };
+  market_implied_prob?: {
+    had?: {
+      home: number;
+      draw: number;
+      away: number;
+    } | null;
+  };
   prediction_status?: {
     available: boolean;
     reason: string | null;
@@ -267,6 +284,7 @@ export type MatchRecap = {
     void_bets: number;
     open_bets: number;
     settlement_status: string;
+    cumulative_vig?: CumulativeVigSummary;
   };
   summary: {
     title: string;
@@ -288,4 +306,12 @@ export type RecapSummary = {
   model_missing_count: number;
   ev_signal_count: number;
   settled_bets: number;
+  cumulative_vig?: CumulativeVigSummary;
+};
+
+export type CumulativeVigSummary = {
+  bet_count: number;
+  total_virtual_stake: number;
+  cumulative_vig: number;
+  cumulative_vig_points: number;
 };

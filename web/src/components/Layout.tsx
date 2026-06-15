@@ -8,17 +8,17 @@ const desktopNavItems = [
   { to: "/bracket", label: "晋级图", icon: GitBranch },
   { to: "/recaps", label: "复盘", icon: History },
   { to: "/leaderboard", label: "排行", icon: Medal },
-  { to: "/help", label: "指标", icon: HelpCircle },
+  { to: "/help", label: "指标说明", icon: HelpCircle },
   { to: "/bets", label: "我的", icon: ReceiptText },
   { to: "/auth", label: "登录", icon: LogIn },
 ];
 
 const mobileNavItems = [
   { to: "/matches", label: "赛程", icon: CalendarDays },
-  { to: "/bracket", label: "晋级图", icon: GitBranch },
+  { to: "/bracket", label: "晋级", icon: GitBranch },
   { to: "/recaps", label: "复盘", icon: History },
   { to: "/leaderboard", label: "排行", icon: Medal },
-  { to: "/bets", label: "我的", icon: ReceiptText },
+  { to: "/help", label: "说明", icon: HelpCircle },
 ];
 
 export function Layout() {
@@ -34,8 +34,8 @@ export function Layout() {
               <BarChart3 className="text-gold" size={22} />
             </div>
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold sm:text-base">世界杯竞彩模拟</div>
-              <div className="truncate text-[11px] text-paper/55 sm:text-xs">虚拟资金模拟游戏</div>
+              <div className="truncate text-sm font-semibold sm:text-base">世界杯竞猜模拟</div>
+              <div className="truncate text-[11px] text-paper/55 sm:text-xs">清醒娱乐工具</div>
             </div>
           </NavLink>
           <nav className="hidden items-center gap-1 md:flex">
@@ -61,8 +61,11 @@ export function Layout() {
             ) : null}
           </div>
         </div>
+        <div className="border-t border-white/10 bg-gold/10 px-3 py-2 text-center text-xs leading-5 text-paper/80 sm:text-sm">
+          这是个看球图乐的预测游戏，所有操作都是虚拟的。真要下注记住一句：庄家永远是最大赢家。
+        </div>
       </header>
-      <main className="mx-auto min-h-[calc(100vh-120px)] max-w-7xl px-3 pb-32 pt-4 sm:px-4 sm:pb-28 md:pb-8 md:pt-5">
+      <main className="mx-auto min-h-[calc(100vh-150px)] max-w-7xl px-3 pb-32 pt-4 sm:px-4 sm:pb-28 md:pb-8 md:pt-5">
         <Outlet />
       </main>
       <div className="fixed bottom-0 left-0 right-0 z-40 md:static">

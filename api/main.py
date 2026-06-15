@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from psycopg.errors import UniqueViolation
 
 from api.auth import create_access_token, current_user_claims, hash_password, verify_password
+from api.banter import build_banter
 from api.betting import BETTING_DISABLED_MESSAGE, is_betting_enabled, place_bet, suggested_stake
 from api.db import Database, get_db
 from api.ops_health_check import latest_ops_health_status
@@ -20,6 +21,8 @@ from api.recap_service import build_match_recap, recent_recaps, recap_summary as
 from api.scheduler import scheduler_startup_error, start_api_scheduler, stop_api_scheduler
 from api.scheduler_health import scheduler_freshness
 from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenResponse, UserCreate, UserLogin
+from api.verdict import build_verdict
+from api.vig import calculate_had_vig, market_implied_prob_had
 
 
 @asynccontextmanager
@@ -177,6 +180,7 @@ def list_matches(status: str = Query("all"), db: Database = Depends(get_db)) -> 
         match["latest_prediction"] = prediction
         match["prediction_status"] = _prediction_status(prediction, match)
         match["ev_signals"] = db.latest_ev_signals(str(match["match_id"])) if prediction else []
+        _attach_verdict_and_banter(match, prediction)
     return matches
 
 
@@ -190,6 +194,11 @@ def match_detail(match_id: str, db: Database = Depends(get_db)) -> dict:
     match["latest_prediction"] = prediction
     match["prediction_status"] = _prediction_status(prediction, match)
     match["ev_signals"] = db.latest_ev_signals(match_id) if prediction else []
+    _attach_verdict_and_banter(match, prediction)
+    had = _latest_had_snapshot(match["latest_odds"])
+    had_odds = had.get("odds") if had else None
+    match["vig"] = {"had": calculate_had_vig(had_odds)}
+    match["market_implied_prob"] = {"had": market_implied_prob_had(had_odds)}
     return match
 
 
@@ -341,6 +350,53 @@ def _prediction_status(prediction: dict | None, match: dict | None = None) -> di
         "reason": "missing_current_market_odds",
         "message": "该场暂未开售胜平负，预测生成中",
     }
+
+
+def _attach_verdict_and_banter(match: dict, prediction: dict | None) -> None:
+    probs = _prediction_probs(prediction)
+    verdict = build_verdict(
+        probs.get("home"),
+        probs.get("draw"),
+        probs.get("away"),
+        str(match.get("home_team") or ""),
+        str(match.get("away_team") or ""),
+    )
+    banter = build_banter(
+        str(match.get("match_id") or ""),
+        str(match.get("home_team") or ""),
+        str(match.get("away_team") or ""),
+        probs.get("home"),
+        probs.get("draw"),
+        probs.get("away"),
+        verdict["verdict_type"],
+    )
+    match.update(verdict)
+    match.update(banter)
+
+
+def _prediction_probs(prediction: dict | None) -> dict[str, float | None]:
+    if not prediction:
+        return {"home": None, "draw": None, "away": None}
+    return {
+        "home": _prob_or_none(prediction.get("p_home")),
+        "draw": _prob_or_none(prediction.get("p_draw")),
+        "away": _prob_or_none(prediction.get("p_away")),
+    }
+
+
+def _prob_or_none(value: object) -> float | None:
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return number if 0 <= number <= 1 else None
+
+
+def _latest_had_snapshot(rows: list[dict] | None) -> dict | None:
+    for row in rows or []:
+        if str(row.get("play_type") or "").lower() == "had":
+            return row
+    return None
 
 
 def _team_form_for_match(match: dict) -> dict:

@@ -3,12 +3,14 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 from decimal import Decimal
+import json
 from typing import Any, Protocol
 
 from psycopg.rows import dict_row
 
 from api.db import connect
 from api.recap_models import RecapPayload, RecapResponse
+from api.vig import calculate_had_vig
 
 
 OUTCOME_LABELS = {"3": "home", "1": "draw", "0": "away"}
@@ -21,6 +23,7 @@ class RecapRepository(Protocol):
     def pre_kickoff_prediction(self, match_id: str, kickoff_at: Any) -> dict[str, Any] | None: ...
     def ev_signals(self, match_id: str) -> list[dict[str, Any]]: ...
     def settlement_summary(self, match_id: str) -> dict[str, int]: ...
+    def cumulative_vig_summary(self, match_id: str | None = None) -> dict[str, Any]: ...
     def finished_matches(self, limit: int) -> list[dict[str, Any]]: ...
 
 
@@ -98,6 +101,41 @@ class SqlRecapRepository:
             counts = {str(status): int(count) for status, count in cur.fetchall()}
         return _settlement_counts(counts)
 
+    def cumulative_vig_summary(self, match_id: str | None = None) -> dict[str, Any]:
+        with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+            if match_id:
+                cur.execute(
+                    """
+                    SELECT legs, stake
+                    FROM bets
+                    WHERE legs::text LIKE %s
+                    """,
+                    (f"%{match_id}%",),
+                )
+            else:
+                cur.execute("SELECT legs, stake FROM bets")
+            rows = [dict(row) for row in cur.fetchall()]
+            snapshot_ids = sorted(
+                {
+                    int(leg["snapshot_id"])
+                    for row in rows
+                    for leg in _legs_list(row.get("legs"))
+                    if str(leg.get("play_type") or "").lower() in {"had", "hhad"} and leg.get("snapshot_id") is not None
+                }
+            )
+            odds_by_snapshot: dict[int, dict[str, Any]] = {}
+            if snapshot_ids:
+                cur.execute(
+                    """
+                    SELECT id, odds
+                    FROM odds_snapshots
+                    WHERE id = ANY(%s)
+                    """,
+                    (snapshot_ids,),
+                )
+                odds_by_snapshot = {int(row["id"]): dict(row["odds"] or {}) for row in cur.fetchall()}
+        return _cumulative_vig_from_bets(rows, odds_by_snapshot)
+
     def finished_matches(self, limit: int) -> list[dict[str, Any]]:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
@@ -165,6 +203,7 @@ def recap_summary(repository: RecapRepository | None = None) -> dict[str, Any]:
             model_missing += 1
         ev_signal_count += recap["ev"]["total_ev_signals"]
         settled_bets += recap["settlement"]["settled_bets"]
+    cumulative_vig = repo.cumulative_vig_summary(None)
     return {
         "finished_matches": len(rows),
         "recap_available_matches": len(rows),
@@ -173,6 +212,7 @@ def recap_summary(repository: RecapRepository | None = None) -> dict[str, Any]:
         "model_missing_count": model_missing,
         "ev_signal_count": ev_signal_count,
         "settled_bets": settled_bets,
+        "cumulative_vig": cumulative_vig,
     }
 
 
@@ -183,6 +223,7 @@ def _build_recap(match: dict[str, Any], repo: RecapRepository) -> RecapPayload:
     model = _model_section(match, repo.pre_kickoff_prediction(str(match["match_id"]), match["kickoff_at"]), result["winner"])
     ev = _ev_section(repo.ev_signals(str(match["match_id"])), result, match)
     settlement = repo.settlement_summary(str(match["match_id"]))
+    settlement["cumulative_vig"] = repo.cumulative_vig_summary(str(match["match_id"]))
     settlement_status = "no_public_bets" if settlement["settled_bets"] == 0 and settlement["open_bets"] == 0 else "has_bets"
     settlement["settlement_status"] = settlement_status
     data_quality = {
@@ -337,6 +378,52 @@ def _settlement_counts(counts: dict[str, int]) -> dict[str, int]:
     void = counts.get("void", 0)
     open_bets = counts.get("open", 0) + counts.get("pending", 0)
     return {"settled_bets": won + lost + void, "won_bets": won, "lost_bets": lost, "void_bets": void, "open_bets": open_bets}
+
+
+def _cumulative_vig_from_bets(rows: list[dict[str, Any]], odds_by_snapshot: dict[int, dict[str, Any]]) -> dict[str, Any]:
+    total_stake = Decimal("0")
+    total_vig_points = Decimal("0")
+    bet_count = 0
+    for row in rows:
+        legs = _legs_list(row.get("legs"))
+        try:
+            stake = Decimal(str(row.get("stake") or "0"))
+        except Exception:
+            stake = Decimal("0")
+        bet_count += 1
+        total_stake += stake
+        leg_vigs: list[Decimal] = []
+        for leg in legs:
+            if str(leg.get("play_type") or "").lower() not in {"had", "hhad"}:
+                continue
+            snapshot_id = leg.get("snapshot_id")
+            if snapshot_id is None:
+                continue
+            vig = calculate_had_vig(odds_by_snapshot.get(int(snapshot_id)))
+            if vig is not None:
+                leg_vigs.append(Decimal(str(vig["vig"])))
+        if leg_vigs:
+            bet_vig = sum(leg_vigs, Decimal("0")) / Decimal(len(leg_vigs))
+            total_vig_points += stake * bet_vig
+    cumulative_vig = total_vig_points / total_stake if total_stake > 0 else Decimal("0")
+    return {
+        "bet_count": bet_count,
+        "total_virtual_stake": float(total_stake),
+        "cumulative_vig": float(cumulative_vig),
+        "cumulative_vig_points": float(total_vig_points),
+    }
+
+
+def _legs_list(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [leg for leg in value if isinstance(leg, dict)]
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        return [leg for leg in parsed if isinstance(leg, dict)] if isinstance(parsed, list) else []
+    return []
 
 
 def _signal_hit(signal: dict[str, Any], result: dict[str, Any], match: dict[str, Any]) -> bool | None:
