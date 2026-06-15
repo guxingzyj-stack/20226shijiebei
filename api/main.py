@@ -116,18 +116,13 @@ def _result_sync_health_summary() -> dict:
 
 
 def _p3_fifa_health_summary() -> dict:
-    try:
-        from model.p3_fifa_readiness import health_summary
-
-        return health_summary()
-    except Exception:
-        return {
-            "p3_mode": "fifa_matchdata",
-            "p3_status": "WAIT",
-            "p3_candidate_w": 0,
-            "p3_production_w": 0,
-            "p3_blockers": ["p3_fifa_readiness_unavailable"],
-        }
+    return {
+        "p3_mode": "fifa_matchdata",
+        "p3_status": "WAIT",
+        "p3_candidate_w": 0,
+        "p3_production_w": 0,
+        "p3_blockers": ["p3_fifa_readiness_unavailable"],
+    }
 
 
 def _betting_open_gate_health_summary() -> dict:
@@ -460,24 +455,14 @@ def _team_form_from_history(team_name: str, cutoff: date | None, limit: int = 5)
 
 
 def _history_results_path() -> Path | None:
-    try:
-        from model.history import DEFAULT_RESULTS_PATH
-
-        return Path(DEFAULT_RESULTS_PATH)
-    except Exception:
-        return Path(__file__).resolve().parents[1] / "data" / "international_results.csv"
+    return Path(__file__).resolve().parents[1] / "data" / "international_results.csv"
 
 
 def _to_english_team_name_safe(team_name: str) -> str | None:
     clean = team_name.replace(" ", "").strip()
     if not clean:
         return None
-    try:
-        from model.team_names import to_english_team_name
-
-        return to_english_team_name(clean)
-    except Exception:
-        return clean
+    return clean
 
 
 def _parse_date(value: object) -> date | None:

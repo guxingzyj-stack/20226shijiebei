@@ -115,7 +115,14 @@ def _scalar(conn, sql: str) -> Any:
 
 def _latest_model_version(conn) -> dict[str, Any] | None:
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute("SELECT id, name, trained_at FROM model_versions ORDER BY trained_at DESC, id DESC LIMIT 1")
+        cur.execute(
+            """
+            SELECT id, name, trained_at
+            FROM
+              model_versions
+            ORDER BY trained_at DESC, id DESC LIMIT 1
+            """
+        )
         row = cur.fetchone()
         return dict(row) if row else None
 

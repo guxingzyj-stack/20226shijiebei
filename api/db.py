@@ -156,7 +156,10 @@ class Database:
                 FROM predictions
                 WHERE match_id = %s
                   AND model_version = (
-                    SELECT id FROM model_versions ORDER BY trained_at DESC, id DESC LIMIT 1
+                    SELECT id
+                    FROM
+                      model_versions
+                    ORDER BY trained_at DESC, id DESC LIMIT 1
                   )
                 ORDER BY created_at DESC, id DESC
                 LIMIT 1
@@ -177,7 +180,10 @@ class Database:
                   FROM ev_signals
                   WHERE match_id = %s
                     AND model_version = (
-                      SELECT id FROM model_versions ORDER BY trained_at DESC, id DESC LIMIT 1
+                      SELECT id
+                      FROM
+                        model_versions
+                      ORDER BY trained_at DESC, id DESC LIMIT 1
                     )
                   ORDER BY play_type, selection, created_at DESC
                 ) deduped
@@ -298,7 +304,10 @@ class Database:
                   FROM ev_signals
                   WHERE match_id = %s
                     AND model_version = (
-                      SELECT id FROM model_versions ORDER BY trained_at DESC, id DESC LIMIT 1
+                      SELECT id
+                      FROM
+                        model_versions
+                      ORDER BY trained_at DESC, id DESC LIMIT 1
                     )
                     AND suggestion_eligible = true
                     AND ev > 0

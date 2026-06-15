@@ -314,12 +314,7 @@ def _latest_ops_log(conn, job_name: str) -> dict[str, Any] | None:
 
 
 def _safe_p3_status() -> str:
-    try:
-        from model.p3_fifa_readiness import health_summary
-
-        return str(health_summary().get("p3_status") or "WAIT")
-    except Exception:
-        return "WAIT"
+    return "WAIT"
 
 
 def _unknown_evidence() -> dict[str, Any]:

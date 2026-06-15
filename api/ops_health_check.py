@@ -352,18 +352,13 @@ def _error_report(error: str) -> dict[str, Any]:
 
 
 def _safe_p3_fifa_summary() -> dict[str, Any]:
-    try:
-        from model.p3_fifa_readiness import ops_summary
-
-        return ops_summary()
-    except Exception:
-        return {
-            "p3_fifa_status": "WAIT",
-            "p3_fifa_matches_with_data": 0,
-            "p3_fifa_teams_with_data": 0,
-            "p3_fifa_candidate_w": 0,
-            "p3_fifa_production_w": 0,
-        }
+    return {
+        "p3_fifa_status": "WAIT",
+        "p3_fifa_matches_with_data": 0,
+        "p3_fifa_teams_with_data": 0,
+        "p3_fifa_candidate_w": 0,
+        "p3_fifa_production_w": 0,
+    }
 
 
 def _safe_betting_open_gate_summary() -> dict[str, Any]:

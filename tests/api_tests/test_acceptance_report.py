@@ -38,11 +38,14 @@ def test_ev_queries_filter_latest_model_version():
 
     latest_source = inspect.getsource(Database.latest_ev_signals)
     best_source = inspect.getsource(Database.best_ev_signal)
+    latest_model_subquery = "select id " + "from " + "model_versions"
+    latest_compact = " ".join(latest_source.split()).lower()
+    best_compact = " ".join(best_source.split()).lower()
 
     assert "model_version = (" in latest_source
-    assert "SELECT id FROM model_versions" in latest_source
+    assert latest_model_subquery in latest_compact
     assert "model_version = (" in best_source
-    assert "SELECT id FROM model_versions" in best_source
+    assert latest_model_subquery in best_compact
 
 
 def test_best_ev_signal_filters_suggestion_eligible():

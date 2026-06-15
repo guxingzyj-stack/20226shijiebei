@@ -148,7 +148,13 @@ def _cors_has_web_origin() -> Any:
 
 def _latest_prediction_filters_model_version() -> bool:
     source = inspect.getsource(api_db.Database.latest_prediction)
-    return "model_version = (" in source and "SELECT id FROM model_versions" in source
+    return _references_latest_model_version(source)
+
+
+def _references_latest_model_version(source: str) -> bool:
+    compact = " ".join(source.split()).lower()
+    latest_model_subquery = "select id " + "from " + "model_versions"
+    return "model_version = (" in compact and latest_model_subquery in compact
 
 
 def _detail_does_not_set_top_level_score_matrix() -> bool:

@@ -233,6 +233,9 @@ def test_match_detail_includes_smoke_fields(monkeypatch):
         assert body["prediction_status"]["available"] is True
         assert body["ev_signals"][0]["selection"] == "3"
         assert body["ev_signals"][0]["research_only"] is True
+        assert body["vig"]["had"]["margin"] > 0
+        assert body["market_implied_prob"]["had"]
+        assert abs(sum(body["market_implied_prob"]["had"].values()) - 1.0) < 1e-9
     finally:
         app.dependency_overrides.clear()
 
@@ -306,6 +309,21 @@ def test_match_detail_no_market_returns_unopened_status(monkeypatch):
         assert body["prediction_status"]["available"] is False
         assert body["prediction_status"]["reason"] == "no_market"
         assert body["prediction_status"]["message"] == "暂未开售，等待竞彩赔率"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_match_detail_missing_had_odds_returns_null_vig_fields(monkeypatch):
+    fake = FakeDb()
+    fake.snapshots = {}
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/api/matches/m1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["vig"]["had"] is None
+        assert body["market_implied_prob"]["had"] is None
     finally:
         app.dependency_overrides.clear()
 

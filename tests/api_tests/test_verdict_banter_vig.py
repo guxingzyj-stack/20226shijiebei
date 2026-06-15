@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import builtins
+import importlib
+import sys
+
+from api._devig import calc_three_way_margin_and_vig, proportional_devig_three_way
 from api.banter import build_banter
 from api.verdict import build_verdict
 from api.vig import calculate_had_vig, market_implied_prob_had
@@ -78,3 +83,34 @@ def test_market_implied_prob_sums_to_one():
     assert probs is not None
     assert set(probs) == {"home", "draw", "away"}
     assert abs(sum(probs.values()) - 1.0) < 1e-9
+
+
+def test_api_devig_margin_is_reasonable():
+    result = calc_three_way_margin_and_vig(1.86, 3.33, 3.43)
+
+    assert result is not None
+    assert result["margin"] > 0
+    assert 0 < result["vig"] < 0.15
+
+
+def test_api_proportional_devig_three_way_sums_to_one():
+    probs = proportional_devig_three_way(1.86, 3.33, 3.43)
+
+    assert probs is not None
+    assert abs(sum(probs.values()) - 1.0) < 1e-12
+
+
+def test_api_vig_imports_without_model_package(monkeypatch):
+    sys.modules.pop("api.vig", None)
+    original_import = builtins.__import__
+
+    def blocked_model_import(name, *args, **kwargs):
+        if name == "model" or name.startswith("model."):
+            raise ModuleNotFoundError("blocked model import in API test")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked_model_import)
+
+    module = importlib.import_module("api.vig")
+
+    assert module.market_implied_prob_had({"3": 2.0, "1": 3.0, "0": 4.0}) is not None
