@@ -5,8 +5,8 @@ import { apiGet } from "../api/client";
 import type { Match } from "../api/types";
 import { MetricHelp } from "../components/MetricHelp";
 import { ProbabilityBar } from "../components/ProbabilityBar";
-import { formatDateKey, formatDateTime, formatPercent } from "../utils/format";
-import { dominantOutcome, hasCompleteResult, outcomeLabel, predictionHit, predictionProbabilities } from "../utils/matchAnalytics";
+import { formatDateKey, formatDateTime } from "../utils/format";
+import { hasCompleteResult } from "../utils/matchAnalytics";
 
 const FILTERS = [
   { key: "all", label: "全部" },
@@ -122,10 +122,6 @@ function MatchCard({ match }: { match: Match }) {
   const hasPrediction = Boolean(match.latest_prediction);
   const completeResult = hasCompleteResult(match);
   const linkTo = completeResult ? `/recaps/${encodeURIComponent(match.match_id)}` : `/matches/${encodeURIComponent(match.match_id)}`;
-  const hit = predictionHit(match, match.latest_prediction);
-  const probs = predictionProbabilities(match.latest_prediction);
-  const predicted = dominantOutcome(probs);
-  const predictedProb = predicted && probs ? probs[predicted] : null;
 
   return (
     <article className="rounded-lg border border-white/10 bg-white/[0.055] p-4 transition hover:border-gold/55 hover:bg-white/[0.08]">
@@ -149,12 +145,15 @@ function MatchCard({ match }: { match: Match }) {
               <span className="whitespace-nowrap text-3xl font-bold text-gold">{match.result_home} - {match.result_away}</span>
               <span className="break-words text-sm font-semibold sm:text-lg">{match.away_team}</span>
             </div>
-            <div className="grid gap-2 text-sm text-paper/65 md:grid-cols-2">
-              <span>
-                赛前判断：{outcomeLabel(predicted)}
-                {predictedProb !== null ? ` ${formatPercent(predictedProb)}` : ""}
-              </span>
-              <span className={hit ? "text-emerald-200" : "text-gold"}>{hit === null ? "无预测" : hit ? "模型命中" : "复盘未命中"}</span>
+            <div className="rounded-lg bg-pitch/55 p-3">
+              <div className="text-sm font-medium text-paper/72">{match.verdict || "本场已完赛，赛果已更新"}</div>
+              <div className="mt-2 flex gap-2 text-sm leading-6 text-paper/60">
+                <MessageCircle size={16} className="mt-1 shrink-0 text-gold" />
+                <span>{match.banter || "赛后别倒推预测，真正有用的是复盘概率。"}</span>
+              </div>
+              <div className="mt-3 inline-flex rounded-lg border border-gold/35 px-3 py-1.5 text-xs font-semibold text-gold">
+                查看赛后复盘
+              </div>
             </div>
           </div>
         ) : ["finished", "completed"].includes(match.status) ? (
