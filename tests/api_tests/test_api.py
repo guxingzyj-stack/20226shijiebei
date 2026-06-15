@@ -240,6 +240,83 @@ def test_match_detail_includes_smoke_fields(monkeypatch):
         app.dependency_overrides.clear()
 
 
+def test_match_list_uses_latest_prediction_probs_for_strong_verdict(monkeypatch):
+    fake = FakeDb()
+    fake.matches["m1"]["home_team"] = "德 国"
+    fake.matches["m1"]["away_team"] = "库 拉 索"
+    fake.prediction.update({"p_home": 0.85, "p_draw": 0.10, "p_away": 0.05})
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/api/matches")
+        assert response.status_code == 200
+        body = response.json()[0]
+        assert body["home_team"] == "德国"
+        assert body["away_team"] == "库拉索"
+        assert body["verdict_type"] == "strong_home"
+        assert body["verdict"] == "模型看好德国获胜"
+        assert body["verdict_type"] != "balanced"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_match_list_and_detail_ux_fields_are_consistent(monkeypatch):
+    fake = FakeDb()
+    fake.matches["m1"]["home_team"] = "德 国"
+    fake.matches["m1"]["away_team"] = "库 拉 索"
+    fake.prediction.update({"p_home": 0.85, "p_draw": 0.10, "p_away": 0.05})
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        list_item = client.get("/api/matches").json()[0]
+        detail = client.get("/api/matches/m1").json()
+
+        for key in ("verdict_type", "verdict", "banter_type", "banter"):
+            assert list_item[key] == detail[key]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_finished_match_without_prediction_returns_no_prediction(monkeypatch):
+    fake = FakeDb()
+    fake.prediction = None
+    fake.matches["m1"]["status"] = "finished"
+    fake.matches["m1"]["result_home"] = 2
+    fake.matches["m1"]["result_away"] = 0
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/api/matches/m1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["verdict_type"] == "no_prediction"
+        assert body["verdict"] == "本场已完赛，赛果已更新"
+        assert body["banter_type"] == "no_prediction"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_non_finished_match_without_prediction_returns_no_prediction_not_balanced(monkeypatch):
+    fake = FakeDb()
+    fake.prediction = None
+    fake.matches["m1"]["home_team"] = "日 本"
+    fake.matches["m1"]["away_team"] = "摩 洛 哥"
+    app.dependency_overrides[get_db] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/api/matches/m1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["home_team"] == "日本"
+        assert body["away_team"] == "摩洛哥"
+        assert body["verdict_type"] == "no_prediction"
+        assert body["verdict"] == "模型预测生成中"
+        assert body["banter_type"] == "no_prediction"
+        assert "日本是出了名" not in body["banter"]
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_match_detail_finished_missing_result_returns_warning(monkeypatch):
     fake = FakeDb()
     fake.matches["m1"]["status"] = "finished"

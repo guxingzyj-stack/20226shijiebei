@@ -5,6 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 import csv
 import os
+import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -175,7 +176,7 @@ def list_matches(status: str = Query("all"), db: Database = Depends(get_db)) -> 
         match["latest_prediction"] = prediction
         match["prediction_status"] = _prediction_status(prediction, match)
         match["ev_signals"] = db.latest_ev_signals(str(match["match_id"])) if prediction else []
-        _attach_verdict_and_banter(match, prediction)
+        build_match_ux_fields(match, prediction)
     return matches
 
 
@@ -189,7 +190,7 @@ def match_detail(match_id: str, db: Database = Depends(get_db)) -> dict:
     match["latest_prediction"] = prediction
     match["prediction_status"] = _prediction_status(prediction, match)
     match["ev_signals"] = db.latest_ev_signals(match_id) if prediction else []
-    _attach_verdict_and_banter(match, prediction)
+    build_match_ux_fields(match, prediction)
     had = _latest_had_snapshot(match["latest_odds"])
     had_odds = had.get("odds") if had else None
     match["vig"] = {"had": calculate_had_vig(had_odds)}
@@ -347,7 +348,8 @@ def _prediction_status(prediction: dict | None, match: dict | None = None) -> di
     }
 
 
-def _attach_verdict_and_banter(match: dict, prediction: dict | None) -> None:
+def build_match_ux_fields(match: dict, prediction: dict | None) -> None:
+    _clean_match_text_fields(match)
     probs = _prediction_probs(prediction)
     verdict = build_verdict(
         probs.get("home"),
@@ -355,6 +357,7 @@ def _attach_verdict_and_banter(match: dict, prediction: dict | None) -> None:
         probs.get("away"),
         str(match.get("home_team") or ""),
         str(match.get("away_team") or ""),
+        str(match.get("status") or ""),
     )
     banter = build_banter(
         str(match.get("match_id") or ""),
@@ -364,19 +367,34 @@ def _attach_verdict_and_banter(match: dict, prediction: dict | None) -> None:
         probs.get("draw"),
         probs.get("away"),
         verdict["verdict_type"],
+        str(match.get("status") or ""),
     )
     match.update(verdict)
     match.update(banter)
+    _clean_match_text_fields(match)
 
 
 def _prediction_probs(prediction: dict | None) -> dict[str, float | None]:
     if not prediction:
         return {"home": None, "draw": None, "away": None}
     return {
-        "home": _prob_or_none(prediction.get("p_home")),
-        "draw": _prob_or_none(prediction.get("p_draw")),
-        "away": _prob_or_none(prediction.get("p_away")),
+        "home": _prob_or_none(_first_prediction_value(prediction, "p_home", "prob_home", "home_prob")),
+        "draw": _prob_or_none(_first_prediction_value(prediction, "p_draw", "prob_draw", "draw_prob")),
+        "away": _prob_or_none(_first_prediction_value(prediction, "p_away", "prob_away", "away_prob")),
     }
+
+
+def _first_prediction_value(prediction: dict, *keys: str) -> object:
+    for key in keys:
+        if key in prediction:
+            return prediction.get(key)
+    probabilities = prediction.get("probabilities")
+    if isinstance(probabilities, dict):
+        for key in keys:
+            short_key = key.removeprefix("p_").removeprefix("prob_").removesuffix("_prob")
+            if short_key in probabilities:
+                return probabilities.get(short_key)
+    return None
 
 
 def _prob_or_none(value: object) -> float | None:
@@ -392,6 +410,22 @@ def _latest_had_snapshot(rows: list[dict] | None) -> dict | None:
         if str(row.get("play_type") or "").lower() == "had":
             return row
     return None
+
+
+def _clean_match_text_fields(match: dict) -> None:
+    for key in ("home_team", "away_team", "league", "verdict", "banter"):
+        if isinstance(match.get(key), str):
+            match[key] = compact_cjk_spaces(match[key])
+
+
+def compact_cjk_spaces(value: str) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", text)
+    text = re.sub(r"\s+([，。！？；：、])", r"\1", text)
+    text = re.sub(r"(?<=[，。！？；：、])\s+(?=[\u4e00-\u9fff])", "", text)
+    text = re.sub(r"([（《])\s+", r"\1", text)
+    text = re.sub(r"\s+([）》])", r"\1", text)
+    return text
 
 
 def _team_form_for_match(match: dict) -> dict:

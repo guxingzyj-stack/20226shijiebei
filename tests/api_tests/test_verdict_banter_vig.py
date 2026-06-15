@@ -6,6 +6,7 @@ import sys
 
 from api._devig import calc_three_way_margin_and_vig, proportional_devig_three_way
 from api.banter import build_banter
+from api.main import compact_cjk_spaces
 from api.verdict import build_verdict
 from api.vig import calculate_had_vig, market_implied_prob_had
 
@@ -33,7 +34,14 @@ def test_verdict_lean_and_balanced():
         "verdict_type": "balanced",
         "verdict": "模型认为这场势均力敌",
     }
-    assert build_verdict(None, None, None, "阿根廷", "墨西哥")["verdict_type"] == "balanced"
+    assert build_verdict(None, None, None, "阿根廷", "墨西哥") == {
+        "verdict_type": "no_prediction",
+        "verdict": "模型预测生成中",
+    }
+    assert build_verdict(None, None, None, "阿根廷", "墨西哥", "finished") == {
+        "verdict_type": "no_prediction",
+        "verdict": "本场已完赛，赛果已更新",
+    }
 
 
 def test_banter_draw_favored_skips_historical_meme():
@@ -66,6 +74,21 @@ def test_banter_historical_priority_and_favorite_and_base_pools():
     assert favorite["banter_type"] == "favorite"
     base = build_banter("m7", "法国", "厄瓜多尔", 0.50, 0.3, 0.2, "lean_home")
     assert base["banter_type"] == "base"
+
+
+def test_no_prediction_banter_skips_historical_memes():
+    scheduled = build_banter("m8", "日本", "摩洛哥", None, None, None, "no_prediction")
+    finished = build_banter("m9", "日本", "摩洛哥", None, None, None, "no_prediction", "finished")
+
+    assert scheduled["banter_type"] == "no_prediction"
+    assert "日本是出了名" not in scheduled["banter"]
+    assert finished == {"banter_type": "no_prediction", "banter": "赛后别倒推预测，真正有用的是复盘概率。"}
+
+
+def test_compact_cjk_spaces_removes_output_spacing():
+    assert compact_cjk_spaces("德 国") == "德国"
+    assert compact_cjk_spaces("模 型 看 好 德 国 获 胜") == "模型看好德国获胜"
+    assert compact_cjk_spaces("势 均 力 敌 ， 这 种 球 最 难 猜") == "势均力敌，这种球最难猜"
 
 
 def test_had_vig_calculation_and_missing_odds():

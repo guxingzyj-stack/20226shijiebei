@@ -6,6 +6,7 @@ from typing import Literal
 VerdictType = Literal[
     "draw_favored",
     "balanced",
+    "no_prediction",
     "strong_home",
     "strong_away",
     "lean_home",
@@ -19,6 +20,7 @@ def build_verdict(
     p_away: float | int | str | None,
     home_team: str | None,
     away_team: str | None,
+    match_status: str | None = None,
 ) -> dict[str, str]:
     probs = {
         "home": _prob(p_home),
@@ -26,7 +28,7 @@ def build_verdict(
         "away": _prob(p_away),
     }
     if any(value is None for value in probs.values()):
-        return _balanced()
+        return _no_prediction(match_status)
 
     home = str(home_team or "主队").strip() or "主队"
     away = str(away_team or "客队").strip() or "客队"
@@ -49,6 +51,12 @@ def build_verdict(
 
 def _balanced() -> dict[str, str]:
     return {"verdict_type": "balanced", "verdict": "模型认为这场势均力敌"}
+
+
+def _no_prediction(match_status: str | None) -> dict[str, str]:
+    if str(match_status or "").lower() in {"finished", "completed"}:
+        return {"verdict_type": "no_prediction", "verdict": "本场已完赛，赛果已更新"}
+    return {"verdict_type": "no_prediction", "verdict": "模型预测生成中"}
 
 
 def _prob(value: float | int | str | None) -> float | None:

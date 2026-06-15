@@ -44,11 +44,16 @@ def build_banter(
     p_draw: float | int | str | None,
     p_away: float | int | str | None,
     verdict_type: str | None,
+    match_status: str | None = None,
 ) -> dict[str, str]:
     home = str(home_team or "主队").strip() or "主队"
     away = str(away_team or "客队").strip() or "客队"
     stable_id = str(match_id or f"{home}-{away}")
 
+    if verdict_type == "no_prediction":
+        if str(match_status or "").lower() in {"finished", "completed"}:
+            return {"banter_type": "no_prediction", "banter": "赛后别倒推预测，真正有用的是复盘概率。"}
+        return {"banter_type": "no_prediction", "banter": "数据还在等模型，先别急着下结论。"}
     if verdict_type == "draw_favored":
         return _from_pool(stable_id, "draw_favored", DRAW_POOL)
     if verdict_type == "balanced":
