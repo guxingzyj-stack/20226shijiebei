@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { BarChart3, CalendarDays, GitBranch, HelpCircle, History, LogIn, Medal, ReceiptText } from "lucide-react";
 import { Disclaimer } from "./Disclaimer";
 import { useAuth } from "../auth/AuthContext";
+import { appVersion } from "../utils/appVersion";
 
 const desktopNavItems = [
   { to: "/matches", label: "赛程", icon: CalendarDays },
@@ -23,6 +24,7 @@ const mobileNavItems = [
 
 export function Layout() {
   const { username, logout } = useAuth();
+  const version = appVersion();
   return (
     <div className="min-h-screen overflow-x-hidden bg-pitch text-paper">
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(232,179,60,0.16),transparent_34%),linear-gradient(135deg,#0D3826,#14513A_56%,#0D3826)]" />
@@ -88,6 +90,9 @@ export function Layout() {
           })}
         </nav>
         <Disclaimer />
+        <div className="border-t border-white/10 bg-pitch/95 px-4 py-1 text-center text-[10px] tracking-wide text-paper/35">
+          {version}
+        </div>
       </div>
     </div>
   );
