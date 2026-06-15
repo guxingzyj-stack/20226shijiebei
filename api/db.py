@@ -155,12 +155,6 @@ class Database:
                        score_matrix, lambda_home, lambda_away, created_at
                 FROM predictions
                 WHERE match_id = %s
-                  AND model_version = (
-                    SELECT id
-                    FROM
-                      model_versions
-                    ORDER BY trained_at DESC, id DESC LIMIT 1
-                  )
                 ORDER BY created_at DESC, id DESC
                 LIMIT 1
                 """,
@@ -180,17 +174,18 @@ class Database:
                   FROM ev_signals
                   WHERE match_id = %s
                     AND model_version = (
-                      SELECT id
-                      FROM
-                        model_versions
-                      ORDER BY trained_at DESC, id DESC LIMIT 1
+                      SELECT p.model_version
+                      FROM predictions p
+                      WHERE p.match_id = %s
+                      ORDER BY p.created_at DESC, p.id DESC
+                      LIMIT 1
                     )
                   ORDER BY play_type, selection, created_at DESC
                 ) deduped
                 ORDER BY ev DESC, created_at DESC
                 LIMIT %s
                 """,
-                (match_id, limit),
+                (match_id, match_id, limit),
             )
             return _mark_research_only(_dedupe_and_sort_ev_signals([dict(row) for row in cur.fetchall()], limit))
 
@@ -304,10 +299,11 @@ class Database:
                   FROM ev_signals
                   WHERE match_id = %s
                     AND model_version = (
-                      SELECT id
-                      FROM
-                        model_versions
-                      ORDER BY trained_at DESC, id DESC LIMIT 1
+                      SELECT p.model_version
+                      FROM predictions p
+                      WHERE p.match_id = %s
+                      ORDER BY p.created_at DESC, p.id DESC
+                      LIMIT 1
                     )
                     AND suggestion_eligible = true
                     AND ev > 0
@@ -319,7 +315,7 @@ class Database:
                 ORDER BY ev DESC, created_at DESC
                 LIMIT 1
                 """,
-                (match_id, EV_RESEARCH_ONLY_THRESHOLD),
+                (match_id, match_id, EV_RESEARCH_ONLY_THRESHOLD),
             )
             row = cur.fetchone()
             return dict(row) if row else None

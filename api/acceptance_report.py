@@ -41,7 +41,7 @@ def generate_report() -> dict[str, list[ReportLine]]:
             ReportLine("warning", "WARNING: betting is enabled" if betting_enabled else "none"),
         ],
         "3. API Data Contract": [
-            ReportLine("detail_uses_latest_model_version_only", _latest_prediction_filters_model_version()),
+            ReportLine("detail_uses_latest_match_prediction", _latest_prediction_uses_match_latest_prediction()),
             ReportLine("top_level_score_matrix_deleted", _detail_does_not_set_top_level_score_matrix()),
             ReportLine("leaderboard_hides_internal_id", _leaderboard_hides_id()),
         ],
@@ -146,15 +146,26 @@ def _cors_has_web_origin() -> Any:
     return any("worldcup2026" in origin or "localhost" in origin for origin in value.split(","))
 
 
-def _latest_prediction_filters_model_version() -> bool:
+def _latest_prediction_uses_match_latest_prediction() -> bool:
     source = inspect.getsource(api_db.Database.latest_prediction)
-    return _references_latest_model_version(source)
-
-
-def _references_latest_model_version(source: str) -> bool:
     compact = " ".join(source.split()).lower()
-    latest_model_subquery = "select id " + "from " + "model_versions"
-    return "model_version = (" in compact and latest_model_subquery in compact
+    return (
+        "from predictions" in compact
+        and "where match_id = %s" in compact
+        and "order by created_at desc, id desc" in compact
+        and ("from " + "model_versions") not in compact
+    )
+
+
+def _references_latest_match_prediction(source: str) -> bool:
+    compact = " ".join(source.split()).lower()
+    latest_prediction_subquery = "select p.model_version from predictions p"
+    return (
+        "model_version = (" in compact
+        and latest_prediction_subquery in compact
+        and "where p.match_id = %s" in compact
+        and "order by p.created_at desc, p.id desc" in compact
+    )
 
 
 def _detail_does_not_set_top_level_score_matrix() -> bool:

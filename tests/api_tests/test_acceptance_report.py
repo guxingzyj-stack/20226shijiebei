@@ -26,26 +26,28 @@ def test_api_acceptance_report_does_not_print_secrets(monkeypatch, capsys):
 
 
 def test_api_acceptance_contract_checks():
-    assert acceptance_report._latest_prediction_filters_model_version() is True
+    assert acceptance_report._latest_prediction_uses_match_latest_prediction() is True
     assert acceptance_report._detail_does_not_set_top_level_score_matrix() is True
     assert acceptance_report._leaderboard_hides_id() is True
 
 
-def test_ev_queries_filter_latest_model_version():
+def test_ev_queries_filter_match_latest_prediction_version():
     import inspect
 
     from api.db import Database
 
     latest_source = inspect.getsource(Database.latest_ev_signals)
     best_source = inspect.getsource(Database.best_ev_signal)
-    latest_model_subquery = "select id " + "from " + "model_versions"
+    latest_prediction_subquery = "select p.model_version from predictions p"
     latest_compact = " ".join(latest_source.split()).lower()
     best_compact = " ".join(best_source.split()).lower()
 
     assert "model_version = (" in latest_source
-    assert latest_model_subquery in latest_compact
+    assert latest_prediction_subquery in latest_compact
+    assert "where p.match_id = %s" in latest_compact
     assert "model_version = (" in best_source
-    assert latest_model_subquery in best_compact
+    assert latest_prediction_subquery in best_compact
+    assert "where p.match_id = %s" in best_compact
 
 
 def test_best_ev_signal_filters_suggestion_eligible():
