@@ -6,7 +6,7 @@ import sys
 
 from api._devig import calc_three_way_margin_and_vig, proportional_devig_three_way
 from api.banter import build_banter
-from api.main import compact_cjk_spaces
+from api.display_text import clean_match_public_fields, compact_cjk_spaces
 from api.verdict import build_verdict
 from api.vig import calculate_had_vig, market_implied_prob_had
 
@@ -87,8 +87,44 @@ def test_no_prediction_banter_skips_historical_memes():
 
 def test_compact_cjk_spaces_removes_output_spacing():
     assert compact_cjk_spaces("德 国") == "德国"
+    assert compact_cjk_spaces("墨 西 哥") == "墨西哥"
+    assert compact_cjk_spaces("沙 特 阿 拉 伯") == "沙特阿拉伯"
+    assert compact_cjk_spaces("库 拉 索") == "库拉索"
+    assert compact_cjk_spaces("刚 果 ( 金 )") == "刚果(金)"
     assert compact_cjk_spaces("模 型 看 好 德 国 获 胜") == "模型看好德国获胜"
     assert compact_cjk_spaces("势 均 力 敌 ， 这 种 球 最 难 猜") == "势均力敌，这种球最难猜"
+    assert compact_cjk_spaces("本 场 已 完 赛 ， 赛 果 已 更 新") == "本场已完赛，赛果已更新"
+    assert compact_cjk_spaces("赛 后 别 倒 推 预 测 ， 真 正 有 用 的 是 复 盘 概 率 。") == "赛后别倒推预测，真正有用的是复盘概率。"
+
+
+def test_compact_cjk_spaces_handles_special_space_chars():
+    assert compact_cjk_spaces("德\u00a0国") == "德国"
+    assert compact_cjk_spaces("墨\u3000西\u200b哥") == "墨西哥"
+    assert compact_cjk_spaces("模\u200c型\u200d预\u202f测\u205f生\u1680成\u180e中") == "模型预测生成中"
+
+
+def test_clean_match_public_fields_cleans_only_display_fields():
+    payload = {
+        "match_id": "500-1359200",
+        "source_url": "https://example.test/a b",
+        "home_team": "德 国",
+        "away_team": "库 拉 索",
+        "league": "世 界 杯",
+        "verdict": "模 型 看 好 德 国 获 胜",
+        "banter": "数 据 还 在 等 模 型 ， 先 别 急 着 下 结 论 。",
+        "prediction_status": {"message": "模 型 预 测 生 成 中"},
+    }
+
+    clean_match_public_fields(payload)
+
+    assert payload["match_id"] == "500-1359200"
+    assert payload["source_url"] == "https://example.test/a b"
+    assert payload["home_team"] == "德国"
+    assert payload["away_team"] == "库拉索"
+    assert payload["league"] == "世界杯"
+    assert payload["verdict"] == "模型看好德国获胜"
+    assert payload["banter"] == "数据还在等模型，先别急着下结论。"
+    assert payload["prediction_status"]["message"] == "模型预测生成中"
 
 
 def test_had_vig_calculation_and_missing_odds():

@@ -5,7 +5,6 @@ from datetime import date, datetime
 from decimal import Decimal
 import csv
 import os
-import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -16,6 +15,7 @@ from api.auth import create_access_token, current_user_claims, hash_password, ve
 from api.banter import build_banter
 from api.betting import BETTING_DISABLED_MESSAGE, is_betting_enabled, place_bet, suggested_stake
 from api.db import Database, get_db
+from api.display_text import clean_display_text, clean_match_public_fields
 from api.ops_health_check import latest_ops_health_status
 from api import recap
 from api.recap_service import build_match_recap, recent_recaps, recap_summary as build_recap_summary
@@ -177,6 +177,7 @@ def list_matches(status: str = Query("all"), db: Database = Depends(get_db)) -> 
         match["prediction_status"] = _prediction_status(prediction, match)
         match["ev_signals"] = db.latest_ev_signals(str(match["match_id"])) if prediction else []
         build_match_ux_fields(match, prediction)
+        clean_match_public_fields(match)
     return matches
 
 
@@ -195,7 +196,7 @@ def match_detail(match_id: str, db: Database = Depends(get_db)) -> dict:
     had_odds = had.get("odds") if had else None
     match["vig"] = {"had": calculate_had_vig(had_odds)}
     match["market_implied_prob"] = {"had": market_implied_prob_had(had_odds)}
-    return match
+    return clean_match_public_fields(match)
 
 
 @app.get("/api/matches/{match_id}/odds-history")
@@ -415,17 +416,7 @@ def _latest_had_snapshot(rows: list[dict] | None) -> dict | None:
 def _clean_match_text_fields(match: dict) -> None:
     for key in ("home_team", "away_team", "league", "verdict", "banter"):
         if isinstance(match.get(key), str):
-            match[key] = compact_cjk_spaces(match[key])
-
-
-def compact_cjk_spaces(value: str) -> str:
-    text = str(value or "").strip()
-    text = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", text)
-    text = re.sub(r"\s+([，。！？；：、])", r"\1", text)
-    text = re.sub(r"(?<=[，。！？；：、])\s+(?=[\u4e00-\u9fff])", "", text)
-    text = re.sub(r"([（《])\s+", r"\1", text)
-    text = re.sub(r"\s+([）》])", r"\1", text)
-    return text
+            match[key] = clean_display_text(match[key])
 
 
 def _team_form_for_match(match: dict) -> dict:

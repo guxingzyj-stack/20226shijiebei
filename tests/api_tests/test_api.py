@@ -242,6 +242,7 @@ def test_match_detail_includes_smoke_fields(monkeypatch):
 
 def test_match_list_uses_latest_prediction_probs_for_strong_verdict(monkeypatch):
     fake = FakeDb()
+    fake.matches["m1"]["league"] = "世 界 杯"
     fake.matches["m1"]["home_team"] = "德 国"
     fake.matches["m1"]["away_team"] = "库 拉 索"
     fake.prediction.update({"p_home": 0.85, "p_draw": 0.10, "p_away": 0.05})
@@ -251,6 +252,7 @@ def test_match_list_uses_latest_prediction_probs_for_strong_verdict(monkeypatch)
         response = client.get("/api/matches")
         assert response.status_code == 200
         body = response.json()[0]
+        assert body["league"] == "世界杯"
         assert body["home_team"] == "德国"
         assert body["away_team"] == "库拉索"
         assert body["verdict_type"] == "strong_home"
@@ -299,6 +301,7 @@ def test_finished_match_without_prediction_returns_no_prediction(monkeypatch):
 def test_non_finished_match_without_prediction_returns_no_prediction_not_balanced(monkeypatch):
     fake = FakeDb()
     fake.prediction = None
+    fake.matches["m1"]["league"] = "世 界 杯"
     fake.matches["m1"]["home_team"] = "日 本"
     fake.matches["m1"]["away_team"] = "摩 洛 哥"
     app.dependency_overrides[get_db] = lambda: fake
@@ -307,12 +310,14 @@ def test_non_finished_match_without_prediction_returns_no_prediction_not_balance
         response = client.get("/api/matches/m1")
         assert response.status_code == 200
         body = response.json()
+        assert body["league"] == "世界杯"
         assert body["home_team"] == "日本"
         assert body["away_team"] == "摩洛哥"
         assert body["verdict_type"] == "no_prediction"
         assert body["verdict"] == "模型预测生成中"
         assert body["banter_type"] == "no_prediction"
         assert "日本是出了名" not in body["banter"]
+        assert body["prediction_status"]["message"] == "模型预测生成中"
     finally:
         app.dependency_overrides.clear()
 
