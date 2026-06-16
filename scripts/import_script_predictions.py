@@ -93,14 +93,17 @@ def _validate_row(row: Any, index: int) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Import script-vs-real group-stage predictions.")
     parser.add_argument("--file", type=Path, default=DEFAULT_FILE)
+    parser.add_argument("--dry-run", action="store_true", help="Validate input without writing to the database.")
     args = parser.parse_args(argv)
 
     rows = load_script_prediction_file(args.file)
-    imported = upsert_script_predictions(rows)
+    imported = 0 if args.dry_run else upsert_script_predictions(rows)
     print("Script Predictions Import Report")
+    print(f"- mode: {'dry-run' if args.dry_run else 'import'}")
     print(f"- file: {args.file}")
     print(f"- rows_loaded: {len(rows)}")
     print(f"- rows_upserted: {imported}")
+    print(f"- would_write_db: {not args.dry_run}")
     return 0
 
 

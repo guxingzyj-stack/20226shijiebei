@@ -43,6 +43,34 @@ def test_import_script_is_idempotent_and_only_targets_script_table() -> None:
     assert "insert into bets" not in source
 
 
+def test_api_dockerfile_packages_script_import_assets() -> None:
+    dockerfile = Path("api/Dockerfile").read_text(encoding="utf-8")
+
+    assert "COPY data/script_predictions_groupstage.json /app/data/script_predictions_groupstage.json" in dockerfile
+    assert "COPY scripts/import_script_predictions.py /app/scripts/import_script_predictions.py" in dockerfile
+
+
+def test_import_script_dry_run_does_not_write_db(monkeypatch, capsys) -> None:
+    called = False
+
+    def fake_upsert(rows):
+        nonlocal called
+        called = True
+        return len(rows)
+
+    monkeypatch.setattr(import_script_predictions, "upsert_script_predictions", fake_upsert)
+
+    exit_code = import_script_predictions.main(["--dry-run"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert called is False
+    assert "- mode: dry-run" in output
+    assert "- rows_loaded: 72" in output
+    assert "- rows_upserted: 0" in output
+    assert "- would_write_db: False" in output
+
+
 def test_script_compare_handles_same_and_reversed_home_away_and_hits() -> None:
     scripts = [
         _script("A", "墨 西 哥", "南 非", 2, 0, is_real=True),
