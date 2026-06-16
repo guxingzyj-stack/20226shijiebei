@@ -148,6 +148,8 @@ def test_finished_result_generates_recap_with_market_model_ev_and_settlement():
     assert recap["summary"]["title_cn"]
     assert recap["script"]["has_script"] is True
     assert recap["script"]["script_score"] == "2:0"
+    assert recap["script"]["group"] == "A"
+    assert recap["script"]["stage"] == "group"
     assert recap["script"]["is_real"] is True
     assert recap["script"]["direction_hit"] is None
     assert recap["script"]["exact_hit"] is None

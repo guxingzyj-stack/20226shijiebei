@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Film, RefreshCw } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { ScriptMatchItem, ScriptMatchesResponse, ScriptOverview } from "../api/types";
@@ -8,11 +9,19 @@ import { formatPercent } from "../utils/format";
 const GROUPS = ["A-L", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
 
 export function ScriptPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const groupParam = normalizeGroupParam(searchParams.get("group"));
+  const targetTeam = searchParams.get("team") || "";
   const [overview, setOverview] = useState<ScriptOverview | null>(null);
   const [matches, setMatches] = useState<ScriptMatchItem[]>([]);
-  const [group, setGroup] = useState("A-L");
+  const [group, setGroup] = useState(() => groupParam || "A-L");
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (groupParam && groupParam !== group) setGroup(groupParam);
+  }, [group, groupParam]);
 
   useEffect(() => {
     let active = true;
@@ -40,7 +49,37 @@ export function ScriptPage() {
     };
   }, [group]);
 
+  const targetId = targetTeam ? scriptCardIdFromTeamParam(targetTeam) : "";
+
+  useEffect(() => {
+    if (loading || error || !targetId) return;
+    let fadeTimer: number | undefined;
+    const scrollTimer = window.setTimeout(() => {
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedId(targetId);
+      fadeTimer = window.setTimeout(() => {
+        setHighlightedId((current) => (current === targetId ? null : current));
+      }, 2400);
+    }, 150);
+    return () => {
+      window.clearTimeout(scrollTimer);
+      if (fadeTimer) window.clearTimeout(fadeTimer);
+    };
+  }, [error, loading, matches, targetId]);
+
   const sentence = useMemo(() => buildOverviewSentence(overview), [overview]);
+
+  function handleGroupClick(item: string) {
+    setGroup(item);
+    setHighlightedId(null);
+    const next = new URLSearchParams(searchParams);
+    if (item === "A-L") next.delete("group");
+    else next.set("group", item);
+    next.delete("team");
+    setSearchParams(next, { replace: true });
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -79,7 +118,7 @@ export function ScriptPage() {
               <button
                 key={item}
                 type="button"
-                onClick={() => setGroup(item)}
+                onClick={() => handleGroupClick(item)}
                 className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                   group === item
                     ? "border-[#f1c968] bg-[#f1c968] text-[#08172e]"
@@ -98,9 +137,17 @@ export function ScriptPage() {
       {!loading && !error && matches.length === 0 ? <ScriptState text="暂无剧本对照数据。" /> : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
-        {matches.map((match, index) => (
-          <ScriptCard key={`${match.group}-${match.home_team}-${match.away_team}-${index}`} match={match} />
-        ))}
+        {matches.map((match, index) => {
+          const cardId = scriptCardId(match.home_team, match.away_team);
+          return (
+            <ScriptCard
+              key={`${match.group}-${match.home_team}-${match.away_team}-${index}`}
+              match={match}
+              cardId={cardId}
+              highlighted={highlightedId === cardId}
+            />
+          );
+        })}
       </section>
     </div>
   );
@@ -115,10 +162,13 @@ function OverviewCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ScriptCard({ match }: { match: ScriptMatchItem }) {
+function ScriptCard({ match, cardId, highlighted }: { match: ScriptMatchItem; cardId: string; highlighted: boolean }) {
   const badge = badgeFor(match);
+  const tone = highlighted
+    ? "border-[#f1c968] bg-[#14345d] shadow-[0_0_0_3px_rgba(241,201,104,0.22)]"
+    : "border-[#caa452]/22 bg-[#08172e] shadow-lg shadow-black/15";
   return (
-    <article className="rounded-xl border border-[#caa452]/22 bg-[#08172e] p-4 text-[#f6ead0] shadow-lg shadow-black/15">
+    <article id={cardId} className={`scroll-mt-24 rounded-xl border p-4 text-[#f6ead0] transition-all duration-700 ${tone}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-[#caa452]">
@@ -203,4 +253,22 @@ function buildOverviewSentence(overview: ScriptOverview | null): string {
     return `剧本真实推演场还没有足够样本；另有 ${realCount} 场为已知真实比分标注样本，不计入预测能力。`;
   }
   return `剧本真实推演场：${scriptCount} 场；方向命中 ${overview.script_direction_hits ?? 0} / ${scriptCount}，比分命中 ${overview.script_exact_hits ?? 0} / ${scriptCount}。另有 ${realCount} 场为已知真实比分标注样本，不计入预测能力。`;
+}
+
+function normalizeGroupParam(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toUpperCase();
+  return GROUPS.includes(normalized) ? normalized : null;
+}
+
+function scriptCardId(home: string, away: string): string {
+  return scriptCardIdFromTeamParam(`${home}-${away}`);
+}
+
+function scriptCardIdFromTeamParam(team: string): string {
+  return `script-${safeDomId(team)}`;
+}
+
+function safeDomId(value: string): string {
+  return encodeURIComponent(value.trim()).replace(/%/g, "_").replace(/[^a-zA-Z0-9_-]/g, "_");
 }

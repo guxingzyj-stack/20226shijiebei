@@ -381,6 +381,8 @@ def _script_section(match: dict[str, Any], repo: RecapRepository) -> dict[str, A
         "has_script": True,
         "script_score": item.get("script_score"),
         "narrative": item.get("narrative"),
+        "group": item.get("group"),
+        "stage": item.get("stage"),
         "is_real": is_real,
         "sample_type": item.get("sample_type"),
         "excluded_from_prediction_metrics": bool(item.get("excluded_from_prediction_metrics")),

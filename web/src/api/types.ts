@@ -353,6 +353,8 @@ export type MatchRecap = {
     has_script: boolean;
     script_score?: string | null;
     narrative?: string | null;
+    group?: string | null;
+    stage?: string | null;
     is_real?: boolean;
     sample_type?: string | null;
     excluded_from_prediction_metrics?: boolean;

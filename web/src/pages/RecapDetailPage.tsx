@@ -288,7 +288,7 @@ function ScriptStory({ recap }: { recap: MatchRecap }) {
             这是商业剧本推演，不是预测。真实足球只服从概率，不服从剧本。
           </p>
         </div>
-        <Link to="/script" className="text-sm text-gold hover:text-gold/80">
+        <Link to={scriptDeepLink(recap)} className="text-sm text-gold hover:text-gold/80">
           去剧本页 →
         </Link>
       </div>
@@ -454,6 +454,13 @@ function scriptResultText(recap: MatchRecap): string {
   if (script.exact_hit) return "比分命中";
   if (script.direction_hit) return "方向命中";
   return "剧本崩了";
+}
+
+function scriptDeepLink(recap: MatchRecap): string {
+  const params = new URLSearchParams();
+  if (recap.script?.group) params.set("group", recap.script.group);
+  params.set("team", `${recap.home_team}-${recap.away_team}`);
+  return `/script?${params.toString()}`;
 }
 
 function fallbackTitleCn(recap: MatchRecap): string {
