@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, CalendarDays, GitBranch, HelpCircle, History, Medal, ReceiptText, ScrollText } from "lucide-react";
+import { BarChart3, CalendarDays, GitBranch, History, Medal, ReceiptText, ScrollText } from "lucide-react";
 import { Disclaimer } from "./Disclaimer";
 import { useAuth } from "../auth/AuthContext";
 import { appVersion } from "../utils/appVersion";
@@ -15,11 +15,11 @@ const desktopNavItems = [
 
 const mobileNavItems = [
   { to: "/matches", label: "赛程", icon: CalendarDays },
-  { to: "/bracket", label: "晋级", icon: GitBranch },
+  { to: "/bracket", label: "晋级图", icon: GitBranch },
   { to: "/script", label: "剧本", icon: ScrollText },
   { to: "/recaps", label: "复盘", icon: History },
   { to: "/leaderboard", label: "排行", icon: Medal },
-  { to: "/help", label: "说明", icon: HelpCircle },
+  { to: "/bets", label: "我的", icon: ReceiptText },
 ];
 
 export function Layout() {
