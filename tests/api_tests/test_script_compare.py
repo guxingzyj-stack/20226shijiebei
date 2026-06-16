@@ -6,9 +6,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from api import import_script_predictions
 from api import script_compare
 from api.main import app
-from scripts import import_script_predictions
 
 
 def test_script_prediction_migration_creates_only_independent_table() -> None:
@@ -27,6 +27,7 @@ def test_script_prediction_json_loads_72_rows() -> None:
     assert len(rows) == 72
     assert rows[0]["home_team"]
     assert rows[0]["away_team"]
+    assert Path("api/script_assets/script_predictions_groupstage.json").is_file()
 
 
 def test_import_script_is_idempotent_and_only_targets_script_table() -> None:
@@ -41,13 +42,24 @@ def test_import_script_is_idempotent_and_only_targets_script_table() -> None:
     assert "update predictions" not in source
     assert "insert into odds_snapshots" not in source
     assert "insert into bets" not in source
+    assert "from model" not in source
+    assert "import model" not in source
 
 
-def test_api_dockerfile_packages_script_import_assets() -> None:
-    dockerfile = Path("api/Dockerfile").read_text(encoding="utf-8")
+def test_root_import_script_is_thin_wrapper() -> None:
+    source = Path("scripts/import_script_predictions.py").read_text(encoding="utf-8")
 
-    assert "COPY data/script_predictions_groupstage.json /app/data/script_predictions_groupstage.json" in dockerfile
-    assert "COPY scripts/import_script_predictions.py /app/scripts/import_script_predictions.py" in dockerfile
+    assert "from api.import_script_predictions import main" in source
+    assert "INSERT INTO" not in source.upper()
+
+
+def test_script_assets_are_inside_api_package() -> None:
+    api_json = Path("api/script_assets/script_predictions_groupstage.json")
+    api_importer = Path("api/import_script_predictions.py")
+
+    assert api_json.is_file()
+    assert api_importer.is_file()
+    assert len(import_script_predictions.load_script_prediction_file(api_json)) == 72
 
 
 def test_import_script_dry_run_does_not_write_db(monkeypatch, capsys) -> None:
