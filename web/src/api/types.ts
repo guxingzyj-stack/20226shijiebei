@@ -202,6 +202,47 @@ export type LeaderboardEntry = {
   settled_bets?: number;
 };
 
+export type ScriptOverview = {
+  total_predictions: number;
+  compared_count: number;
+  pending_count: number;
+  not_yet_count: number;
+  direction_hits: number;
+  exact_hits: number;
+  direction_accuracy: number | null;
+  exact_accuracy: number | null;
+};
+
+export type ScriptModelProb = {
+  home: number;
+  draw: number;
+  away: number;
+};
+
+export type ScriptMatchItem = {
+  group: string;
+  stage: string;
+  home_team: string;
+  away_team: string;
+  script_score: string;
+  narrative?: string | null;
+  status: "COMPARED" | "PENDING" | "NOT_YET" | string;
+  real_score?: string | null;
+  direction_hit?: boolean | null;
+  exact_hit?: boolean | null;
+  model_prob?: ScriptModelProb | null;
+  comment: string;
+  match_id?: string | null;
+  match_num?: string | null;
+  kickoff_at?: string | null;
+  match_status?: string | null;
+};
+
+export type ScriptMatchesResponse = {
+  overview: ScriptOverview;
+  matches: ScriptMatchItem[];
+};
+
 export type RecapStatus = {
   status: string;
   message?: string;

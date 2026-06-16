@@ -18,6 +18,7 @@ from api.db import Database, get_db
 from api.display_text import clean_display_text, clean_match_public_fields
 from api.ops_health_check import latest_ops_health_status
 from api import recap
+from api import script_compare
 from api.recap_service import build_match_recap, recent_recaps, recap_summary as build_recap_summary
 from api.scheduler import scheduler_startup_error, start_api_scheduler, stop_api_scheduler
 from api.scheduler_health import scheduler_freshness
@@ -96,6 +97,16 @@ def health() -> dict:
     payload.update(_p3_fifa_health_summary())
     payload.update(_betting_open_gate_health_summary())
     return payload
+
+
+@app.get("/api/script/overview")
+def script_overview_endpoint() -> dict:
+    return script_compare.script_overview()
+
+
+@app.get("/api/script/matches")
+def script_matches_endpoint(group: str | None = Query(None), stage: str | None = Query(None)) -> dict:
+    return script_compare.script_matches(group=group, stage=stage)
 
 
 def _result_sync_health_summary() -> dict:

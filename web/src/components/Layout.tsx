@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, CalendarDays, GitBranch, HelpCircle, History, LogIn, Medal, ReceiptText } from "lucide-react";
+import { BarChart3, CalendarDays, GitBranch, HelpCircle, History, LogIn, Medal, ReceiptText, ScrollText } from "lucide-react";
 import { Disclaimer } from "./Disclaimer";
 import { useAuth } from "../auth/AuthContext";
 import { appVersion } from "../utils/appVersion";
@@ -7,6 +7,7 @@ import { appVersion } from "../utils/appVersion";
 const desktopNavItems = [
   { to: "/matches", label: "赛程", icon: CalendarDays },
   { to: "/bracket", label: "晋级图", icon: GitBranch },
+  { to: "/script", label: "剧本", icon: ScrollText },
   { to: "/recaps", label: "复盘", icon: History },
   { to: "/leaderboard", label: "排行", icon: Medal },
   { to: "/help", label: "指标说明", icon: HelpCircle },
@@ -17,6 +18,7 @@ const desktopNavItems = [
 const mobileNavItems = [
   { to: "/matches", label: "赛程", icon: CalendarDays },
   { to: "/bracket", label: "晋级", icon: GitBranch },
+  { to: "/script", label: "剧本", icon: ScrollText },
   { to: "/recaps", label: "复盘", icon: History },
   { to: "/leaderboard", label: "排行", icon: Medal },
   { to: "/help", label: "说明", icon: HelpCircle },
@@ -71,7 +73,7 @@ export function Layout() {
         <Outlet />
       </main>
       <div className="fixed bottom-0 left-0 right-0 z-40 md:static">
-        <nav className="grid grid-cols-5 border-t border-white/10 bg-pitch/95 px-1 py-1 backdrop-blur md:hidden">
+        <nav className="grid grid-cols-6 border-t border-white/10 bg-pitch/95 px-1 py-1 backdrop-blur md:hidden">
           {mobileNavItems.map((item) => {
             const Icon = item.icon;
             return (

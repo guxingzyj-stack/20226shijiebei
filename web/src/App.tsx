@@ -14,6 +14,7 @@ import { RecapDetailPage } from "./pages/RecapDetailPage";
 import { RecapEvPage } from "./pages/RecapEvPage";
 import { RecapModelPage } from "./pages/RecapModelPage";
 import { RecapsPage } from "./pages/RecapsPage";
+import { ScriptPage } from "./pages/ScriptPage";
 
 export function App() {
   return (
@@ -27,6 +28,7 @@ export function App() {
         <Route path="/bets" element={<MyBetsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/help" element={<HelpPage />} />
+        <Route path="/script" element={<ScriptPage />} />
         <Route path="/recap" element={<RecapPage />} />
         <Route path="/recaps" element={<RecapsPage />} />
         <Route path="/recaps/model" element={<RecapModelPage />} />
