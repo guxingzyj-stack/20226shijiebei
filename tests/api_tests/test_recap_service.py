@@ -65,6 +65,19 @@ class FakeRecapRepo:
             "p_away": 0.7,
             "created_at": self.kickoff + timedelta(hours=1),
         }
+        self.script_rows = [
+            {
+                "id": 1,
+                "grp": "A",
+                "stage": "group",
+                "home_team": "Mexico",
+                "away_team": "South Africa",
+                "script_home": 2,
+                "script_away": 0,
+                "narrative": "known result sample",
+                "is_real": True,
+            }
+        ]
 
     def match(self, match_id):
         return self.matches.get(match_id)
@@ -98,6 +111,9 @@ class FakeRecapRepo:
     def finished_matches(self, limit):
         return [self.matches["finished"]][:limit]
 
+    def script_predictions(self):
+        return self.script_rows
+
 
 def test_unfinished_match_returns_unavailable():
     result = recap_service.build_match_recap("scheduled", FakeRecapRepo())
@@ -129,6 +145,14 @@ def test_finished_result_generates_recap_with_market_model_ev_and_settlement():
     assert recap["settlement"]["settled_bets"] == 2
     assert recap["settlement"]["cumulative_vig"]["cumulative_vig_points"] == 2.4
     assert "user_id" not in recap["settlement"]
+    assert recap["summary"]["title_cn"]
+    assert recap["script"]["has_script"] is True
+    assert recap["script"]["script_score"] == "2:0"
+    assert recap["script"]["is_real"] is True
+    assert recap["script"]["direction_hit"] is None
+    assert recap["script"]["exact_hit"] is None
+    assert recap["three_way_summary"]["market_hit"] is True
+    assert recap["three_way_summary"]["model_hit"] is True
 
 
 def test_post_kickoff_prediction_is_not_used():
@@ -149,6 +173,40 @@ def test_missing_prediction_still_generates_recap():
 
     assert result["available"] is True
     assert result["recap"]["model"]["prediction_correct"] is None
+
+
+def test_script_projection_reports_hits_for_non_real_script():
+    repo = FakeRecapRepo()
+    repo.script_rows = [
+        {
+            "id": 2,
+            "grp": "A",
+            "stage": "group",
+            "home_team": "Mexico",
+            "away_team": "South Africa",
+            "script_home": 1,
+            "script_away": 0,
+            "narrative": "script projection",
+            "is_real": False,
+        }
+    ]
+
+    result = recap_service.build_match_recap("finished", repo)
+
+    script = result["recap"]["script"]
+    assert script["has_script"] is True
+    assert script["is_real"] is False
+    assert script["direction_hit"] is True
+    assert script["exact_hit"] is False
+
+
+def test_no_script_returns_empty_script_section():
+    repo = FakeRecapRepo()
+    repo.script_rows = []
+
+    result = recap_service.build_match_recap("finished", repo)
+
+    assert result["recap"]["script"] == {"has_script": False}
 
 
 def test_recent_and_summary_only_use_finished_matches():

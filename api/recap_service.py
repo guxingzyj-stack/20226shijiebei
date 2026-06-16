@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 from psycopg.rows import dict_row
 
+from api import script_compare
 from api.db import connect
 from api.recap_models import RecapPayload, RecapResponse
 from api.vig import calculate_had_vig
@@ -25,6 +26,7 @@ class RecapRepository(Protocol):
     def settlement_summary(self, match_id: str) -> dict[str, int]: ...
     def cumulative_vig_summary(self, match_id: str | None = None) -> dict[str, Any]: ...
     def finished_matches(self, limit: int) -> list[dict[str, Any]]: ...
+    def script_predictions(self) -> list[dict[str, Any]]: ...
 
 
 class SqlRecapRepository:
@@ -153,6 +155,21 @@ class SqlRecapRepository:
             )
             return [dict(row) for row in cur.fetchall()]
 
+    def script_predictions(self) -> list[dict[str, Any]]:
+        try:
+            with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    """
+                    SELECT id, grp, stage, home_team, away_team, script_home, script_away,
+                           narrative, is_real
+                    FROM script_predictions
+                    ORDER BY grp, id
+                    """
+                )
+                return [dict(row) for row in cur.fetchall()]
+        except Exception:
+            return []
+
 
 def build_match_recap(match_id: str, repository: RecapRepository | None = None) -> RecapResponse:
     repo = repository or SqlRecapRepository()
@@ -226,6 +243,8 @@ def _build_recap(match: dict[str, Any], repo: RecapRepository) -> RecapPayload:
     settlement["cumulative_vig"] = repo.cumulative_vig_summary(str(match["match_id"]))
     settlement_status = "no_public_bets" if settlement["settled_bets"] == 0 and settlement["open_bets"] == 0 else "has_bets"
     settlement["settlement_status"] = settlement_status
+    script = _script_section(match, repo)
+    three_way_summary = _three_way_summary(match, result, market, model, script)
     data_quality = {
         "has_result": True,
         "has_had_odds": bool(market["had_open"] or market["had_close"]),
@@ -247,6 +266,8 @@ def _build_recap(match: dict[str, Any], repo: RecapRepository) -> RecapPayload:
         "model": model,
         "ev": ev,
         "settlement": settlement,
+        "script": script,
+        "three_way_summary": three_way_summary,
         "summary": _summary_section(match, result, market, model, ev, settlement_status),
     }
 
@@ -346,6 +367,87 @@ def _ev_section(signals: list[dict[str, Any]], result: dict[str, Any], match: di
     }
 
 
+def _script_section(match: dict[str, Any], repo: RecapRepository) -> dict[str, Any]:
+    script_rows = repo.script_predictions()
+    if not script_rows:
+        return {"has_script": False}
+    items = script_compare.build_script_match_items(script_rows, [match], {})
+    item = next((row for row in items if row.get("match_id") == match.get("match_id")), None)
+    if item is None:
+        return {"has_script": False}
+
+    is_real = bool(item.get("is_real"))
+    return {
+        "has_script": True,
+        "script_score": item.get("script_score"),
+        "narrative": item.get("narrative"),
+        "is_real": is_real,
+        "sample_type": item.get("sample_type"),
+        "excluded_from_prediction_metrics": bool(item.get("excluded_from_prediction_metrics")),
+        "direction_hit": None if is_real else item.get("direction_hit"),
+        "exact_hit": None if is_real else item.get("exact_hit"),
+        "comment": script_compare.COMMENT_REAL_SAMPLE if is_real else item.get("comment"),
+    }
+
+
+def _three_way_summary(
+    match: dict[str, Any],
+    result: dict[str, Any],
+    market: dict[str, Any],
+    model: dict[str, Any],
+    script: dict[str, Any],
+) -> dict[str, Any]:
+    market_hit = _hit_status(market.get("favorite"), result["winner"])
+    model_hit = model.get("prediction_correct")
+    script_hit: bool | None = None
+    if script.get("has_script") and not script.get("is_real"):
+        script_hit = script.get("exact_hit")
+
+    text = _three_way_text(match, result, market_hit, model_hit, script)
+    return {"market_hit": market_hit, "model_hit": model_hit, "script_hit": script_hit, "text": text}
+
+
+def _hit_status(predicted: Any, actual: str) -> bool | None:
+    if predicted is None:
+        return None
+    return str(predicted) == actual
+
+
+def _three_way_text(
+    match: dict[str, Any],
+    result: dict[str, Any],
+    market_hit: bool | None,
+    model_hit: bool | None,
+    script: dict[str, Any],
+) -> str:
+    if market_hit is True and model_hit is True:
+        core = "市场和模型都说中了方向。"
+    elif market_hit is True and model_hit is False:
+        core = "市场方向说中了，模型这次没跟上。"
+    elif market_hit is False and model_hit is True:
+        core = "模型方向说中了，市场这次看错了。"
+    elif market_hit is False and model_hit is False:
+        if result["winner"] == "draw":
+            core = "真实结果是平局，市场和模型都没说中。"
+        else:
+            winner = _winner_team_name(match, result["winner"])
+            core = f"爆了个冷门，{winner}赢球，赛前市场和模型都没看到。"
+    else:
+        core = "这场适合把赛前判断和真实结果放在一起复盘。"
+
+    if not script.get("has_script"):
+        script_note = "本场暂无剧本预言。"
+    elif script.get("is_real"):
+        script_note = "剧本为已知赛果样本，不计入预测能力。"
+    elif script.get("exact_hit"):
+        script_note = "剧本比分命中，但这只作为复盘观察。"
+    elif script.get("direction_hit"):
+        script_note = "剧本方向命中，比分没中。"
+    else:
+        script_note = "剧本这次被现实打脸。"
+    return f"{core}{script_note}"
+
+
 def _summary_section(
     match: dict[str, Any],
     result: dict[str, Any],
@@ -362,6 +464,7 @@ def _summary_section(
     elif model["prediction_correct"] is False:
         model_text = "model direction missed"
     title = f"{home} {result['scoreline']} {away}: {model_text}"
+    title_cn = _summary_title_cn(match, result, market, model)
     bullets = [
         f"Final result was {OUTCOME_NAMES[result['winner']]}.",
         f"Market favorite was {market['favorite'] or 'unavailable'}.",
@@ -369,7 +472,44 @@ def _summary_section(
         f"EV signals reviewed: {ev['total_ev_signals']}.",
         f"Settlement status: {settlement_status}.",
     ]
-    return {"title": title, "bullets": bullets}
+    return {"title": title, "title_cn": title_cn, "bullets": bullets}
+
+
+def _summary_title_cn(
+    match: dict[str, Any],
+    result: dict[str, Any],
+    market: dict[str, Any],
+    model: dict[str, Any],
+) -> str:
+    home = str(match.get("home_team"))
+    away = str(match.get("away_team"))
+    winner = result["winner"]
+    market_fav = market.get("favorite")
+    model_pick = model.get("predicted_outcome")
+
+    if winner == "draw" and market_fav == model_pick and market_fav in {"home", "away"}:
+        team = home if market_fav == "home" else away
+        return f"这场打平了。赛前市场和模型都看好{team}赢，结果都没说中。"
+    if winner == "home" and model_pick == "home":
+        return f"{home}赢了，模型说中了方向。"
+    if winner == "away" and model_pick == "away":
+        return f"{away}赢了，模型说中了方向。"
+    if winner in {"home", "away"} and market_fav and model_pick and market_fav != winner and model_pick != winner:
+        winner_name = _winner_team_name(match, winner)
+        return f"爆了个冷门——{winner_name}赢球，赛前市场和模型都没看到。"
+    if market_fav == winner and model_pick != winner:
+        return "市场方向说中了，模型这次没跟上。"
+    if model_pick == winner and market_fav != winner:
+        return "模型方向说中了，市场这次看错了。"
+    return "这场比赛已经结束，赛前判断和真实结果可以放在一起复盘。"
+
+
+def _winner_team_name(match: dict[str, Any], winner: str) -> str:
+    if winner == "home":
+        return str(match.get("home_team"))
+    if winner == "away":
+        return str(match.get("away_team"))
+    return "双方"
 
 
 def _settlement_counts(counts: dict[str, int]) -> dict[str, int]:

@@ -346,7 +346,25 @@ export type MatchRecap = {
   };
   summary: {
     title: string;
+    title_cn?: string;
     bullets: string[];
+  };
+  script?: {
+    has_script: boolean;
+    script_score?: string | null;
+    narrative?: string | null;
+    is_real?: boolean;
+    sample_type?: string | null;
+    excluded_from_prediction_metrics?: boolean;
+    direction_hit?: boolean | null;
+    exact_hit?: boolean | null;
+    comment?: string | null;
+  };
+  three_way_summary?: {
+    market_hit: boolean | null;
+    model_hit: boolean | null;
+    script_hit: boolean | null;
+    text: string;
   };
 };
 
