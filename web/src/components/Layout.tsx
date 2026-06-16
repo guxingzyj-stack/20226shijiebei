@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, CalendarDays, GitBranch, HelpCircle, History, LogIn, Medal, ReceiptText, ScrollText } from "lucide-react";
+import { BarChart3, CalendarDays, GitBranch, HelpCircle, History, Medal, ScrollText } from "lucide-react";
 import { Disclaimer } from "./Disclaimer";
 import { useAuth } from "../auth/AuthContext";
 import { appVersion } from "../utils/appVersion";
@@ -10,9 +10,6 @@ const desktopNavItems = [
   { to: "/script", label: "剧本", icon: ScrollText },
   { to: "/recaps", label: "复盘", icon: History },
   { to: "/leaderboard", label: "排行", icon: Medal },
-  { to: "/help", label: "指标说明", icon: HelpCircle },
-  { to: "/bets", label: "我的", icon: ReceiptText },
-  { to: "/auth", label: "登录", icon: LogIn },
 ];
 
 const mobileNavItems = [
@@ -57,7 +54,7 @@ export function Layout() {
             ))}
           </nav>
           <div className="hidden items-center gap-3 md:flex">
-            {username ? <span className="max-w-[140px] truncate text-sm text-paper/70">{username}</span> : <span className="text-sm text-paper/45">未登录</span>}
+            {username ? <span className="max-w-[140px] truncate text-sm text-paper/70">{username}</span> : null}
             {username ? (
               <button type="button" onClick={logout} className="rounded-lg border border-white/15 px-3 py-2 text-sm text-paper/75 hover:bg-white/10">
                 退出
