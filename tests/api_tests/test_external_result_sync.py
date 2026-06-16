@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import pytest
 
 from api import external_result_sync as sync
+from api.result_source_mapping import normalize_team_name
 
 
 NOW = datetime(2026, 6, 14, 16, 0, tzinfo=timezone.utc)
@@ -50,6 +51,22 @@ def _source_report(events):
     }
 
 
+def _espn_event(raw_home, raw_away, kickoff_at, status="finished", home_score=0, away_score=0, external_id="espn-071"):
+    return {
+        "source": "espn",
+        "source_url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260615",
+        "external_id": external_id,
+        "raw_home": raw_home,
+        "raw_away": raw_away,
+        "normalized_home": normalize_team_name(raw_home),
+        "normalized_away": normalize_team_name(raw_away),
+        "kickoff_at": kickoff_at,
+        "status": status,
+        "result_home": home_score,
+        "result_away": away_score,
+    }
+
+
 def _patch_plan(monkeypatch, events, locals_=None, current_500=None):
     monkeypatch.setattr(sync, "fetch_source_events", lambda source, date: _source_report(events))
     monkeypatch.setattr(sync, "fetch_espn_events_for_dates", lambda dates: {**_source_report(events), "scoreboard_dates": dates})
@@ -75,6 +92,114 @@ def test_espn_final_score_dry_run_matches(monkeypatch):
 
     assert report["would_update_count"] == 1
     assert report["matches"][0]["external_source"] == "espn"
+
+
+def test_espn_0615_spain_cape_verde_maps_and_updates_in_dry_run(monkeypatch):
+    local = {
+        "match_id": "500-1359209",
+        "match_num": "周一013",
+        "home_team": "\u897f \u73ed \u7259",
+        "away_team": "\u4f5b\u5f97\u89d2",
+        "kickoff_at": datetime(2026, 6, 15, 16, 0, tzinfo=timezone.utc),
+        "status": "closed",
+        "result_home": None,
+        "result_away": None,
+    }
+    event = _espn_event("Spain", "Cape Verde", "2026-06-15T16:00:00+00:00", home_score=0, away_score=0)
+    _patch_plan(monkeypatch, [event], locals_=[local])
+
+    report = sync.dry_run("espn", "2026-06-15", now=datetime(2026, 6, 15, 20, 0, tzinfo=timezone.utc))
+
+    assert report["would_update_count"] == 1
+    item = report["matches"][0]
+    assert item["action"] == "update"
+    assert item["reason"] == "external_result_matched"
+    assert item["result_home"] == 0
+    assert item["result_away"] == 0
+    assert item["normalized_external_home"] == "\u897f\u73ed\u7259"
+    assert item["normalized_external_away"] == "\u4f5b\u5f97\u89d2"
+
+
+def test_espn_0615_belgium_egypt_and_saudi_uruguay_aliases_match(monkeypatch):
+    locals_ = [
+        {
+            "match_id": "500-1359206",
+            "match_num": "周一014",
+            "home_team": "\u6bd4\u5229\u65f6",
+            "away_team": "\u57c3\u53ca",
+            "kickoff_at": datetime(2026, 6, 15, 19, 0, tzinfo=timezone.utc),
+            "status": "closed",
+            "result_home": None,
+            "result_away": None,
+        },
+        {
+            "match_id": "500-1359245",
+            "match_num": "周一015",
+            "home_team": "\u6c99\u7279\u963f\u62c9\u4f2f",
+            "away_team": "\u4e4c\u62c9\u572d",
+            "kickoff_at": datetime(2026, 6, 15, 22, 0, tzinfo=timezone.utc),
+            "status": "closed",
+            "result_home": None,
+            "result_away": None,
+        },
+    ]
+    events = [
+        _espn_event("Belgium", "Egypt", "2026-06-15T19:00:00+00:00", home_score=1, away_score=1, external_id="bel-egy"),
+        _espn_event("Saudi Arabia", "Uruguay", "2026-06-15T22:00:00+00:00", home_score=1, away_score=1, external_id="sau-uru"),
+    ]
+    _patch_plan(monkeypatch, events, locals_=locals_)
+
+    report = sync.dry_run("espn", "2026-06-15", now=datetime(2026, 6, 16, 1, 0, tzinfo=timezone.utc))
+
+    assert report["would_update_count"] == 2
+    assert {item["match_id"] for item in report["matches"] if item["action"] == "update"} == {"500-1359206", "500-1359245"}
+
+
+def test_espn_live_completed_false_does_not_write(monkeypatch):
+    local = {
+        "match_id": "500-1359242",
+        "match_num": "周一016",
+        "home_team": "\u4f0a\u6717",
+        "away_team": "\u65b0\u897f\u5170",
+        "kickoff_at": datetime(2026, 6, 16, 1, 0, tzinfo=timezone.utc),
+        "status": "closed",
+        "result_home": None,
+        "result_away": None,
+    }
+    event = _espn_event("IR Iran", "New Zealand", "2026-06-16T01:00:00+00:00", status="live", home_score=2, away_score=2)
+    _patch_plan(monkeypatch, [event], locals_=[local])
+
+    report = sync.dry_run("espn", "2026-06-15", now=datetime(2026, 6, 16, 4, 0, tzinfo=timezone.utc))
+
+    assert report["would_update_count"] == 0
+    item = report["matches"][0]
+    assert item["action"] == "skip"
+    assert item["reason"] == "external_result_status_not_final"
+    assert item["reject_reason"] == "status_not_final"
+
+
+def test_no_candidate_includes_reject_reason_and_candidate_diagnostics(monkeypatch):
+    local = {
+        "match_id": "500-1359209",
+        "match_num": "周一013",
+        "home_team": "\u897f\u73ed\u7259",
+        "away_team": "\u4f5b\u5f97\u89d2",
+        "kickoff_at": datetime(2026, 6, 15, 16, 0, tzinfo=timezone.utc),
+        "status": "closed",
+        "result_home": None,
+        "result_away": None,
+    }
+    event = _espn_event("Belgium", "Egypt", "2026-06-15T19:00:00+00:00", home_score=1, away_score=1)
+    _patch_plan(monkeypatch, [event], locals_=[local])
+
+    report = sync.dry_run("espn", "2026-06-15", now=datetime(2026, 6, 15, 20, 0, tzinfo=timezone.utc))
+
+    item = report["matches"][0]
+    assert item["reason"] == "external_result_no_candidate"
+    assert item["reject_reason"] == "team_not_matched"
+    assert item["candidate_diagnostics"][0]["raw_home"] == "Belgium"
+    assert item["candidate_diagnostics"][0]["normalized_home"] == "\u6bd4\u5229\u65f6"
+    assert item["candidate_diagnostics"][0]["reject_reason"] == "team_not_matched"
 
 
 def test_espn_sync_matches_previous_et_bucket_when_cli_date_is_utc_date(monkeypatch):

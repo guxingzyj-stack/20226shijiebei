@@ -185,6 +185,42 @@ def test_english_team_aliases_normalize_to_local_names():
     assert normalize_team_name("Tunisia") == "突尼斯"
     assert normalize_team_name("Türkiye") == "土耳其"
 
+def test_espn_0615_and_future_aliases_normalize_to_local_names():
+    assert normalize_team_name("Spain") == "\u897f\u73ed\u7259"
+    assert normalize_team_name("Belgium") == "\u6bd4\u5229\u65f6"
+    assert normalize_team_name("Egypt") == "\u57c3\u53ca"
+    assert normalize_team_name("Uruguay") == "\u4e4c\u62c9\u572d"
+    assert normalize_team_name("Cape Verde") == "\u4f5b\u5f97\u89d2"
+    assert normalize_team_name("Cabo Verde") == "\u4f5b\u5f97\u89d2"
+    assert normalize_team_name("Saudi Arabia") == "\u6c99\u7279\u963f\u62c9\u4f2f"
+    assert normalize_team_name("Saudi") == "\u6c99\u7279\u963f\u62c9\u4f2f"
+    assert normalize_team_name("IR Iran") == "\u4f0a\u6717"
+    assert normalize_team_name("Iran") == "\u4f0a\u6717"
+    assert normalize_team_name("New Zealand") == "\u65b0\u897f\u5170"
+    assert normalize_team_name("France") == "\u6cd5\u56fd"
+    assert normalize_team_name("Senegal") == "\u585e\u5185\u52a0\u5c14"
+    assert normalize_team_name("Iraq") == "\u4f0a\u62c9\u514b"
+    assert normalize_team_name("Norway") == "\u632a\u5a01"
+    assert normalize_team_name("Argentina") == "\u963f\u6839\u5ef7"
+    assert normalize_team_name("Algeria") == "\u963f\u5c14\u53ca\u5229\u4e9a"
+    assert normalize_team_name("Austria") == "\u5965\u5730\u5229"
+    assert normalize_team_name("Jordan") == "\u7ea6\u65e6"
+    assert normalize_team_name("Portugal") == "\u8461\u8404\u7259"
+    assert normalize_team_name("DR Congo") == "\u521a\u679c(\u91d1)"
+    assert normalize_team_name("Congo DR") == "\u521a\u679c(\u91d1)"
+    assert normalize_team_name("Uzbekistan") == "\u4e4c\u5179\u522b\u514b"
+    assert normalize_team_name("Colombia") == "\u54e5\u4f26\u6bd4\u4e9a"
+    assert normalize_team_name("England") == "\u82f1\u683c\u5170"
+    assert normalize_team_name("Croatia") == "\u514b\u7f57\u5730\u4e9a"
+    assert normalize_team_name("Ghana") == "\u52a0\u7eb3"
+    assert normalize_team_name("Panama") == "\u5df4\u62ff\u9a6c"
+
+
+def test_local_team_names_with_visible_and_invisible_spaces_normalize():
+    assert normalize_team_name("\u897f \u73ed \u7259") == "\u897f\u73ed\u7259"
+    assert normalize_team_name("\u6c99\u200b \u7279\u3000\u963f \u62c9 \u4f2f") == "\u6c99\u7279\u963f\u62c9\u4f2f"
+    assert normalize_team_name("\u521a \u679c (\u91d1 )") == "\u521a\u679c(\u91d1)"
+
 
 def test_fifa_source_without_targets_reports_mapping_missing(tmp_path: Path):
     missing = tmp_path / "missing.csv"

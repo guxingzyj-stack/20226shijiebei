@@ -30,6 +30,7 @@ class ExternalResultPlan:
     time_delta_minutes: int | None = None
     source_500_diagnostic: str | None = None
     source_500_status: str | None = None
+    candidate_diagnostics: list[dict[str, Any]] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         event = self.external_event or {}
@@ -54,6 +55,8 @@ class ExternalResultPlan:
             "external_status": event.get("status"),
             "result_home": event.get("result_home"),
             "result_away": event.get("result_away"),
+            "reject_reason": _reject_reason(self.reason),
+            "candidate_diagnostics": self.candidate_diagnostics or [],
             "source_500_diagnostic": self.source_500_diagnostic,
             "source_500_status": self.source_500_status,
         }
@@ -177,6 +180,18 @@ def print_report(report: dict[str, Any]) -> None:
         print(f"  external_source_date: {item.get('external_source_date')}")
         print(f"  score: {item.get('result_home')}-{item.get('result_away')}")
         print(f"  time_delta_minutes: {item.get('time_delta_minutes')}")
+        print(f"  reject_reason: {item.get('reject_reason')}")
+        for candidate in (item.get("candidate_diagnostics") or [])[:5]:
+            print("  candidate:")
+            print(f"    raw_home: {candidate.get('raw_home')}")
+            print(f"    raw_away: {candidate.get('raw_away')}")
+            print(f"    normalized_home: {candidate.get('normalized_home')}")
+            print(f"    normalized_away: {candidate.get('normalized_away')}")
+            print(f"    external_status: {candidate.get('external_status')}")
+            print(f"    is_final: {candidate.get('is_final')}")
+            print(f"    score: {candidate.get('score')}")
+            print(f"    time_delta_minutes: {candidate.get('time_delta_minutes')}")
+            print(f"    reject_reason: {candidate.get('reject_reason')}")
         print(f"  source_500_diagnostic: {item.get('source_500_diagnostic')}")
         print(f"  source_500_status: {item.get('source_500_status')}")
         print(f"  source_url: {item.get('external_source_url')}")
@@ -232,20 +247,62 @@ def _plan_one(
     if reversed_order and not same_order:
         return ExternalResultPlan(local, "skip", "external_result_reversed_team_order", reversed_order[0], source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
     if not same_order:
-        return ExternalResultPlan(local, "skip", "external_result_no_candidate", source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
+        return ExternalResultPlan(
+            local,
+            "skip",
+            "external_result_no_candidate",
+            source_500_diagnostic=source_500_diagnostic,
+            source_500_status=source_500_status,
+            candidate_diagnostics=_candidate_diagnostics(local, events),
+        )
 
     timed = [(event, _time_delta_minutes(local.get("kickoff_at"), event.get("kickoff_at"))) for event in same_order]
     timed = [(event, delta) for event, delta in timed if delta is not None and delta <= TIME_WINDOW_MINUTES]
     if not timed:
-        return ExternalResultPlan(local, "skip", "external_result_time_mismatch", same_order[0], source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
+        return ExternalResultPlan(
+            local,
+            "skip",
+            "external_result_time_mismatch",
+            same_order[0],
+            source_500_diagnostic=source_500_diagnostic,
+            source_500_status=source_500_status,
+            candidate_diagnostics=_candidate_diagnostics(local, same_order),
+        )
     if len(timed) > 1:
-        return ExternalResultPlan(local, "skip", "external_result_ambiguous", timed[0][0], timed[0][1], source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
+        return ExternalResultPlan(
+            local,
+            "skip",
+            "external_result_ambiguous",
+            timed[0][0],
+            timed[0][1],
+            source_500_diagnostic=source_500_diagnostic,
+            source_500_status=source_500_status,
+            candidate_diagnostics=_candidate_diagnostics(local, [event for event, _delta in timed]),
+        )
 
     event, delta = timed[0]
     if event.get("status") != "finished":
-        return ExternalResultPlan(local, "skip", "external_result_status_not_final", event, delta, source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
+        return ExternalResultPlan(
+            local,
+            "skip",
+            "external_result_status_not_final",
+            event,
+            delta,
+            source_500_diagnostic=source_500_diagnostic,
+            source_500_status=source_500_status,
+            candidate_diagnostics=_candidate_diagnostics(local, [event]),
+        )
     if event.get("result_home") is None or event.get("result_away") is None:
-        return ExternalResultPlan(local, "skip", "external_result_score_missing", event, delta, source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
+        return ExternalResultPlan(
+            local,
+            "skip",
+            "external_result_score_missing",
+            event,
+            delta,
+            source_500_diagnostic=source_500_diagnostic,
+            source_500_status=source_500_status,
+            candidate_diagnostics=_candidate_diagnostics(local, [event]),
+        )
     return ExternalResultPlan(local, "update", "external_result_matched", event, delta, source_500_diagnostic=source_500_diagnostic, source_500_status=source_500_status)
 
 
@@ -267,6 +324,64 @@ def _local_is_eligible(local: dict[str, Any], now: datetime) -> bool:
         and kickoff is not None
         and kickoff <= now - timedelta(minutes=OVERDUE_MINUTES)
     )
+
+
+def _candidate_diagnostics(local: dict[str, Any], events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    local_home = normalize_team_name(local.get("home_team"))
+    local_away = normalize_team_name(local.get("away_team"))
+    diagnostics = []
+    for event in events[:10]:
+        normalized_home = event.get("normalized_home")
+        normalized_away = event.get("normalized_away")
+        delta = _time_delta_minutes(local.get("kickoff_at"), event.get("kickoff_at"))
+        score = _score_text(event.get("result_home"), event.get("result_away"))
+        diagnostics.append(
+            {
+                "raw_home": event.get("raw_home"),
+                "raw_away": event.get("raw_away"),
+                "normalized_home": normalized_home,
+                "normalized_away": normalized_away,
+                "external_status": event.get("status"),
+                "is_final": event.get("status") == "finished",
+                "score": score,
+                "time_delta_minutes": delta,
+                "reject_reason": _candidate_reject_reason(local_home, local_away, event, delta),
+            }
+        )
+    return diagnostics
+
+
+def _candidate_reject_reason(local_home: str, local_away: str, event: dict[str, Any], delta: int | None) -> str | None:
+    external_home = event.get("normalized_home")
+    external_away = event.get("normalized_away")
+    if external_home == local_away and external_away == local_home:
+        return "reversed_team_order"
+    if external_home != local_home or external_away != local_away:
+        return "team_not_matched"
+    if delta is None or delta > TIME_WINDOW_MINUTES:
+        return "time_delta_too_large"
+    if event.get("status") != "finished":
+        return "status_not_final"
+    if event.get("result_home") is None or event.get("result_away") is None:
+        return "score_missing"
+    return None
+
+
+def _score_text(home: Any, away: Any) -> str | None:
+    if home is None or away is None:
+        return None
+    return f"{home}-{away}"
+
+
+def _reject_reason(reason: str) -> str | None:
+    return {
+        "external_result_no_candidate": "team_not_matched",
+        "external_result_status_not_final": "status_not_final",
+        "external_result_score_missing": "score_missing",
+        "external_result_time_mismatch": "time_delta_too_large",
+        "external_result_ambiguous": "ambiguous_candidate",
+        "external_result_reversed_team_order": "reversed_team_order",
+    }.get(reason)
 
 
 def _ops_summary(report: dict[str, Any]) -> dict[str, Any]:
