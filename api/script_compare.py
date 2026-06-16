@@ -19,6 +19,7 @@ COMMENT_DIRECTION = "赢家猜对了，比分没中——方向易，比分难"
 COMMENT_MISS = "剧本崩了——再合理的剧本，真实也不照着走"
 COMMENT_PENDING = "剧本已预言，真实待揭晓"
 COMMENT_NOT_YET = "即将开赛"
+COMMENT_REAL_SAMPLE = "这场是已知赛果标注样本，不参与剧本能力统计"
 
 
 def script_overview() -> dict[str, Any]:
@@ -58,7 +59,7 @@ def build_script_match_items(
                     "direction_hit": None,
                     "exact_hit": None,
                     "model_prob": None,
-                    "comment": COMMENT_NOT_YET,
+                    "comment": COMMENT_REAL_SAMPLE if item["is_real"] else COMMENT_NOT_YET,
                 }
             )
             items.append(item)
@@ -85,7 +86,7 @@ def build_script_match_items(
                     "real_score": None,
                     "direction_hit": None,
                     "exact_hit": None,
-                    "comment": COMMENT_PENDING,
+                    "comment": COMMENT_REAL_SAMPLE if item["is_real"] else COMMENT_PENDING,
                 }
             )
             items.append(item)
@@ -103,7 +104,7 @@ def build_script_match_items(
                 "real_score": f"{real_home_score}:{real_away_score}",
                 "direction_hit": direction_hit,
                 "exact_hit": exact_hit,
-                "comment": _comment(direction_hit, exact_hit),
+                "comment": COMMENT_REAL_SAMPLE if item["is_real"] else _comment(direction_hit, exact_hit),
             }
         )
         items.append(item)
@@ -112,18 +113,40 @@ def build_script_match_items(
 
 def build_script_overview(items: list[dict[str, Any]]) -> dict[str, Any]:
     compared = [item for item in items if item.get("status") == COMPARED]
-    compared_count = len(compared)
-    direction_hits = sum(1 for item in compared if item.get("direction_hit") is True)
-    exact_hits = sum(1 for item in compared if item.get("exact_hit") is True)
+    real_compared = [item for item in compared if item.get("is_real") is True]
+    script_compared = [item for item in compared if item.get("is_real") is not True]
+    all_count = len(compared)
+    all_direction_hits = _count_hits(compared, "direction_hit")
+    all_exact_hits = _count_hits(compared, "exact_hit")
+    real_count = len(real_compared)
+    real_direction_hits = _count_hits(real_compared, "direction_hit")
+    real_exact_hits = _count_hits(real_compared, "exact_hit")
+    script_count = len(script_compared)
+    script_direction_hits = _count_hits(script_compared, "direction_hit")
+    script_exact_hits = _count_hits(script_compared, "exact_hit")
     return {
         "total_predictions": len(items),
-        "compared_count": compared_count,
+        "compared_count": all_count,
         "pending_count": sum(1 for item in items if item.get("status") == PENDING),
         "not_yet_count": sum(1 for item in items if item.get("status") == NOT_YET),
-        "direction_hits": direction_hits,
-        "exact_hits": exact_hits,
-        "direction_accuracy": direction_hits / compared_count if compared_count else None,
-        "exact_accuracy": exact_hits / compared_count if compared_count else None,
+        "all_direction_hits": all_direction_hits,
+        "all_exact_hits": all_exact_hits,
+        "all_direction_accuracy": _accuracy(all_direction_hits, all_count),
+        "all_exact_accuracy": _accuracy(all_exact_hits, all_count),
+        "real_count": real_count,
+        "real_direction_hits": real_direction_hits,
+        "real_exact_hits": real_exact_hits,
+        "real_direction_accuracy": _accuracy(real_direction_hits, real_count),
+        "real_exact_accuracy": _accuracy(real_exact_hits, real_count),
+        "script_count": script_count,
+        "script_direction_hits": script_direction_hits,
+        "script_exact_hits": script_exact_hits,
+        "script_direction_accuracy": _accuracy(script_direction_hits, script_count),
+        "script_exact_accuracy": _accuracy(script_exact_hits, script_count),
+        "direction_hits": script_direction_hits,
+        "exact_hits": script_exact_hits,
+        "direction_accuracy": _accuracy(script_direction_hits, script_count),
+        "exact_accuracy": _accuracy(script_exact_hits, script_count),
     }
 
 
@@ -212,6 +235,7 @@ def _load_latest_predictions(cur: Any, match_ids: list[str]) -> dict[str, dict[s
 
 
 def _base_item(script: dict[str, Any], home_team: str, away_team: str) -> dict[str, Any]:
+    is_real = bool(script.get("is_real", False))
     return {
         "group": script["grp"],
         "stage": script["stage"],
@@ -223,6 +247,9 @@ def _base_item(script: dict[str, Any], home_team: str, away_team: str) -> dict[s
         "match_num": None,
         "kickoff_at": None,
         "match_status": None,
+        "is_real": is_real,
+        "sample_type": "known_result_seed" if is_real else "script_projection",
+        "excluded_from_prediction_metrics": is_real,
     }
 
 
@@ -251,6 +278,14 @@ def _comment(direction_hit: bool, exact_hit: bool) -> str:
     if direction_hit:
         return COMMENT_DIRECTION
     return COMMENT_MISS
+
+
+def _count_hits(items: list[dict[str, Any]], field: str) -> int:
+    return sum(1 for item in items if item.get(field) is True)
+
+
+def _accuracy(hits: int, total: int) -> float | None:
+    return hits / total if total else None
 
 
 def _extract_prob_triplet(source: dict[str, Any], key_sets: list[tuple[str, str, str]]) -> dict[str, float] | None:

@@ -65,10 +65,10 @@ export function ScriptPage() {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <OverviewCard label="方向准确率" value={formatRate(overview?.direction_accuracy)} />
-        <OverviewCard label="比分准确率" value={formatRate(overview?.exact_accuracy)} />
-        <OverviewCard label="已揭晓" value={`${overview?.compared_count ?? 0} / ${overview?.total_predictions ?? 72}`} />
-        <OverviewCard label="待揭晓" value={`${overview?.pending_count ?? 0}`} />
+        <OverviewCard label="剧本方向命中" value={formatRate(overview?.script_direction_accuracy ?? overview?.direction_accuracy)} />
+        <OverviewCard label="剧本比分命中" value={formatRate(overview?.script_exact_accuracy ?? overview?.exact_accuracy)} />
+        <OverviewCard label="剧本推演场" value={`${overview?.script_count ?? 0} 场`} />
+        <OverviewCard label="已知赛果样本" value={`${overview?.real_count ?? 0} 场`} />
       </section>
 
       <section className="rounded-xl border border-[#caa452]/25 bg-[#0a1b33] px-4 py-4 text-[#f6ead0]">
@@ -140,6 +140,11 @@ function ScriptCard({ match }: { match: ScriptMatchItem }) {
           {match.real_score ? `${match.real_score} [${match.status}]` : match.status === "NOT_YET" ? "即将开赛" : "真实待揭晓"}
         </InfoLine>
         <InfoLine label="📊 模型概率">{modelProbText(match.model_prob)}</InfoLine>
+        {match.is_real ? (
+          <InfoLine label="样本类型">
+            已知赛果样本：这场是已踢真实比分标注，不计入剧本预测能力。
+          </InfoLine>
+        ) : null}
         <InfoLine label="💬 一句点醒">
           <span className="text-[#f1c968]">{match.comment}</span>
         </InfoLine>
@@ -167,6 +172,9 @@ function ScriptState({ text, danger = false }: { text: string; danger?: boolean 
 }
 
 function badgeFor(match: ScriptMatchItem): { text: string; className: string } {
+  if (match.is_real) {
+    return { text: "已知赛果样本", className: "bg-[#7f6b38] text-[#fff3cf]" };
+  }
   if (match.status !== "COMPARED") {
     return { text: "等待现实", className: "bg-slate-700 text-slate-100" };
   }
@@ -189,8 +197,10 @@ function formatRate(value: number | null | undefined): string {
 }
 
 function buildOverviewSentence(overview: ScriptOverview | null): string {
-  if (!overview || overview.compared_count === 0 || overview.exact_accuracy === null) {
-    return "剧本写得再合理，也要等真实比赛慢慢揭晓。比分准确率还没有足够样本，先别急着下结论。";
+  const scriptCount = overview?.script_count ?? 0;
+  const realCount = overview?.real_count ?? 0;
+  if (!overview || scriptCount === 0 || overview.script_exact_accuracy === null) {
+    return `剧本真实推演场还没有足够样本；另有 ${realCount} 场为已知真实比分标注样本，不计入预测能力。`;
   }
-  return `剧本写得再合理，当前比分准确率也只有 ${formatPercent(overview.exact_accuracy)}。别信剧本，信概率。`;
+  return `剧本真实推演场：${scriptCount} 场；方向命中 ${overview.script_direction_hits ?? 0} / ${scriptCount}，比分命中 ${overview.script_exact_hits ?? 0} / ${scriptCount}。另有 ${realCount} 场为已知真实比分标注样本，不计入预测能力。`;
 }

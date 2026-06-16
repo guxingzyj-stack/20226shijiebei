@@ -110,11 +110,18 @@ def test_script_compare_handles_same_and_reversed_home_away_and_hits() -> None:
     assert items[0]["direction_hit"] is True
     assert items[0]["exact_hit"] is True
     assert items[0]["model_prob"] == {"home": 0.6, "draw": 0.25, "away": 0.15}
+    assert items[0]["is_real"] is True
+    assert items[0]["sample_type"] == "known_result_seed"
+    assert items[0]["excluded_from_prediction_metrics"] is True
+    assert items[0]["comment"] == script_compare.COMMENT_REAL_SAMPLE
 
     assert items[1]["status"] == script_compare.COMPARED
     assert items[1]["real_score"] == "2:1"
     assert items[1]["exact_hit"] is True
     assert items[1]["model_prob"] == {"home": 0.2, "draw": 0.3, "away": 0.5}
+    assert items[1]["is_real"] is False
+    assert items[1]["sample_type"] == "script_projection"
+    assert items[1]["excluded_from_prediction_metrics"] is False
 
     assert items[2]["status"] == script_compare.PENDING
     assert items[2]["direction_hit"] is None
@@ -122,10 +129,48 @@ def test_script_compare_handles_same_and_reversed_home_away_and_hits() -> None:
 
     assert overview["total_predictions"] == 4
     assert overview["compared_count"] == 2
-    assert overview["direction_hits"] == 2
-    assert overview["exact_hits"] == 2
-    assert overview["direction_accuracy"] == 1.0
-    assert overview["exact_accuracy"] == 1.0
+    assert overview["all_direction_hits"] == 2
+    assert overview["all_exact_hits"] == 2
+    assert overview["all_direction_accuracy"] == 1.0
+    assert overview["all_exact_accuracy"] == 1.0
+    assert overview["real_count"] == 1
+    assert overview["real_direction_hits"] == 1
+    assert overview["real_exact_hits"] == 1
+    assert overview["real_direction_accuracy"] == 1.0
+    assert overview["real_exact_accuracy"] == 1.0
+    assert overview["script_count"] == 1
+    assert overview["script_direction_hits"] == 1
+    assert overview["script_exact_hits"] == 1
+    assert overview["script_direction_accuracy"] == 1.0
+    assert overview["script_exact_accuracy"] == 1.0
+    assert overview["direction_hits"] == overview["script_direction_hits"]
+    assert overview["exact_hits"] == overview["script_exact_hits"]
+    assert overview["direction_accuracy"] == overview["script_direction_accuracy"]
+    assert overview["exact_accuracy"] == overview["script_exact_accuracy"]
+
+
+def test_script_overview_excludes_known_real_samples_from_main_accuracy() -> None:
+    items = [
+        {"status": script_compare.COMPARED, "is_real": True, "direction_hit": True, "exact_hit": True},
+        {"status": script_compare.COMPARED, "is_real": True, "direction_hit": True, "exact_hit": True},
+        {"status": script_compare.COMPARED, "is_real": False, "direction_hit": True, "exact_hit": False},
+        {"status": script_compare.COMPARED, "is_real": False, "direction_hit": False, "exact_hit": False},
+    ]
+
+    overview = script_compare.build_script_overview(items)
+
+    assert overview["compared_count"] == 4
+    assert overview["all_direction_accuracy"] == 0.75
+    assert overview["all_exact_accuracy"] == 0.5
+    assert overview["real_count"] == 2
+    assert overview["real_exact_accuracy"] == 1.0
+    assert overview["script_count"] == 2
+    assert overview["script_direction_hits"] == 1
+    assert overview["script_exact_hits"] == 0
+    assert overview["script_direction_accuracy"] == 0.5
+    assert overview["script_exact_accuracy"] == 0.0
+    assert overview["direction_accuracy"] == overview["script_direction_accuracy"]
+    assert overview["exact_accuracy"] == overview["script_exact_accuracy"]
 
 
 def test_script_compare_is_real_does_not_override_real_score() -> None:
@@ -137,7 +182,8 @@ def test_script_compare_is_real_does_not_override_real_score() -> None:
     assert item["status"] == script_compare.COMPARED
     assert item["direction_hit"] is False
     assert item["exact_hit"] is False
-    assert item["comment"] == script_compare.COMMENT_MISS
+    assert item["is_real"] is True
+    assert item["comment"] == script_compare.COMMENT_REAL_SAMPLE
 
 
 def test_script_compare_reads_latest_prediction_by_match_order() -> None:
@@ -178,6 +224,9 @@ def test_script_api_routes_return_expected_fields(monkeypatch) -> None:
                     "real_score": "2:0",
                     "direction_hit": True,
                     "exact_hit": True,
+                    "is_real": False,
+                    "sample_type": "script_projection",
+                    "excluded_from_prediction_metrics": False,
                     "model_prob": {"home": 0.6, "draw": 0.25, "away": 0.15},
                     "comment": script_compare.COMMENT_EXACT,
                 }
@@ -192,6 +241,9 @@ def test_script_api_routes_return_expected_fields(monkeypatch) -> None:
     assert overview["total_predictions"] == 72
     assert matches["matches"][0]["group"] == "A"
     assert matches["matches"][0]["script_score"] == "2:0"
+    assert matches["matches"][0]["is_real"] is False
+    assert matches["matches"][0]["sample_type"] == "script_projection"
+    assert matches["matches"][0]["excluded_from_prediction_metrics"] is False
     assert matches["matches"][0]["model_prob"]["home"] == 0.6
     assert matches["matches"][0]["comment"] == script_compare.COMMENT_EXACT
 
