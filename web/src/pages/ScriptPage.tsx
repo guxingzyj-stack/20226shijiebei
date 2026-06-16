@@ -15,6 +15,7 @@ export function ScriptPage() {
   const [overview, setOverview] = useState<ScriptOverview | null>(null);
   const [matches, setMatches] = useState<ScriptMatchItem[]>([]);
   const [group, setGroup] = useState(() => groupParam || "A-L");
+  const [searchQuery, setSearchQuery] = useState("");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +23,12 @@ export function ScriptPage() {
   useEffect(() => {
     if (groupParam && groupParam !== group) setGroup(groupParam);
   }, [group, groupParam]);
+
+  useEffect(() => {
+    if (searchQuery.trim() && group !== "A-L") {
+      setGroup("A-L");
+    }
+  }, [group, searchQuery]);
 
   useEffect(() => {
     let active = true;
@@ -70,8 +77,18 @@ export function ScriptPage() {
   }, [error, loading, matches, targetId]);
 
   const sentence = useMemo(() => buildOverviewSentence(overview), [overview]);
+  const normalizedSearch = normalizeSearchText(searchQuery);
+  const visibleMatches = useMemo(() => {
+    if (!normalizedSearch) return matches;
+    return matches.filter((match) => {
+      const home = normalizeSearchText(match.home_team);
+      const away = normalizeSearchText(match.away_team);
+      return home.includes(normalizedSearch) || away.includes(normalizedSearch);
+    });
+  }, [matches, normalizedSearch]);
 
   function handleGroupClick(item: string) {
+    setSearchQuery("");
     setGroup(item);
     setHighlightedId(null);
     const next = new URLSearchParams(searchParams);
@@ -113,31 +130,57 @@ export function ScriptPage() {
       <section className="rounded-xl border border-[#caa452]/25 bg-[#0a1b33] px-4 py-4 text-[#f6ead0]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <p className="text-sm leading-6 text-[#f6ead0]/80">{sentence}</p>
-          <div className="flex flex-wrap gap-2">
-            {GROUPS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => handleGroupClick(item)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  group === item
-                    ? "border-[#f1c968] bg-[#f1c968] text-[#08172e]"
-                    : "border-white/15 bg-white/5 text-[#f6ead0]/75 hover:bg-white/10"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
+          <div className="flex w-full flex-col gap-3 lg:max-w-2xl">
+            <div className="flex w-full flex-col gap-2 sm:flex-row">
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="搜索球队(如:西班牙、佛得角)"
+                className="min-h-10 flex-1 rounded-lg border border-[#caa452]/35 bg-black/20 px-3 py-2 text-sm text-[#f6ead0] outline-none transition placeholder:text-[#f6ead0]/38 focus:border-[#f1c968] focus:bg-black/28"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="min-h-10 rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-[#f6ead0]/75 transition hover:bg-white/10"
+                >
+                  清空
+                </button>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {GROUPS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => handleGroupClick(item)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    group === item && !searchQuery.trim()
+                      ? "border-[#f1c968] bg-[#f1c968] text-[#08172e]"
+                      : "border-white/15 bg-white/5 text-[#f6ead0]/75 hover:bg-white/10"
+                  }`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+        {searchQuery.trim() ? (
+          <p className="mt-3 text-xs leading-5 text-[#f6ead0]/55">
+            正在全局搜索全部剧本场次，组筛选暂时忽略。
+          </p>
+        ) : null}
       </section>
 
       {loading ? <ScriptState text="剧本对照加载中..." /> : null}
       {error ? <ScriptState text={error} danger /> : null}
-      {!loading && !error && matches.length === 0 ? <ScriptState text="暂无剧本对照数据。" /> : null}
+      {!loading && !error && visibleMatches.length === 0 ? (
+        <ScriptState text={searchQuery.trim() ? "没有找到相关场次，换个球队名试试。" : "暂无剧本对照数据。"} />
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
-        {matches.map((match, index) => {
+        {visibleMatches.map((match, index) => {
           const cardId = scriptCardId(match.home_team, match.away_team);
           return (
             <ScriptCard
@@ -259,6 +302,10 @@ function normalizeGroupParam(value: string | null): string | null {
   if (!value) return null;
   const normalized = value.trim().toUpperCase();
   return GROUPS.includes(normalized) ? normalized : null;
+}
+
+function normalizeSearchText(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
 }
 
 function scriptCardId(home: string, away: string): string {
