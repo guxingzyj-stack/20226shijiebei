@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
@@ -79,11 +80,23 @@ def crawl_once() -> None:
         except Exception as source_error:
             error_text = str(source_error)
             raise
-        db.upsert_matches(conn, matches)
+        upsert_stats = db.upsert_matches(conn, matches)
         db_source = source_module(active_source).SOURCE_NAME
         rows_written = db.write_odds_snapshots(conn, matches, db_source)
         db.finish_run(conn, run_id, db_source, len(matches), rows_written, True, error_text)
-        LOGGER.info("crawl ok source=%s matches=%s rows_written=%s", active_source, len(matches), rows_written)
+        summary: dict[str, object] = {}
+        if active_source in {"m500", "500"}:
+            summary = m500.get_last_scan_summary()
+        max_kickoff = db.max_match_kickoff(conn)
+        LOGGER.info(
+            "crawl ok source=%s matches=%s rows_written=%s upsert=%s max_kickoff_in_db_after=%s scan_summary=%s",
+            active_source,
+            len(matches),
+            rows_written,
+            upsert_stats,
+            max_kickoff.isoformat() if max_kickoff else None,
+            json.dumps(summary, ensure_ascii=False, default=str),
+        )
     except Exception as exc:
         LOGGER.exception("crawl failed")
         try:

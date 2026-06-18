@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import os
 from pathlib import Path
 import time
 from urllib.parse import urljoin
@@ -35,6 +36,8 @@ TYPE_TO_PLAY = {
     "bqc": "hafu",
 }
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+DEFAULT_FULL_SCAN_DAYS_AHEAD = 21
+LAST_SCAN_SUMMARY: dict[str, object] = {}
 
 
 @dataclass
@@ -50,29 +53,118 @@ class ProbePlayResult:
 
 
 def fetch_all(session: requests.Session | None = None) -> list[MatchOdds]:
+    return fetch_full_scan(session)
+
+
+def fetch_full_scan(
+    session: requests.Session | None = None,
+    *,
+    start_date: datetime | None = None,
+    days_ahead: int | None = None,
+    date_texts: list[str] | None = None,
+) -> list[MatchOdds]:
     session = session or requests.Session()
     merged: dict[str, MatchOdds] = {}
     errors: list[str] = []
-    today = datetime.now(SHANGHAI).date()
-    date_text = today.isoformat()
-    try:
-        html = fetch_html(session, BASE_URL, {"date": date_text})
-        for match in parse_html_or_raise(html, date_text, "had_hhad"):
-            _merge_match(merged, match)
-    except Exception as exc:
-        errors.append(f"had_hhad {date_text}: {exc}")
-    for play in ("crs", "ttg", "hafu"):
-        time.sleep(2)
+    if date_texts is None:
+        today = (start_date or datetime.now(SHANGHAI)).date()
+        scan_days = _full_scan_days_ahead(days_ahead)
+        date_texts = [(today + timedelta(days=offset)).isoformat() for offset in range(scan_days + 1)]
+
+    summary: dict[str, object] = {
+        "dates_tested": list(date_texts),
+        "active_dates": [],
+        "unique_sales_windows": 0,
+        "source_urls": [],
+        "raw_events_seen": 0,
+        "parsed_matches_seen": 0,
+        "latest_kickoff_seen": None,
+        "errors": errors,
+    }
+    seen_sales_windows: set[tuple[str, ...]] = set()
+
+    for date_text in date_texts:
         try:
-            html = fetch_html(session, BASE_URL, {"playid": PLAY_URLS[play].split("playid=", 1)[1].split("&", 1)[0], "g": "2", "date": date_text})
-            for match in parse_html(html, date_text, play):
+            params = _request_params("had_hhad", date_text)
+            summary["source_urls"].append(_prepared_url(BASE_URL, params))
+            html = fetch_html(session, BASE_URL, params)
+            summary["raw_events_seen"] = int(summary["raw_events_seen"]) + _raw_match_rows(html)
+            had_matches = parse_html(html, date_text, "had_hhad")
+            for match in had_matches:
                 _merge_match(merged, match)
+            if not had_matches:
+                continue
+            sales_window = tuple(sorted(match.match_id for match in had_matches))
+            if sales_window in seen_sales_windows:
+                continue
+            seen_sales_windows.add(sales_window)
+            summary["unique_sales_windows"] = int(summary["unique_sales_windows"]) + 1
+            summary["active_dates"].append(date_text)
         except Exception as exc:
-            # TODO: crs/ttg/hafu are P0.5-tolerated if 500.com changes page shape.
-            errors.append(f"{play} {date_text}: {exc}")
-    if not merged:
+            errors.append(f"had_hhad {date_text}: {exc}")
+            continue
+
+        for play in ("crs", "ttg", "hafu"):
+            _optional_scan_sleep()
+            try:
+                params = _request_params(play, date_text)
+                summary["source_urls"].append(_prepared_url(BASE_URL, params))
+                html = fetch_html(session, BASE_URL, params)
+                summary["raw_events_seen"] = int(summary["raw_events_seen"]) + _raw_match_rows(html)
+                for match in parse_html(html, date_text, play):
+                    _merge_match(merged, match)
+            except Exception as exc:
+                # TODO: crs/ttg/hafu are P0.5-tolerated if 500.com changes page shape.
+                errors.append(f"{play} {date_text}: {exc}")
+
+    matches = sorted(merged.values(), key=lambda item: item.kickoff_at)
+    if matches:
+        summary["parsed_matches_seen"] = len(matches)
+        summary["latest_kickoff_seen"] = max(match.kickoff_at for match in matches).isoformat()
+
+    global LAST_SCAN_SUMMARY
+    LAST_SCAN_SUMMARY = summary
+    if not matches:
         raise SourceError(f"500.com returned 0 World Cup matches; errors={'; '.join(errors) or 'none'}")
-    return list(merged.values())
+    return matches
+
+
+def get_last_scan_summary() -> dict[str, object]:
+    return dict(LAST_SCAN_SUMMARY)
+
+
+def _full_scan_days_ahead(days_ahead: int | None) -> int:
+    if days_ahead is None:
+        try:
+            days_ahead = int(os.getenv("M500_FULL_SCAN_DAYS_AHEAD", str(DEFAULT_FULL_SCAN_DAYS_AHEAD)))
+        except ValueError:
+            days_ahead = DEFAULT_FULL_SCAN_DAYS_AHEAD
+    return max(0, min(days_ahead, 45))
+
+
+def _optional_scan_sleep() -> None:
+    try:
+        seconds = float(os.getenv("M500_SCAN_SLEEP_SECONDS", "0"))
+    except ValueError:
+        seconds = 0
+    if seconds > 0:
+        time.sleep(seconds)
+
+
+def _request_params(play: str, date_text: str) -> dict[str, str]:
+    if play == "had_hhad":
+        return {"date": date_text}
+    playid = PLAY_URLS[play].split("playid=", 1)[1].split("&", 1)[0]
+    return {"playid": playid, "g": "2", "date": date_text}
+
+
+def _prepared_url(url: str, params: dict[str, str]) -> str:
+    request = requests.Request("GET", url, params=params).prepare()
+    return request.url or url
+
+
+def _raw_match_rows(html: str) -> int:
+    return len(BeautifulSoup(html, "lxml").select("tr.bet-tb-tr"))
 
 
 def fetch_html(session: requests.Session, url: str, params: dict[str, str] | None = None) -> str:

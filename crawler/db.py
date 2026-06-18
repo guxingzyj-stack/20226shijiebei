@@ -66,7 +66,8 @@ def finish_run(
     conn.commit()
 
 
-def upsert_matches(conn: psycopg.Connection, matches: Iterable[MatchOdds]) -> None:
+def upsert_matches(conn: psycopg.Connection, matches: Iterable[MatchOdds]) -> dict[str, int]:
+    stats = {"new_matches_inserted": 0, "existing_matches_updated": 0}
     with conn.cursor() as cur:
         for match in matches:
             _merge_seed_match_id_if_needed(cur, match)
@@ -92,6 +93,7 @@ def upsert_matches(conn: psycopg.Connection, matches: Iterable[MatchOdds]) -> No
                     ELSE EXCLUDED.status
                   END,
                   updated_at = now()
+                RETURNING (xmax = 0) AS inserted
                 """,
                 (
                     match.match_id,
@@ -107,7 +109,20 @@ def upsert_matches(conn: psycopg.Connection, matches: Iterable[MatchOdds]) -> No
                     match.status,
                 ),
             )
+            inserted = bool(cur.fetchone()[0])
+            if inserted:
+                stats["new_matches_inserted"] += 1
+            else:
+                stats["existing_matches_updated"] += 1
     conn.commit()
+    return stats
+
+
+def max_match_kickoff(conn: psycopg.Connection) -> datetime | None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(kickoff_at) FROM matches")
+        row = cur.fetchone()
+    return row[0] if row else None
 
 
 def _merge_seed_match_id_if_needed(cur: psycopg.Cursor, match: MatchOdds) -> None:
