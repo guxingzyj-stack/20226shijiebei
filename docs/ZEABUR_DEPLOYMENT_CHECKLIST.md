@@ -47,6 +47,8 @@ User should confirm:
 - m500 source is selected when available
 - crawl ok logs are present
 - env `DATABASE_URL` uses the internal PostgreSQL connection
+- one-off full scan command, when needed:
+  `PYTHONPATH=. python -m crawler.odds_crawler_once --source 500 --full-scan`
 
 ## PostgreSQL
 
