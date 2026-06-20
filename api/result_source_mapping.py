@@ -68,6 +68,8 @@ TEAM_ALIASES_RAW.update(
         "\u5df4\u62c9\u572d": "\u5df4\u62c9\u572d",
         "\u52a0\u62ff\u5927": "\u52a0\u62ff\u5927",
         "\u6ce2\u9ed1": "\u6ce2\u9ed1",
+        "bosnia-herzegovina": "\u6ce2\u9ed1",
+        "bosnia&herzegovina": "\u6ce2\u9ed1",
         "\u97e9\u56fd": "\u97e9\u56fd",
         "\u6377\u514b": "\u6377\u514b",
         "\u58a8\u897f\u54e5": "\u58a8\u897f\u54e5",

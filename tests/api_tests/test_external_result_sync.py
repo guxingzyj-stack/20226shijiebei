@@ -120,6 +120,41 @@ def test_espn_0615_spain_cape_verde_maps_and_updates_in_dry_run(monkeypatch):
     assert item["normalized_external_away"] == "\u4f5b\u5f97\u89d2"
 
 
+def test_espn_switzerland_bosnia_hyphen_alias_maps_and_updates_in_dry_run(monkeypatch):
+    local = {
+        "match_id": "500-1359228",
+        "match_num": "\u5468\u56db026",
+        "home_team": "\u745e\u58eb",
+        "away_team": "\u6ce2\u9ed1",
+        "kickoff_at": datetime(2026, 6, 18, 19, 0, tzinfo=timezone.utc),
+        "status": "closed",
+        "result_home": None,
+        "result_away": None,
+    }
+    event = _espn_event(
+        "Switzerland",
+        "Bosnia-Herzegovina",
+        "2026-06-18T19:00:00+00:00",
+        home_score=4,
+        away_score=1,
+        external_id="760439",
+    )
+    _patch_plan(monkeypatch, [event], locals_=[local])
+
+    report = sync.dry_run("espn", "2026-06-18", now=datetime(2026, 6, 18, 23, 0, tzinfo=timezone.utc))
+
+    assert report["would_update_count"] == 1
+    item = report["matches"][0]
+    assert item["match_id"] == "500-1359228"
+    assert item["action"] == "update"
+    assert item["reason"] == "external_result_matched"
+    assert item["result_home"] == 4
+    assert item["result_away"] == 1
+    assert item["external_event_id"] == "760439"
+    assert item["normalized_external_home"] == "\u745e\u58eb"
+    assert item["normalized_external_away"] == "\u6ce2\u9ed1"
+
+
 def test_espn_0615_belgium_egypt_and_saudi_uruguay_aliases_match(monkeypatch):
     locals_ = [
         {

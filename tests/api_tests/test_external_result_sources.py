@@ -214,6 +214,10 @@ def test_espn_0615_and_future_aliases_normalize_to_local_names():
     assert normalize_team_name("Croatia") == "\u514b\u7f57\u5730\u4e9a"
     assert normalize_team_name("Ghana") == "\u52a0\u7eb3"
     assert normalize_team_name("Panama") == "\u5df4\u62ff\u9a6c"
+    assert normalize_team_name("Bosnia-Herzegovina") == "\u6ce2\u9ed1"
+    assert normalize_team_name("Bosnia and Herzegovina") == "\u6ce2\u9ed1"
+    assert normalize_team_name("Bosnia & Herzegovina") == "\u6ce2\u9ed1"
+    assert normalize_team_name("BIH") == "\u6ce2\u9ed1"
 
 
 def test_local_team_names_with_visible_and_invisible_spaces_normalize():
