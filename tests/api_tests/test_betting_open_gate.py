@@ -131,16 +131,75 @@ def test_api_health_outputs_betting_open_gate_status(monkeypatch):
     assert payload["betting_open_blockers"] == ["need_two_matchdays_auto_result_sync"]
 
 
-def test_official_result_fallback_does_not_count_as_auto_result_sync(monkeypatch):
+def test_historical_official_result_fallback_outside_recent_window_does_not_block(monkeypatch):
     monkeypatch.setattr(betting_open_gate, "_rows", lambda conn, sql: [{"matchday": "2026-06-11"}, {"matchday": "2026-06-12"}])
 
-    def fake_scalar(conn, sql):
+    def fake_scalar(conn, sql, params=None):
+        if "official_result_fallback" in sql and "started_at::date" in sql:
+            assert params == ("2026-06-11",)
+            return 0
         if "official_result_fallback" in sql:
-            return 1
+            return 4
         if "results_sync" in sql:
             return 2
         return 0
 
     monkeypatch.setattr(betting_open_gate, "_scalar", fake_scalar)
 
+    evidence = betting_open_gate._two_matchdays_auto_result_sync_evidence(object())
+
+    assert betting_open_gate._two_matchdays_auto_result_sync(object()) is True
+    assert evidence["two_matchdays_auto_result_sync"] is True
+    assert evidence["fallback_window_start"] == "2026-06-11"
+    assert evidence["recent_fallback_ok_count"] == 0
+    assert evidence["historical_fallback_ok_count"] == 4
+    assert evidence["results_ok_count"] == 2
+
+
+def test_official_result_fallback_inside_recent_window_blocks(monkeypatch):
+    monkeypatch.setattr(betting_open_gate, "_rows", lambda conn, sql: [{"matchday": "2026-06-18"}, {"matchday": "2026-06-19"}])
+
+    def fake_scalar(conn, sql, params=None):
+        if "official_result_fallback" in sql and "started_at::date" in sql:
+            assert params == ("2026-06-18",)
+            return 1
+        if "official_result_fallback" in sql:
+            return 4
+        if "results_sync" in sql:
+            return 2
+        return 0
+
+    monkeypatch.setattr(betting_open_gate, "_scalar", fake_scalar)
+
+    evidence = betting_open_gate._two_matchdays_auto_result_sync_evidence(object())
+
+    assert evidence["two_matchdays_auto_result_sync"] is False
     assert betting_open_gate._two_matchdays_auto_result_sync(object()) is False
+    assert evidence["recent_fallback_ok_count"] == 1
+
+
+def test_two_matchdays_auto_result_sync_requires_two_results_sync_ok(monkeypatch):
+    monkeypatch.setattr(betting_open_gate, "_rows", lambda conn, sql: [{"matchday": "2026-06-18"}, {"matchday": "2026-06-19"}])
+
+    def fake_scalar(conn, sql, params=None):
+        if "results_sync" in sql:
+            return 1
+        return 0
+
+    monkeypatch.setattr(betting_open_gate, "_scalar", fake_scalar)
+
+    evidence = betting_open_gate._two_matchdays_auto_result_sync_evidence(object())
+
+    assert evidence["two_matchdays_auto_result_sync"] is False
+    assert evidence["results_ok_count"] == 1
+
+
+def test_two_matchdays_auto_result_sync_requires_two_finished_matchdays(monkeypatch):
+    monkeypatch.setattr(betting_open_gate, "_rows", lambda conn, sql: [{"matchday": "2026-06-19"}])
+    monkeypatch.setattr(betting_open_gate, "_scalar", lambda conn, sql, params=None: 99)
+
+    evidence = betting_open_gate._two_matchdays_auto_result_sync_evidence(object())
+
+    assert evidence["two_matchdays_auto_result_sync"] is False
+    assert evidence["recent_matchdays"] == ["2026-06-19"]
+    assert evidence["recent_fallback_ok_count"] is None

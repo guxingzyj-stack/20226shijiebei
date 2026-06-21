@@ -99,6 +99,7 @@ def collect_evidence(conn) -> dict[str, Any]:
         )
         or 0
     )
+    result_sync_evidence = _two_matchdays_auto_result_sync_evidence(conn)
     return {
         "scheduler_stale": bool(scheduler.get("scheduler_stale")),
         "odds_stale": latest_odds_age is None or latest_odds_age > _env_int("ODDS_STALE_THRESHOLD_MINUTES", DEFAULT_ODDS_STALE_THRESHOLD_MINUTES),
@@ -110,7 +111,7 @@ def collect_evidence(conn) -> dict[str, Any]:
         "leaderboard_safe": leaderboard["leaderboard_safe"] and probe["leaderboard_safety"],
         "leaderboard_exposes_internal_id": leaderboard["leaderboard_exposes_internal_id"],
         "leaderboard_test_user_count": leaderboard["leaderboard_test_user_count"],
-        "two_matchdays_auto_result_sync": _two_matchdays_auto_result_sync(conn),
+        **result_sync_evidence,
         "betting_enabled": _enabled(os.getenv("BETTING_ENABLED", "false")),
         "p1c_prime_ready": evaluable_finished_matches >= 30,
         "p3_status": p3_status,
@@ -214,6 +215,11 @@ def print_report(report: dict[str, Any]) -> None:
         "settlement_idempotency_pass",
         "leaderboard_safe",
         "two_matchdays_auto_result_sync",
+        "recent_matchdays",
+        "fallback_window_start",
+        "recent_fallback_ok_count",
+        "historical_fallback_ok_count",
+        "results_ok_count",
         "betting_enabled",
     ):
         print(f"- {key}: {report.get(key)}")
@@ -255,6 +261,10 @@ def _leaderboard_safety(conn) -> dict[str, Any]:
 
 
 def _two_matchdays_auto_result_sync(conn) -> bool:
+    return bool(_two_matchdays_auto_result_sync_evidence(conn)["two_matchdays_auto_result_sync"])
+
+
+def _two_matchdays_auto_result_sync_evidence(conn) -> dict[str, Any]:
     matchday_rows = _rows(
         conn,
         """
@@ -268,8 +278,17 @@ def _two_matchdays_auto_result_sync(conn) -> bool:
         LIMIT 2
         """,
     )
+    recent_matchdays = [row["matchday"] for row in matchday_rows]
     if len(matchday_rows) < 2:
-        return False
+        return {
+            "two_matchdays_auto_result_sync": False,
+            "recent_matchdays": [_date_text(value) for value in recent_matchdays],
+            "fallback_window_start": None,
+            "recent_fallback_ok_count": None,
+            "historical_fallback_ok_count": None,
+            "results_ok_count": None,
+        }
+    window_start = min(recent_matchdays)
     results_ok_count = int(
         _scalar(
             conn,
@@ -282,7 +301,21 @@ def _two_matchdays_auto_result_sync(conn) -> bool:
         )
         or 0
     )
-    fallback_ok_count = int(
+    recent_fallback_ok_count = int(
+        _scalar(
+            conn,
+            """
+            SELECT count(*)
+            FROM ops_log
+            WHERE job_name = 'official_result_fallback'
+              AND status = 'ok'
+              AND started_at::date >= %s
+            """,
+            (window_start,),
+        )
+        or 0
+    )
+    historical_fallback_ok_count = int(
         _scalar(
             conn,
             """
@@ -294,7 +327,14 @@ def _two_matchdays_auto_result_sync(conn) -> bool:
         )
         or 0
     )
-    return results_ok_count >= 2 and fallback_ok_count == 0
+    return {
+        "two_matchdays_auto_result_sync": results_ok_count >= 2 and recent_fallback_ok_count == 0,
+        "recent_matchdays": [_date_text(value) for value in recent_matchdays],
+        "fallback_window_start": _date_text(window_start),
+        "recent_fallback_ok_count": recent_fallback_ok_count,
+        "historical_fallback_ok_count": historical_fallback_ok_count,
+        "results_ok_count": results_ok_count,
+    }
 
 
 def _latest_ops_log(conn, job_name: str) -> dict[str, Any] | None:
@@ -330,14 +370,19 @@ def _unknown_evidence() -> dict[str, Any]:
         "leaderboard_exposes_internal_id": None,
         "leaderboard_test_user_count": 0,
         "two_matchdays_auto_result_sync": False,
+        "recent_matchdays": [],
+        "fallback_window_start": None,
+        "recent_fallback_ok_count": None,
+        "historical_fallback_ok_count": None,
+        "results_ok_count": None,
         "betting_enabled": _enabled(os.getenv("BETTING_ENABLED", "false")),
         "p1c_prime_ready": False,
         "p3_status": "WAIT",
     }
 
 
-def _scalar(conn, sql: str) -> Any:
-    row = conn.execute(sql).fetchone()
+def _scalar(conn, sql: str, params: tuple[Any, ...] | None = None) -> Any:
+    row = conn.execute(sql, params or ()).fetchone()
     return row[0] if row else None
 
 
@@ -361,6 +406,10 @@ def _iso(value: datetime | None) -> str | None:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc).isoformat()
+
+
+def _date_text(value: Any) -> str:
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
 def _env_int(name: str, default: int) -> int:
