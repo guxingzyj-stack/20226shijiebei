@@ -87,6 +87,20 @@ def collect_evidence(conn) -> dict[str, Any]:
         )
         or 0
     )
+    result_overdue_closed_count = int(
+        _scalar(
+            conn,
+            """
+            SELECT count(*)
+            FROM matches
+            WHERE status IN ('closed', 'scheduled')
+              AND kickoff_at <= now() - interval '3 hours'
+              AND result_home IS NULL
+              AND result_away IS NULL
+            """,
+        )
+        or 0
+    )
     non_finished_with_result_count = int(
         _scalar(
             conn,
@@ -104,6 +118,7 @@ def collect_evidence(conn) -> dict[str, Any]:
         "scheduler_stale": bool(scheduler.get("scheduler_stale")),
         "odds_stale": latest_odds_age is None or latest_odds_age > _env_int("ODDS_STALE_THRESHOLD_MINUTES", DEFAULT_ODDS_STALE_THRESHOLD_MINUTES),
         "finished_null_count": finished_null_count,
+        "result_overdue_closed_count": result_overdue_closed_count,
         "non_finished_with_result_count": non_finished_with_result_count,
         "settlement_runner_error": bool((latest_settlement or {}).get("error")) or str((latest_settlement or {}).get("status") or "").lower() == "error",
         "settlement_probe_pass": probe["settlement_probe_pass"],
@@ -136,6 +151,7 @@ def evaluate_gate(
     betting_enabled: bool,
     p1c_prime_ready: bool | None = None,
     p3_status: str | None = None,
+    result_overdue_closed_count: int | None = 0,
     **extra: Any,
 ) -> dict[str, Any]:
     blockers: list[str] = []
@@ -147,6 +163,8 @@ def evaluate_gate(
         blockers.append("odds_stale")
     if int(finished_null_count or 0) > 0:
         blockers.append("finished_null_count")
+    if int(result_overdue_closed_count or 0) > 0:
+        blockers.append("result_overdue_closed_matches")
     if int(non_finished_with_result_count or 0) > 0:
         blockers.append("non_finished_with_result_count")
     if settlement_runner_error is True or settlement_runner_error is None:
@@ -171,11 +189,14 @@ def evaluate_gate(
         warnings.append("p3_wait")
 
     if betting_enabled and (blockers or wait_blockers):
-        blockers.append("betting_enabled_true_before_gate_ready")
+        status = "BLOCKED"
+        recommend = False
+        final_blockers = _dedupe(blockers + wait_blockers)
     elif betting_enabled:
-        blockers.append("betting_enabled_already_true")
-
-    if blockers:
+        status = "LIVE"
+        recommend = False
+        final_blockers = []
+    elif blockers:
         status = "BLOCKED"
         recommend = False
         final_blockers = _dedupe(blockers + wait_blockers)
@@ -210,6 +231,7 @@ def print_report(report: dict[str, Any]) -> None:
         "scheduler_stale",
         "odds_stale",
         "finished_null_count",
+        "result_overdue_closed_count",
         "non_finished_with_result_count",
         "settlement_probe_pass",
         "settlement_idempotency_pass",
@@ -362,6 +384,7 @@ def _unknown_evidence() -> dict[str, Any]:
         "scheduler_stale": None,
         "odds_stale": None,
         "finished_null_count": 0,
+        "result_overdue_closed_count": 0,
         "non_finished_with_result_count": 0,
         "settlement_runner_error": None,
         "settlement_probe_pass": False,
@@ -434,7 +457,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.parse_args(argv)
     report = generate_report()
     print_report(report)
-    return 0 if report["status"] in {"READY", "WAIT"} else 1
+    return 0 if report["status"] in {"READY", "WAIT", "LIVE"} else 1
 
 
 if __name__ == "__main__":

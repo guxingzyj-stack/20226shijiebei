@@ -94,6 +94,7 @@ def health() -> dict:
         if "result_overdue_closed_matches" not in blockers:
             blockers.append("result_overdue_closed_matches")
         payload["ops_health_blockers"] = blockers
+        payload["ops_health_status"] = "FAIL"
     payload.update(_p3_fifa_health_summary())
     payload.update(_betting_open_gate_health_summary())
     return payload

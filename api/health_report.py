@@ -153,7 +153,7 @@ def _result(report: dict[str, Any]) -> str:
         return "FAIL"
     if report.get("betting_open_gate_status") == "BLOCKED":
         return "FAIL"
-    if _enabled(report.get("betting_enabled")):
+    if _enabled(report.get("betting_enabled")) and report.get("betting_open_gate_status") not in {"LIVE", "READY"}:
         return "WARN"
     if int(report.get("test_users_count") or 0) > 0 or int(report.get("test_matches_count") or 0) > 0:
         return "WARN"
