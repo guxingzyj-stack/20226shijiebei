@@ -179,11 +179,17 @@ def login(payload: UserLogin, db: Database = Depends(get_db)) -> TokenResponse:
     return TokenResponse(access_token=create_access_token(int(user["id"]), str(user["username"])))
 
 
+@app.get("/api/me")
+def me(user: dict = Depends(get_current_user)) -> dict:
+    return {"username": user["username"], "balance": user["balance"]}
+
+
 @app.get("/api/matches")
 def list_matches(status: str = Query("all"), db: Database = Depends(get_db)) -> list[dict]:
     matches = db.list_matches(status=status)
     for match in matches:
         prediction = db.latest_prediction(str(match["match_id"]))
+        match["latest_odds"] = db.latest_odds_by_match(str(match["match_id"]))
         match["latest_prediction"] = prediction
         match["prediction_status"] = _prediction_status(prediction, match)
         match["ev_signals"] = db.latest_ev_signals(str(match["match_id"])) if prediction else []

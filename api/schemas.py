@@ -29,9 +29,19 @@ class BetLegIn(BaseModel):
 
 
 class BetCreate(BaseModel):
-    legs: list[BetLegIn] = Field(min_length=1, max_length=8)
+    legs: list[BetLegIn] | None = None
+    match_id: str | None = None
+    play_type: str | None = None
+    selection: str | None = None
     parlay: str
     stake: Decimal = Field(gt=0)
+
+    def bet_legs(self) -> list[BetLegIn]:
+        if self.legs is not None:
+            return self.legs
+        if self.match_id and self.play_type and self.selection:
+            return [BetLegIn(match_id=self.match_id, play_type=self.play_type, selection=self.selection)]
+        return []
 
 
 class BetResponse(BaseModel):

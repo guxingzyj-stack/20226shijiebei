@@ -42,7 +42,8 @@ export function playTypeLabel(playType: string): string {
   const labels: Record<string, string> = {
     had: "胜平负",
     hhad: "让球胜平负",
-    crs: "比分",
+    crs: "正确比分",
+    correct_score: "正确比分",
     ttg: "总进球",
     hafu: "半全场",
   };
@@ -50,6 +51,19 @@ export function playTypeLabel(playType: string): string {
 }
 
 export function selectionLabel(selection: string): string {
-  const labels: Record<string, string> = { "3": "主胜", "1": "平局", "0": "客胜" };
-  return labels[selection] || selection;
+  const labels: Record<string, string> = {
+    "3": "主胜",
+    "1": "平局",
+    "0": "客胜",
+    other_home_win: "其他主胜",
+    other_draw: "其他平局",
+    other_away_win: "其他客胜",
+    胜其他: "其他主胜",
+    胜其它: "其他主胜",
+    平其他: "其他平局",
+    平其它: "其他平局",
+    负其他: "其他客胜",
+    负其它: "其他客胜",
+  };
+  return labels[selection] || selection.replace(":", "-");
 }

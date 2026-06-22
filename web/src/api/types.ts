@@ -180,6 +180,9 @@ export type BetLeg = {
   snapshot_id?: number;
   goal_line?: string | number | null;
   label?: string;
+  home_team?: string;
+  away_team?: string;
+  kickoff_at?: string;
 };
 
 export type Bet = {
@@ -193,6 +196,11 @@ export type Bet = {
   balance?: string | number | null;
   placed_at?: string;
   settled_at?: string | null;
+};
+
+export type UserProfile = {
+  username: string;
+  balance: string | number;
 };
 
 export type LeaderboardEntry = {

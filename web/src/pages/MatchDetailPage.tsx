@@ -6,6 +6,7 @@ import { apiGet } from "../api/client";
 import type { EvSignal, Match, OddsSnapshot, PredictionHistoryResponse, Suggestion, TeamFormResponse } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { useBetSlip } from "../bet/BetSlipContext";
+import { BettingPanel } from "../components/BettingPanel";
 import { BetSlipCompact } from "../components/BetSlip";
 import { EvBadge } from "../components/EvBadge";
 import { InfoTip } from "../components/InfoTip";
@@ -122,6 +123,14 @@ export function MatchDetailPage() {
           )}
         </div>
       </section>
+
+      <BettingPanel
+        match={match}
+        suggestion={suggestion}
+        showAi
+        onShowAnalysis={() => setShowData(true)}
+        className="shadow-soft"
+      />
 
       <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5">
         <h2 className="mb-4 text-lg font-semibold">11x11 比分矩阵</h2>

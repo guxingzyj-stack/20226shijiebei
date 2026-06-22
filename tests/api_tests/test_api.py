@@ -31,7 +31,8 @@ class FakeDb:
             }
         }
         self.snapshots = {
-            ("m1", "had"): {"id": 10, "match_id": "m1", "play_type": "had", "goal_line": None, "odds": {"3": 2.0, "1": 3.0, "0": 4.0}}
+            ("m1", "had"): {"id": 10, "match_id": "m1", "play_type": "had", "goal_line": None, "odds": {"3": 2.0, "1": 3.0, "0": 4.0}},
+            ("m1", "crs"): {"id": 11, "match_id": "m1", "play_type": "crs", "goal_line": None, "odds": {"2:1": 8.5, "胜其他": 40.0}},
         }
         self.ev_signal = {"match_id": "m1", "play_type": "had", "selection": "3", "model_prob": 0.60, "odds": 2.20, "ev": 0.32, "suggestion_eligible": False}
         self.prediction = {
@@ -170,6 +171,51 @@ def test_bet_placement_uses_server_odds_not_client_odds(monkeypatch):
         assert body["legs"][0]["odds"] == "2.0"
         assert body["potential_payout"] == "20.0"
         assert body["balance"] == "90"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_placement_accepts_correct_score_alias_and_flat_payload(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "test-secret")
+    monkeypatch.setenv("BETTING_ENABLED", "true")
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": hash_password("dummy-test-passphrase"), "balance": Decimal("100")}
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/bets",
+            json={"match_id": "m1", "play_type": "correct_score", "selection": "2-1", "parlay": "single", "stake": "10"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["legs"][0]["play_type"] == "crs"
+        assert body["legs"][0]["selection"] == "2:1"
+        assert body["legs"][0]["odds"] == "8.5"
+        assert body["potential_payout"] == "85.0"
+        assert body["balance"] == "90"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_placement_rejects_correct_score_without_real_odds(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "test-secret")
+    monkeypatch.setenv("BETTING_ENABLED", "true")
+    fake = FakeDb()
+    fake.snapshots.pop(("m1", "crs"))
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": hash_password("dummy-test-passphrase"), "balance": Decimal("100")}
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/bets",
+            json={"match_id": "m1", "play_type": "correct_score", "selection": "2-1", "parlay": "single", "stake": "10"},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "market not available"
+        assert fake.bets == []
     finally:
         app.dependency_overrides.clear()
 
@@ -357,6 +403,19 @@ def test_health_returns_scheduler_fields(monkeypatch):
     assert "latest_ops_health_check_at" in body
     assert "ops_health_status" in body
     assert "ops_health_blockers" in body
+
+
+def test_me_returns_current_user_balance(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("100")}
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.get("/api/me")
+        assert response.status_code == 200
+        assert response.json() == {"username": "bob", "balance": "100"}
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_match_detail_without_current_prediction_returns_status(monkeypatch):

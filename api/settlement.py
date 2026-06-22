@@ -66,7 +66,7 @@ def settle_leg(
     if play_type == "hhad":
         line = float(goal_line or 0)
         return _win_if(selection == _outcome(result.home_score + line, result.away_score))
-    if play_type == "crs":
+    if play_type in {"crs", "correct_score"}:
         return _settle_crs(selection, result)
     if play_type == "ttg":
         total_goals = result.home_score + result.away_score
@@ -138,6 +138,16 @@ def _settle_crs(selection: str, result: MatchResult) -> LegStatus:
 
 
 def _normalize_score_selection(selection: str) -> str:
+    if selection == "other_home_win":
+        return WIN_OTHER
+    if selection == "other_draw":
+        return DRAW_OTHER
+    if selection == "other_away_win":
+        return LOSE_OTHER
+    if "-" in selection:
+        left, right = selection.split("-", 1)
+        if left.isdigit() and right.isdigit():
+            return f"{left}:{right}"
     if ":" in selection:
         return selection
     if len(selection) == 2 and selection.isdigit():

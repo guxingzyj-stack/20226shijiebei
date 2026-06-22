@@ -20,6 +20,8 @@ def test_ttg_seven_plus():
 
 def test_crs_exact_and_other_buckets():
     assert settle_leg("crs", "10", MatchResult(1, 0)) == "win"
+    assert settle_leg("correct_score", "2-1", MatchResult(2, 1)) == "win"
+    assert settle_leg("correct_score", "other_home_win", MatchResult(6, 0)) == "win"
     assert settle_leg("crs", "\u80dc\u5176\u4ed6", MatchResult(6, 0)) == "win"
     assert settle_leg("crs", "\u5e73\u5176\u4ed6", MatchResult(4, 4)) == "win"
     assert settle_leg("crs", "\u8d1f\u5176\u4ed6", MatchResult(0, 6)) == "win"

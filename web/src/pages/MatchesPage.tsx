@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ChevronRight, GitBranch, MessageCircle } from "lucide-react";
 import { apiGet } from "../api/client";
 import type { Match } from "../api/types";
+import { BettingPanel } from "../components/BettingPanel";
 import { MetricHelp } from "../components/MetricHelp";
 import { ProbabilityBar } from "../components/ProbabilityBar";
 import { formatDateKey, formatDateTime } from "../utils/format";
@@ -173,6 +174,12 @@ function MatchCard({ match }: { match: Match }) {
           </div>
         )}
       </Link>
+
+      {!completeResult ? (
+        <div className="mt-4">
+          <BettingPanel match={match} compact analysisTo={`/matches/${encodeURIComponent(match.match_id)}`} />
+        </div>
+      ) : null}
 
       {hasPrediction && !completeResult ? (
         <div className="mt-4">
