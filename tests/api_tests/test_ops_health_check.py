@@ -98,7 +98,7 @@ def test_ops_health_check_warns_without_open_bets_or_enough_samples():
     assert "insufficient_finished_matches" in blockers
 
 
-def test_ops_health_check_warns_when_closed_result_is_overdue():
+def test_ops_health_check_fails_when_closed_result_is_overdue():
     status, blockers = ops_health_check.evaluate_status(
         scheduler_stale=False,
         latest_results_sync_age_minutes=10,
@@ -113,7 +113,7 @@ def test_ops_health_check_warns_when_closed_result_is_overdue():
         result_overdue_closed_count=2,
     )
 
-    assert status == "WARN"
+    assert status == "FAIL"
     assert "result_overdue_closed_matches" in blockers
 
 
@@ -265,6 +265,48 @@ def test_latest_ops_health_status_reads_summary(monkeypatch):
 
     assert status["ops_health_status"] == "WARN"
     assert status["ops_health_blockers"] == ["no_open_bets_to_settle"]
+
+
+def test_latest_ops_health_status_maps_ok_to_public_pass(monkeypatch):
+    now = datetime.now(timezone.utc) - timedelta(minutes=3)
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            self.sql = sql
+            self.params = params
+
+        def fetchone(self):
+            return {
+                "job_name": "ops_health_check",
+                "status": "ok",
+                "started_at": now,
+                "finished_at": now,
+                "summary": {"overall_status": "OK", "blockers": []},
+                "error": None,
+            }
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self, *args, **kwargs):
+            return FakeCursor()
+
+    monkeypatch.setattr(ops_health_check, "connect", lambda: FakeConn())
+
+    status = ops_health_check.latest_ops_health_status()
+
+    assert status["ops_health_status"] == "PASS"
+    assert status["ops_health_blockers"] == []
 
 
 def test_ops_health_check_includes_p3_fifa_without_causing_fail(monkeypatch):

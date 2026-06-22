@@ -25,6 +25,19 @@ def test_health_report_warns_when_betting_enabled():
     assert health_report._result(report) == "WARN"
 
 
+def test_health_report_passes_when_betting_enabled_and_gate_live():
+    report = {
+        "database": "ok",
+        "odds_snapshots count": 10,
+        "betting_enabled": "true",
+        "betting_open_gate_status": "LIVE",
+        "test_users_count": 0,
+        "test_matches_count": 0,
+    }
+
+    assert health_report._result(report) == "PASS"
+
+
 def test_health_report_fails_without_database_or_odds():
     assert health_report._result({"database": "fail", "odds_snapshots count": 10}) == "FAIL"
     assert health_report._result({"database": "ok", "odds_snapshots count": 0}) == "FAIL"

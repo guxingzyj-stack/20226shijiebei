@@ -10,6 +10,7 @@ def _base(**overrides):
         "scheduler_stale": False,
         "odds_stale": False,
         "finished_null_count": 0,
+        "result_overdue_closed_count": 0,
         "non_finished_with_result_count": 0,
         "settlement_runner_error": False,
         "settlement_probe_pass": True,
@@ -30,6 +31,7 @@ def test_gate_ready_when_all_conditions_pass():
     report = betting_open_gate.evaluate_gate(**_base())
 
     assert report["status"] == "READY"
+    assert report["betting_open_gate_status"] == "READY"
     assert report["recommend_open_betting"] is True
     assert report["blockers"] == []
 
@@ -94,15 +96,51 @@ def test_leaderboard_internal_id_blocks_gate():
     assert "leaderboard_exposes_internal_id" in report["blockers"]
 
 
-def test_betting_enabled_before_gate_ready_blocks_without_changing_env(monkeypatch):
+def test_betting_enabled_live_when_all_conditions_pass_without_artificial_blocker(monkeypatch):
+    monkeypatch.setenv("BETTING_ENABLED", "true")
+    before = os.getenv("BETTING_ENABLED")
+
+    report = betting_open_gate.evaluate_gate(**_base(betting_enabled=True))
+
+    assert report["status"] == "LIVE"
+    assert report["betting_open_gate_status"] == "LIVE"
+    assert report["recommend_open_betting"] is False
+    assert report["blockers"] == []
+    assert report["betting_open_blockers"] == []
+    assert "betting_enabled_already_true" not in report["blockers"]
+    assert "betting_enabled_true_before_gate_ready" not in report["blockers"]
+    assert os.getenv("BETTING_ENABLED") == before
+
+
+def test_betting_enabled_with_wait_blocker_is_blocked_without_artificial_blocker(monkeypatch):
     monkeypatch.setenv("BETTING_ENABLED", "true")
     before = os.getenv("BETTING_ENABLED")
 
     report = betting_open_gate.evaluate_gate(**_base(betting_enabled=True, two_matchdays_auto_result_sync=False))
 
     assert report["status"] == "BLOCKED"
-    assert "betting_enabled_true_before_gate_ready" in report["blockers"]
+    assert "need_two_matchdays_auto_result_sync" in report["blockers"]
+    assert "betting_enabled_already_true" not in report["blockers"]
+    assert "betting_enabled_true_before_gate_ready" not in report["blockers"]
     assert os.getenv("BETTING_ENABLED") == before
+
+
+def test_betting_enabled_with_odds_stale_blocks_on_real_reason():
+    report = betting_open_gate.evaluate_gate(**_base(betting_enabled=True, odds_stale=True))
+
+    assert report["status"] == "BLOCKED"
+    assert report["betting_open_gate_status"] == "BLOCKED"
+    assert "odds_stale" in report["blockers"]
+    assert "betting_enabled_already_true" not in report["blockers"]
+    assert "betting_enabled_true_before_gate_ready" not in report["blockers"]
+
+
+def test_betting_enabled_with_overdue_closed_result_blocks_gate():
+    report = betting_open_gate.evaluate_gate(**_base(betting_enabled=True, result_overdue_closed_count=2))
+
+    assert report["status"] == "BLOCKED"
+    assert report["betting_open_gate_status"] == "BLOCKED"
+    assert "result_overdue_closed_matches" in report["blockers"]
 
 
 def test_api_health_outputs_betting_open_gate_status(monkeypatch):

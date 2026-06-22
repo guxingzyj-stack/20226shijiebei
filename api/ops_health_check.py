@@ -230,7 +230,7 @@ def evaluate_status(
     if closed_prediction_pending_count > 0:
         warn.append("closed_prediction_pending")
     if result_overdue_closed_count > 0:
-        warn.append("result_overdue_closed_matches")
+        fail.append("result_overdue_closed_matches")
     if fail:
         return "FAIL", fail + warn
     if warn:
@@ -291,9 +291,10 @@ def latest_ops_health_status() -> dict[str, Any]:
     summary = row.get("summary") if row else None
     if not isinstance(summary, dict):
         summary = {}
+    status_value = summary.get("overall_status") or (str(row.get("status")).upper() if row else None)
     return {
         "latest_ops_health_check_at": _iso(row.get("started_at") if row else None),
-        "ops_health_status": summary.get("overall_status") or (str(row.get("status")).upper() if row else None),
+        "ops_health_status": _public_ops_health_status(status_value),
         "ops_health_blockers": summary.get("blockers") or [],
     }
 
@@ -425,6 +426,12 @@ def _env_int(name: str, default: int) -> int:
     except ValueError:
         return default
     return value if value > 0 else default
+
+
+def _public_ops_health_status(value: Any) -> Any:
+    if str(value or "").upper() == "OK":
+        return "PASS"
+    return value
 
 
 def main(argv: list[str] | None = None) -> int:
