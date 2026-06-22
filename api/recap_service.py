@@ -11,6 +11,7 @@ from psycopg.rows import dict_row
 from api import script_compare
 from api.db import connect
 from api.recap_models import RecapPayload, RecapResponse
+from api.result_source_mapping import normalize_team_name
 from api.vig import calculate_had_vig
 
 
@@ -379,7 +380,7 @@ def _script_section(match: dict[str, Any], repo: RecapRepository) -> dict[str, A
     is_real = bool(item.get("is_real"))
     return {
         "has_script": True,
-        "script_score": item.get("script_score"),
+        "script_score": _script_score_for_match_order(match, item),
         "narrative": item.get("narrative"),
         "group": item.get("group"),
         "stage": item.get("stage"),
@@ -390,6 +391,24 @@ def _script_section(match: dict[str, Any], repo: RecapRepository) -> dict[str, A
         "exact_hit": None if is_real else item.get("exact_hit"),
         "comment": script_compare.COMMENT_REAL_SAMPLE if is_real else item.get("comment"),
     }
+
+
+def _script_score_for_match_order(match: dict[str, Any], item: dict[str, Any]) -> str | None:
+    score = item.get("script_score")
+    if score is None:
+        return None
+
+    parts = str(score).replace("-", ":").split(":", 1)
+    if len(parts) != 2:
+        return str(score)
+
+    script_home = normalize_team_name(item.get("home_team"))
+    script_away = normalize_team_name(item.get("away_team"))
+    match_home = normalize_team_name(match.get("home_team"))
+    match_away = normalize_team_name(match.get("away_team"))
+    if script_home == match_away and script_away == match_home:
+        return f"{parts[1]}:{parts[0]}"
+    return str(score)
 
 
 def _three_way_summary(

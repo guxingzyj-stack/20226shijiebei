@@ -202,6 +202,43 @@ def test_script_projection_reports_hits_for_non_real_script():
     assert script["exact_hit"] is False
 
 
+def test_recap_script_score_is_canonicalized_to_match_home_away_order():
+    repo = FakeRecapRepo()
+    repo.matches["finished"].update(
+        {
+            "home_team": "\u65b0\u897f\u5170",
+            "away_team": "\u57c3\u53ca",
+            "result_home": 1,
+            "result_away": 3,
+        }
+    )
+    repo.script_rows = [
+        {
+            "id": 40,
+            "grp": "G",
+            "stage": "group",
+            "home_team": "\u57c3\u53ca",
+            "away_team": "\u65b0\u897f\u5170",
+            "script_home": 2,
+            "script_away": 1,
+            "narrative": "script projection",
+            "is_real": False,
+        }
+    ]
+
+    result = recap_service.build_match_recap("finished", repo)
+
+    recap = result["recap"]
+    script = recap["script"]
+    display_text = f"{recap['home_team']} {script['script_score']} {recap['away_team']}"
+    assert recap["result"]["scoreline"] == "1-3"
+    assert script["script_score"] == "1:2"
+    assert display_text == "\u65b0\u897f\u5170 1:2 \u57c3\u53ca"
+    assert display_text != "\u65b0\u897f\u5170 2:1 \u57c3\u53ca"
+    assert script["direction_hit"] is True
+    assert script["exact_hit"] is False
+
+
 def test_no_script_returns_empty_script_section():
     repo = FakeRecapRepo()
     repo.script_rows = []
