@@ -72,6 +72,111 @@ def test_validate_state_requires_correct_pre_kickoff_prediction() -> None:
     assert any("has no pre-kickoff prediction" in error for error in errors)
 
 
+def test_verify_after_delete_allows_split_to_disappear_when_tracked_correct_prediction_remains() -> None:
+    before = {
+        "plans": [{"correct_id": "500-1359210", "dirty_ids": ["500-2040123"], "errors": []}],
+        "dirty_ids": ["500-2040123"],
+        "script_predictions_count": 72,
+    }
+    after = {
+        "plans": [],
+        "dirty_ids": ["500-2040123"],
+        "dirty_counts": {"500-2040123": {table: 0 for table in cleanup.MATCH_ID_TABLES}},
+        "correct_matches": {"500-1359210": _match("500-1359210")},
+        "correct_pre_kickoff_predictions": {"500-1359210": 112},
+        "script_predictions_count": 72,
+    }
+
+    assert cleanup._verify_after_delete(after, before) == []
+
+
+def test_verify_after_delete_still_rejects_missing_tracked_correct_prediction() -> None:
+    before = {
+        "plans": [{"correct_id": "500-1359210", "dirty_ids": ["500-2040123"], "errors": []}],
+        "dirty_ids": ["500-2040123"],
+        "script_predictions_count": 72,
+    }
+    after = {
+        "plans": [],
+        "dirty_ids": ["500-2040123"],
+        "dirty_counts": {"500-2040123": {table: 0 for table in cleanup.MATCH_ID_TABLES}},
+        "correct_matches": {"500-1359210": _match("500-1359210")},
+        "correct_pre_kickoff_predictions": {"500-1359210": 0},
+        "script_predictions_count": 72,
+    }
+
+    errors = cleanup._verify_after_delete(after, before)
+
+    assert "correct match 500-1359210 lost pre-kickoff predictions" in errors
+
+
+def test_verify_after_delete_still_rejects_dirty_id_residue() -> None:
+    before = {
+        "plans": [{"correct_id": "500-1359210", "dirty_ids": ["500-2040123"], "errors": []}],
+        "dirty_ids": ["500-2040123"],
+        "script_predictions_count": 72,
+    }
+    after = {
+        "plans": [],
+        "dirty_ids": ["500-2040123"],
+        "dirty_counts": {
+            "500-2040123": {
+                **{table: 0 for table in cleanup.MATCH_ID_TABLES},
+                "odds_snapshots": 1,
+            }
+        },
+        "correct_matches": {"500-1359210": _match("500-1359210")},
+        "correct_pre_kickoff_predictions": {"500-1359210": 112},
+        "script_predictions_count": 72,
+    }
+
+    errors = cleanup._verify_after_delete(after, before)
+
+    assert "odds_snapshots still has 1 rows for 500-2040123" in errors
+
+
+class _TrackedStateCursor:
+    def __init__(self):
+        self.sql = ""
+        self.params = None
+
+    def execute(self, sql, params=None):
+        self.sql = " ".join(sql.split())
+        self.params = params
+
+    def fetchone(self):
+        if "to_regclass" in self.sql:
+            return {"table_name": "public.table"}
+        if "FROM predictions" in self.sql:
+            return {"count": 112}
+        if "FROM bets" in self.sql:
+            return {"count": 0}
+        if "FROM script_predictions" in self.sql:
+            return {"count": 72}
+        if "SELECT count(*) AS count" in self.sql:
+            return {"count": 0}
+        if "FROM matches WHERE match_id = %s" in self.sql:
+            return _match(str(self.params[0]))
+        raise AssertionError(f"unhandled fetchone SQL: {self.sql}")
+
+    def fetchall(self):
+        if "FROM matches WHERE match_id LIKE '500-%%'" in self.sql:
+            return [_match("500-1359210")]
+        return []
+
+
+def test_collect_state_counts_tracked_correct_predictions_after_split_disappears() -> None:
+    state = cleanup._collect_state(
+        _TrackedStateCursor(),
+        tracked_dirty_ids=["500-2040123"],
+        tracked_correct_ids=["500-1359210"],
+    )
+
+    assert state["plans"] == []
+    assert state["correct_matches"]["500-1359210"]["match_id"] == "500-1359210"
+    assert state["correct_pre_kickoff_predictions"]["500-1359210"] == 112
+
+
 def test_cli_defaults_to_dry_run(monkeypatch) -> None:
     called = False
 

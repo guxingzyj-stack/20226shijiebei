@@ -71,9 +71,8 @@ def _collect_state(
     dirty_counts = _dirty_counts(cur, table_status, dirty_ids)
     bets_by_dirty_id = _bets_by_dirty_id(cur, dirty_ids) if table_status["bets"] else {dirty_id: 0 for dirty_id in dirty_ids}
     correct_prediction_counts = {
-        plan["correct_id"]: _count_correct_pre_kickoff_predictions(cur, plan["correct_id"])
-        for plan in plans
-        if plan.get("correct_id")
+        correct_id: _count_correct_pre_kickoff_predictions(cur, correct_id)
+        for correct_id in correct_ids
     }
     correct_matches = {match_id: _fetch_one_match(cur, match_id) for match_id in correct_ids}
     script_prediction_count = _count_table(cur, "script_predictions") if table_status["script_predictions"] else "table_not_found_skipped"
