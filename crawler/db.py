@@ -67,9 +67,20 @@ def finish_run(
 
 
 def upsert_matches(conn: psycopg.Connection, matches: Iterable[MatchOdds]) -> dict[str, int]:
-    stats = {"new_matches_inserted": 0, "existing_matches_updated": 0}
+    stats = {
+        "new_matches_inserted": 0,
+        "existing_matches_updated": 0,
+        "drifted_500_ids_merged": 0,
+        "untrusted_500_ids_skipped": 0,
+    }
     with conn.cursor() as cur:
         for match in matches:
+            drift_result = _merge_drifted_500_id_if_needed(cur, match)
+            if drift_result == "merged":
+                stats["drifted_500_ids_merged"] += 1
+            elif drift_result == "skipped":
+                stats["untrusted_500_ids_skipped"] += 1
+                continue
             _merge_seed_match_id_if_needed(cur, match)
             cur.execute(
                 """
@@ -128,6 +139,8 @@ def max_match_kickoff(conn: psycopg.Connection) -> datetime | None:
 def _merge_seed_match_id_if_needed(cur: psycopg.Cursor, match: MatchOdds) -> None:
     if not match.match_id.startswith("500-"):
         return
+    if not _is_trusted_500_match_id(match):
+        return
     cur.execute("SELECT 1 FROM matches WHERE match_id = %s", (match.match_id,))
     if cur.fetchone():
         return
@@ -174,6 +187,51 @@ def _merge_seed_match_id_if_needed(cur: psycopg.Cursor, match: MatchOdds) -> Non
             ),
         )
         return
+
+
+def _merge_drifted_500_id_if_needed(cur: psycopg.Cursor, match: MatchOdds) -> str:
+    if not match.match_id.startswith("500-"):
+        return "none"
+
+    trusted = _is_trusted_500_match_id(match)
+    if trusted:
+        cur.execute("SELECT 1 FROM matches WHERE match_id = %s", (match.match_id,))
+        if cur.fetchone():
+            return "none"
+
+    cur.execute(
+        """
+        SELECT match_id, home_team, away_team
+        FROM matches
+        WHERE match_id LIKE '500-%%'
+          AND match_id <> %s
+          AND kickoff_at = %s
+        """,
+        (match.match_id, match.kickoff_at),
+    )
+    candidates = [
+        existing_match_id
+        for existing_match_id, home_team, away_team in cur.fetchall()
+        if _canonical_team(home_team) == _canonical_team(match.home_team)
+        and _canonical_team(away_team) == _canonical_team(match.away_team)
+    ]
+    unique_candidates = sorted(set(candidates))
+
+    if len(unique_candidates) == 1 and not trusted:
+        match.match_id = unique_candidates[0]
+        match.match_id_source = "identity_match"
+        match.persistence_skip_reason = None
+        return "merged"
+
+    if not trusted:
+        match.persistence_skip_reason = "untrusted_500_match_id_without_unique_existing_identity_match"
+        return "skipped"
+
+    return "none"
+
+
+def _is_trusted_500_match_id(match: MatchOdds) -> bool:
+    return match.match_id_source in {None, "data-fixtureid", "identity_match"}
 
 
 TEAM_ALIASES = {
@@ -245,6 +303,8 @@ def write_odds_snapshots(conn: psycopg.Connection, matches: Iterable[MatchOdds],
     written = 0
     with conn.cursor() as cur:
         for match in matches:
+            if match.persistence_skip_reason:
+                continue
             for entry in match.odds:
                 odds_hash = odds_md5(entry.odds)
                 cur.execute(

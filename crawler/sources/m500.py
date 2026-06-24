@@ -285,7 +285,7 @@ def sample_match_json(match: MatchOdds) -> dict[str, object]:
 
 def _parse_match_row(row: Tag, date_text: str) -> MatchOdds:
     attrs = row.attrs
-    match_id = str(attrs.get("data-fixtureid") or attrs.get("data-id") or attrs.get("data-processid") or "")
+    match_id, match_id_source = _match_id_from_attrs(attrs)
     match_num = str(attrs.get("data-matchnum") or "")
     home = str(attrs.get("data-homesxname") or _team_name(row, "team-l"))
     away = str(attrs.get("data-awaysxname") or _team_name(row, "team-r"))
@@ -298,7 +298,16 @@ def _parse_match_row(row: Tag, date_text: str) -> MatchOdds:
         away_team=away,
         kickoff_at=kickoff,
         status=_status_from_sale_attrs(attrs),
+        match_id_source=match_id_source,
     )
+
+
+def _match_id_from_attrs(attrs: dict[str, object]) -> tuple[str, str]:
+    for key in ("data-fixtureid", "data-id", "data-processid"):
+        value = str(attrs.get(key) or "").strip()
+        if value:
+            return value, key
+    return "", "missing"
 
 
 def _status_from_sale_attrs(attrs: dict[str, object]) -> str:

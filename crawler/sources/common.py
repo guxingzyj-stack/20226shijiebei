@@ -31,6 +31,8 @@ class MatchOdds:
     result_away: int | None = None
     status: str = "scheduled"
     odds: list[OddsEntry] = field(default_factory=list)
+    match_id_source: str | None = None
+    persistence_skip_reason: str | None = None
 
 
 class SourceError(RuntimeError):

@@ -88,8 +88,27 @@ class M500ParserTests(unittest.TestCase):
         matches = m500.parse_html_or_raise(html, "2026-06-10")
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0].match_id, "500-1359172")
+        self.assertEqual(matches[0].match_id_source, "data-fixtureid")
         self.assertEqual({entry.play_type for entry in matches[0].odds}, {"had", "hhad"})
         self.assertEqual(matches[0].status, "scheduled")
+
+    def test_row_without_fixture_id_is_marked_untrusted(self) -> None:
+        html = """
+        <table><tr class="bet-tb-tr" data-id="2040123" data-homesxname="Cape Verde"
+          data-awaysxname="Saudi Arabia" data-matchdate="2026-06-24" data-matchtime="03:00"
+          data-simpleleague="World Cup" data-matchnum="001" data-isend="0">
+          <td class="td td-betbtn">
+            <p class="betbtn" data-sp="1.30" data-type="nspf" data-value="3"></p>
+            <p class="betbtn" data-sp="4.15" data-type="nspf" data-value="1"></p>
+            <p class="betbtn" data-sp="8.40" data-type="nspf" data-value="0"></p>
+          </td>
+        </tr></table>
+        """
+
+        matches = m500.parse_html_or_raise(html, "2026-06-24")
+
+        self.assertEqual(matches[0].match_id, "500-2040123")
+        self.assertEqual(matches[0].match_id_source, "data-id")
 
     def test_sale_closed_is_not_finished(self) -> None:
         html = """
