@@ -13,7 +13,7 @@ from psycopg.errors import UniqueViolation
 
 from api.auth import create_access_token, current_user_claims, hash_password, verify_password
 from api.banter import build_banter
-from api.betting import BETTING_DISABLED_MESSAGE, is_betting_enabled, place_bet, suggested_stake
+from api.betting import BETTING_DISABLED_MESSAGE, build_bet_plan, is_betting_enabled, place_bet, place_bet_plan, suggested_stake
 from api.db import Database, get_db
 from api.display_text import clean_display_text, clean_match_public_fields
 from api.ops_health_check import latest_ops_health_status
@@ -22,7 +22,17 @@ from api import script_compare
 from api.recap_service import build_match_recap, recent_recaps, recap_summary as build_recap_summary
 from api.scheduler import scheduler_startup_error, start_api_scheduler, stop_api_scheduler
 from api.scheduler_health import scheduler_freshness
-from api.schemas import BetCreate, BetResponse, SuggestionResponse, TokenResponse, UserCreate, UserLogin
+from api.schemas import (
+    BetCreate,
+    BetPlanCreate,
+    BetPlanResponse,
+    BetPlanSubmitResponse,
+    BetResponse,
+    SuggestionResponse,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+)
 from api.verdict import build_verdict
 from api.vig import calculate_had_vig, market_implied_prob_had
 
@@ -264,6 +274,17 @@ def create_bet(
     return place_bet(db, user, payload)
 
 
+@app.post("/api/bets/plan", response_model=BetPlanSubmitResponse)
+def create_bet_plan(
+    payload: BetPlanCreate,
+    user: dict = Depends(get_current_user),
+    db: Database = Depends(get_db),
+) -> dict:
+    if not is_betting_enabled():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=BETTING_DISABLED_MESSAGE)
+    return place_bet_plan(db, user, budget=payload.budget, max_bets=payload.max_bets)
+
+
 @app.get("/api/bets/me")
 def my_bets(user: dict = Depends(get_current_user), db: Database = Depends(get_db)) -> list[dict]:
     return db.list_user_bets(int(user["id"]))
@@ -298,6 +319,16 @@ def model_suggestion(
         ev=float(signal["ev"]),
         suggested_stake=stake,
     )
+
+
+@app.get("/api/model/bet-plan", response_model=BetPlanResponse)
+def model_bet_plan(
+    budget: Decimal = Query(Decimal("100"), gt=0),
+    max_bets: int = Query(5, ge=1, le=8),
+    user: dict = Depends(get_current_user),
+    db: Database = Depends(get_db),
+) -> dict:
+    return build_bet_plan(db, user, budget=budget, max_bets=max_bets)
 
 
 @app.get("/api/recap/status")

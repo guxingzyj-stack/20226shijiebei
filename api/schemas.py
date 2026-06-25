@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -63,3 +64,41 @@ class SuggestionResponse(BaseModel):
     ev: float | None = None
     suggested_stake: Decimal
     reason: str | None = None
+
+
+class BetPlanItem(BaseModel):
+    match_id: str
+    match_num: int | None = None
+    home_team: str | None = None
+    away_team: str | None = None
+    kickoff_at: datetime | None = None
+    play_type: str
+    selection: str
+    selection_label: str | None = None
+    model_prob: float
+    ev: float
+    odds: Decimal
+    stake: Decimal
+    potential_payout: Decimal
+    snapshot_id: int | None = None
+    goal_line: Any | None = None
+
+
+class BetPlanResponse(BaseModel):
+    available: bool
+    total_budget: Decimal
+    total_stake: Decimal
+    items: list[BetPlanItem]
+    blockers: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class BetPlanCreate(BaseModel):
+    budget: Decimal = Field(gt=0)
+    max_bets: int = Field(default=5, ge=1, le=8)
+
+
+class BetPlanSubmitResponse(BaseModel):
+    created_bets: list[BetResponse]
+    plan_snapshot: BetPlanResponse
+    balance_after: Decimal

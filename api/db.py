@@ -189,6 +189,47 @@ class Database:
             )
             return _mark_research_only(_dedupe_and_sort_ev_signals([dict(row) for row in cur.fetchall()], limit))
 
+    def plan_ev_candidates(self, limit: int = 50) -> list[dict[str, Any]]:
+        with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT match_id, model_version, play_type, selection, model_prob, odds, ev,
+                       snapshot_id, research_only, suggestion_eligible, created_at
+                FROM (
+                  SELECT DISTINCT ON (e.match_id, e.play_type, e.selection)
+                         e.match_id,
+                         e.model_version,
+                         e.play_type,
+                         e.selection,
+                         e.model_prob,
+                         e.odds,
+                         e.ev,
+                         e.snapshot_id,
+                         e.research_only,
+                         e.suggestion_eligible,
+                         e.created_at
+                  FROM ev_signals e
+                  WHERE e.model_version = (
+                      SELECT p.model_version
+                      FROM predictions p
+                      WHERE p.match_id = e.match_id
+                      ORDER BY p.created_at DESC, p.id DESC
+                      LIMIT 1
+                    )
+                    AND e.suggestion_eligible = true
+                    AND e.ev > 0
+                    AND e.ev <= %s
+                    AND e.play_type IN ('had', 'hhad')
+                    AND COALESCE(e.research_only, false) = false
+                  ORDER BY e.match_id, e.play_type, e.selection, e.created_at DESC
+                ) deduped
+                ORDER BY ev DESC, created_at DESC
+                LIMIT %s
+                """,
+                (EV_RESEARCH_ONLY_THRESHOLD, limit),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
     def odds_history(self, match_id: str, play_type: str | None = None) -> list[dict[str, Any]]:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             if play_type:
@@ -257,6 +298,42 @@ class Database:
             cur.execute("SELECT balance FROM users WHERE id = %s", (user_id,))
             bet["balance"] = cur.fetchone()["balance"]
             return bet
+
+    def create_bets_batch(self, user_id: int, planned_bets: list[dict[str, Any]]) -> dict[str, Any]:
+        if not planned_bets:
+            raise ValueError("no bets to create")
+        total_stake = sum((Decimal(str(item["stake"])) for item in planned_bets), Decimal("0"))
+        with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SELECT balance FROM users WHERE id = %s FOR UPDATE", (user_id,))
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("user not found")
+            balance = Decimal(str(row["balance"]))
+            if balance < total_stake:
+                raise ValueError("insufficient balance")
+            cur.execute("UPDATE users SET balance = balance - %s WHERE id = %s", (total_stake, user_id))
+            created_bets: list[dict[str, Any]] = []
+            for item in planned_bets:
+                cur.execute(
+                    """
+                    INSERT INTO bets (user_id, legs, parlay, stake, potential_payout)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id, legs, parlay, stake, potential_payout, status
+                    """,
+                    (
+                        user_id,
+                        Jsonb(item["legs"]),
+                        item.get("parlay", "single"),
+                        item["stake"],
+                        item["potential_payout"],
+                    ),
+                )
+                created_bets.append(dict(cur.fetchone()))
+            cur.execute("SELECT balance FROM users WHERE id = %s", (user_id,))
+            balance_after = cur.fetchone()["balance"]
+            for bet in created_bets:
+                bet["balance"] = balance_after
+            return {"created_bets": created_bets, "balance_after": balance_after}
 
     def list_user_bets(self, user_id: int) -> list[dict[str, Any]]:
         with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
