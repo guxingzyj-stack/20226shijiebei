@@ -379,6 +379,12 @@ function SuggestionCard({ suggestion, token }: { suggestion: Suggestion | null; 
         <div className="mt-1 text-2xl font-semibold text-gold">{formatMoney(suggestion.suggested_stake)}</div>
         <div className="mt-2 text-xs text-paper/50">这是风险管理演示，不是盈利建议。</div>
       </div>
+      <Link
+        to="/bet?mode=plan"
+        className="inline-flex w-full items-center justify-center rounded-lg border border-gold/40 px-3 py-2 text-sm font-semibold text-gold transition hover:bg-gold/10"
+      >
+        加入数据方案
+      </Link>
     </div>
   );
 }

@@ -198,6 +198,39 @@ export type Bet = {
   settled_at?: string | null;
 };
 
+export type BetPlanItem = {
+  match_id: string;
+  match_num?: number | null;
+  home_team?: string | null;
+  away_team?: string | null;
+  kickoff_at?: string | null;
+  play_type: string;
+  selection: string;
+  selection_label?: string | null;
+  model_prob: string | number;
+  ev: string | number;
+  odds: string | number;
+  stake: string | number;
+  potential_payout: string | number;
+  snapshot_id?: number | null;
+  goal_line?: string | number | null;
+};
+
+export type BetPlanResponse = {
+  available: boolean;
+  total_budget: string | number;
+  total_stake: string | number;
+  items: BetPlanItem[];
+  blockers: string[];
+  warnings: string[];
+};
+
+export type BetPlanSubmitResponse = {
+  created_bets: Bet[];
+  plan_snapshot: BetPlanResponse;
+  balance_after: string | number;
+};
+
 export type UserProfile = {
   username: string;
   balance: string | number;

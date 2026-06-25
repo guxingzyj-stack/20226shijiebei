@@ -35,6 +35,8 @@ class FakeDb:
             ("m1", "crs"): {"id": 11, "match_id": "m1", "play_type": "crs", "goal_line": None, "odds": {"2:1": 8.5, "胜其他": 40.0}},
         }
         self.ev_signal = {"match_id": "m1", "play_type": "had", "selection": "3", "model_prob": 0.60, "odds": 2.20, "ev": 0.32, "suggestion_eligible": False}
+        self.plan_signals = []
+        self.fail_batch_after_first = False
         self.prediction = {
             "id": 1,
             "match_id": "m1",
@@ -82,6 +84,9 @@ class FakeDb:
     def latest_ev_signals(self, match_id, limit=20):
         return _mark_research_only([dict(self.ev_signal)]) if match_id == "m1" else []
 
+    def plan_ev_candidates(self, limit=50):
+        return [dict(row) for row in self.plan_signals[:limit]]
+
     def latest_odds(self, match_id, play_type):
         return self.snapshots.get((match_id, play_type))
 
@@ -101,6 +106,36 @@ class FakeDb:
         }
         self.bets.append(bet)
         return bet
+
+    def create_bets_batch(self, user_id, planned_bets):
+        user = self.users[user_id]
+        total_stake = sum((Decimal(str(item["stake"])) for item in planned_bets), Decimal("0"))
+        if user["balance"] < total_stake:
+            raise ValueError("insufficient balance")
+        original_balance = user["balance"]
+        original_bets = list(self.bets)
+        created_bets = []
+        try:
+            user["balance"] -= total_stake
+            for index, item in enumerate(planned_bets):
+                if self.fail_batch_after_first and index == 1:
+                    raise ValueError("simulated insert failure")
+                bet = {
+                    "id": len(self.bets) + 1,
+                    "legs": item["legs"],
+                    "parlay": item["parlay"],
+                    "stake": item["stake"],
+                    "potential_payout": item["potential_payout"],
+                    "status": "open",
+                    "balance": user["balance"],
+                }
+                self.bets.append(bet)
+                created_bets.append(bet)
+        except Exception:
+            user["balance"] = original_balance
+            self.bets = original_bets
+            raise
+        return {"created_bets": created_bets, "balance_after": user["balance"]}
 
     def list_user_bets(self, user_id):
         return self.bets
@@ -582,3 +617,213 @@ def test_leaderboard_does_not_expose_internal_id(monkeypatch):
         assert "settled_bets" in body[0]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_bet_plan_returns_multiple_candidates_one_per_match(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    _add_plan_signal(fake, "m1", "had", "3", model_prob=0.60, odds=2.0, ev=0.08)
+    _add_plan_signal(fake, "m1", "had", "1", model_prob=0.38, odds=3.0, ev=0.14)
+    _add_plan_match(fake, "m2", home_team="C", away_team="D")
+    _add_plan_signal(fake, "m2", "had", "3", model_prob=0.60, odds=2.0, ev=0.10)
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.get("/api/model/bet-plan?budget=200&max_bets=5")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["available"] is True
+        assert len(body["items"]) == 2
+        assert body["items"][0]["match_id"] == "m1"
+        assert body["items"][0]["selection"] == "1"
+        assert {item["match_id"] for item in body["items"]} == {"m1", "m2"}
+        assert Decimal(body["total_stake"]) <= Decimal("200")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_plan_filters_ineligible_markets_and_matches(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    _add_plan_match(fake, "good")
+    _add_plan_signal(fake, "good", "had", "3", model_prob=0.60, odds=2.0, ev=0.10)
+    _add_plan_match(fake, "crs")
+    _add_plan_signal(fake, "crs", "crs", "1:0", model_prob=0.20, odds=8.0, ev=0.10)
+    _add_plan_match(fake, "ttg")
+    _add_plan_signal(fake, "ttg", "ttg", "3", model_prob=0.20, odds=5.0, ev=0.10)
+    _add_plan_match(fake, "research")
+    _add_plan_signal(fake, "research", "had", "3", model_prob=0.60, odds=2.0, ev=0.10, research_only=True)
+    _add_plan_match(fake, "not-eligible")
+    _add_plan_signal(fake, "not-eligible", "had", "3", model_prob=0.60, odds=2.0, ev=0.10, suggestion_eligible=False)
+    _add_plan_match(fake, "high-ev")
+    _add_plan_signal(fake, "high-ev", "had", "3", model_prob=0.60, odds=2.0, ev=0.16)
+    _add_plan_match(fake, "cutoff", kickoff_delta=timedelta(minutes=4))
+    _add_plan_signal(fake, "cutoff", "had", "3", model_prob=0.60, odds=2.0, ev=0.10)
+    _add_plan_match(fake, "finished", status="finished", result_home=1, result_away=0)
+    _add_plan_signal(fake, "finished", "had", "3", model_prob=0.60, odds=2.0, ev=0.10)
+    _add_plan_match(fake, "closed", status="closed")
+    _add_plan_signal(fake, "closed", "had", "3", model_prob=0.60, odds=2.0, ev=0.10)
+    _add_plan_match(fake, "missing-selection")
+    _add_plan_signal(fake, "missing-selection", "had", "9", model_prob=0.60, odds=2.0, ev=0.10)
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.get("/api/model/bet-plan?budget=200&max_bets=8")
+        assert response.status_code == 200
+        body = response.json()
+        assert [item["match_id"] for item in body["items"]] == ["good"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_plan_scales_to_budget_and_drops_sub_minimum(monkeypatch):
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    for match_id in ("m1", "m2", "m3"):
+        if match_id != "m1":
+            _add_plan_match(fake, match_id)
+        _add_plan_signal(fake, match_id, "had", "3", model_prob=0.60, odds=2.0, ev=0.10)
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.get("/api/model/bet-plan?budget=60&max_bets=3")
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body["items"]) == 3
+        assert Decimal(body["total_stake"]) <= Decimal("60")
+        assert {Decimal(item["stake"]) for item in body["items"]} == {Decimal("20.00")}
+
+        tiny_budget = client.get("/api/model/bet-plan?budget=2&max_bets=3")
+        assert tiny_budget.status_code == 200
+        tiny_body = tiny_budget.json()
+        assert tiny_body["available"] is False
+        assert tiny_body["items"] == []
+        assert "no_eligible_signals" in tiny_body["blockers"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_plan_post_rejects_when_betting_disabled_without_writes(monkeypatch):
+    monkeypatch.setenv("BETTING_ENABLED", "false")
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    _add_plan_signal(fake, "m1", "had", "3", model_prob=0.60, odds=2.0, ev=0.10)
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post("/api/bets/plan", json={"budget": "100", "max_bets": 5})
+        assert response.status_code == 403
+        assert response.json()["detail"] == BETTING_DISABLED_MESSAGE
+        assert fake.bets == []
+        assert fake.users[1]["balance"] == Decimal("1000")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_plan_post_creates_multiple_single_bets(monkeypatch):
+    monkeypatch.setenv("BETTING_ENABLED", "true")
+    fake = FakeDb()
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    _add_plan_signal(fake, "m1", "had", "3", model_prob=0.60, odds=2.0, ev=0.10)
+    _add_plan_match(fake, "m2")
+    _add_plan_signal(fake, "m2", "had", "3", model_prob=0.60, odds=2.0, ev=0.09)
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post("/api/bets/plan", json={"budget": "200", "max_bets": 5})
+        assert response.status_code == 200
+        body = response.json()
+        assert [bet["id"] for bet in body["created_bets"]] == [1, 2]
+        assert {bet["parlay"] for bet in body["created_bets"]} == {"single"}
+        assert body["created_bets"][0]["legs"][0]["odds"] == "2.0"
+        assert body["balance_after"] == "900.00"
+        assert fake.users[1]["balance"] == Decimal("900.00")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bet_plan_post_rolls_back_on_batch_failure(monkeypatch):
+    monkeypatch.setenv("BETTING_ENABLED", "true")
+    fake = FakeDb()
+    fake.fail_batch_after_first = True
+    fake.users[1] = {"id": 1, "username": "bob", "password_hash": "x", "balance": Decimal("1000")}
+    _add_plan_signal(fake, "m1", "had", "3", model_prob=0.60, odds=2.0, ev=0.10)
+    _add_plan_match(fake, "m2")
+    _add_plan_signal(fake, "m2", "had", "3", model_prob=0.60, odds=2.0, ev=0.09)
+    app.dependency_overrides[get_db] = lambda: fake
+    app.dependency_overrides[get_current_user] = lambda: fake.users[1]
+    try:
+        client = TestClient(app)
+        response = client.post("/api/bets/plan", json={"budget": "200", "max_bets": 5})
+        assert response.status_code == 400
+        assert response.json()["detail"] == "simulated insert failure"
+        assert fake.bets == []
+        assert fake.users[1]["balance"] == Decimal("1000")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def _add_plan_match(
+    fake: FakeDb,
+    match_id: str,
+    *,
+    home_team: str = "Home",
+    away_team: str = "Away",
+    kickoff_delta: timedelta = timedelta(hours=2),
+    status: str = "scheduled",
+    result_home: int | None = None,
+    result_away: int | None = None,
+) -> None:
+    fake.matches[match_id] = {
+        "match_id": match_id,
+        "match_num": len(fake.matches) + 1,
+        "home_team": home_team,
+        "away_team": away_team,
+        "kickoff_at": datetime.now(timezone.utc) + kickoff_delta,
+        "status": status,
+        "result_home": result_home,
+        "result_away": result_away,
+        "ht_home": None,
+        "ht_away": None,
+    }
+
+
+def _add_plan_signal(
+    fake: FakeDb,
+    match_id: str,
+    play_type: str,
+    selection: str,
+    *,
+    model_prob: float,
+    odds: float,
+    ev: float,
+    suggestion_eligible: bool = True,
+    research_only: bool = False,
+) -> None:
+    fake.snapshots[(match_id, play_type)] = {
+        "id": len(fake.snapshots) + 100,
+        "match_id": match_id,
+        "play_type": play_type,
+        "goal_line": None,
+        "odds": {"3": odds, "1": 3.0, "0": 4.0},
+    }
+    fake.plan_signals.append(
+        {
+            "match_id": match_id,
+            "model_version": 1,
+            "play_type": play_type,
+            "selection": selection,
+            "model_prob": model_prob,
+            "odds": 99.0,
+            "ev": ev,
+            "snapshot_id": 1,
+            "research_only": research_only,
+            "suggestion_eligible": suggestion_eligible,
+            "created_at": datetime.now(timezone.utc),
+        }
+    )
