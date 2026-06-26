@@ -11,15 +11,16 @@ const emptyRounds = [
   { key: "semifinal", title: "半决赛", description: "暂无真实半决赛对阵。" },
   { key: "quarterfinal", title: "四分之一决赛", description: "暂无真实四分之一决赛对阵。" },
   { key: "round16", title: "十六强", description: "小组赛完成后根据真实晋级结果生成。" },
+  { key: "round32", title: "三十二强", description: "小组赛完成后根据真实晋级结果生成。" },
 ];
 
 const emptyDesktopColumns = [
-  ["16强", "8强", "4强", "半决赛"],
+  ["32强", "16强", "8强", "4强", "半决赛"],
   ["决赛", "冠军预测 / 冠军结果"],
-  ["半决赛", "4强", "8强", "16强"],
+  ["半决赛", "4强", "8强", "16强", "32强"],
 ];
 
-const roundOrder = ["round16", "quarterfinal", "semifinal", "final", "champion"];
+const roundOrder = ["round32", "round16", "quarterfinal", "semifinal", "final", "champion"];
 
 export function BracketPage() {
   const [payload, setPayload] = useState<BracketResponse | null>(null);
@@ -336,6 +337,8 @@ function orderIndex(key: string): number {
 
 function normalizeRoundKey(key: string): string {
   const lower = key.toLowerCase();
+  const compact = lower.replace(/[\s_-]/g, "");
+  if (compact === "round32" || compact === "roundof32" || compact === "r32" || lower.includes("32强") || lower.includes("三十二")) return "round32";
   if (lower.includes("16")) return "round16";
   if (lower.includes("quarter") || lower.includes("8")) return "quarterfinal";
   if (lower.includes("semi") || lower.includes("4")) return "semifinal";
@@ -346,6 +349,7 @@ function normalizeRoundKey(key: string): string {
 
 function roundTitle(key: string): string {
   const normalized = normalizeRoundKey(key);
+  if (normalized === "round32") return "三十二强";
   if (normalized === "round16") return "十六强";
   if (normalized === "quarterfinal") return "四分之一决赛";
   if (normalized === "semifinal") return "半决赛";
